@@ -199,10 +199,10 @@ export default function SignupScreen() {
 
           <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
             {t.already_have || 'Already have an account?'}{' '}
-          <motion.span whileTap={tapScale} onClick={() => navigate('/login', { state: { from: location.state?.from } })}
-              style={{ color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: location.state?.from } })}
+              style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
               {t.log_in || 'Log in'}
-            </motion.span>
+            </motion.button>
           </motion.div>
         </motion.div>
     </AuthShell>

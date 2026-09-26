@@ -37,7 +37,7 @@ export default function BusinessIntegrationsScreen() {
   const [keyName, setKeyName] = useState('Production ATS')
   const [keyEnvironment, setKeyEnvironment] = useState('live')
   const [webhookUrl, setWebhookUrl] = useState('')
-  const [webhookEnvironment, setWebhookEnvironment] = useState('test')
+  const [webhookEnvironment, setWebhookEnvironment] = useState('live')
   const [issuedSecret, setIssuedSecret] = useState(null)
   const [method, setMethod] = useState('link')
   const logoInput = useRef(null)

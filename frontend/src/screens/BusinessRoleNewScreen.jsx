@@ -14,6 +14,7 @@ import BusinessShell from '../components/BusinessShell'
 import PlaybackViewControl from '../components/PlaybackViewControl'
 import MetricRange from '../components/MetricRange'
 import { rolePublicationError } from '../utils/rolePublicationError'
+import { payRangeError } from '../utils/payRangeError'
 import { useBusiness } from '../context/BusinessContext'
 import { labelOf } from '../data/culinaryTaxonomy'
 import {
@@ -100,14 +101,15 @@ export default function BusinessRoleNewScreen() {
 
   const questionsValid = questions.every(question => question.label.trim() &&
     (!['select', 'multiselect'].includes(question.type) || question.options.filter(Boolean).length >= 2))
-  const canPublish = roleId && title.trim() && locationLabel.trim() && payMin && payMax && questionsValid && mustCount <= MAX_MUST_HAVES &&
+  const payError = payRangeError(payMin, payMax)
+  const canPublish = !payError && roleId && title.trim() && locationLabel.trim() && payMin && payMax && questionsValid && mustCount <= MAX_MUST_HAVES &&
     (Object.values(skillState).some(s => s === 'must') || foodHandler)
 
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState('')
 
   async function publish() {
-    if (publishing) return
+    if (publishing || !canPublish) return
     const must = Object.keys(skillState).filter(k => skillState[k] === 'must')
     const pref = Object.keys(skillState).filter(k => skillState[k] === 'preferred')
     setPublishing(true); setPublishError('')
@@ -115,7 +117,7 @@ export default function BusinessRoleNewScreen() {
       const r = await biz.addRole({
         title: title.trim(), status: 'open',
         role: roleId, station: station || null,
-        employmentType: employment, shifts, payMin: +payMin || null, payMax: +payMax || null, tips,
+        employmentType: employment, shifts, payMin: Number(payMin), payMax: Number(payMax), tips,
         experience, minAge: minAge || null, mustHave: must, required: must, preferred: pref,
         certsRequired: foodHandler ? [FOOD_HANDLER_ID] : [],
         assessmentCriteria: { profileVersion: 'knife-motion-v1', ...thresholds },
@@ -170,9 +172,9 @@ export default function BusinessRoleNewScreen() {
             <motion.div variants={fadeUp}>
               <label style={lbl}>Pay range / hr <span style={note}>shown to applicants</span></label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input type="number" value={payMin} onChange={e => setPayMin(e.target.value)} placeholder="min" style={{ ...input, width: 100 }} />
+                <input aria-label="Minimum hourly pay" min="0" max="10000" step="1" type="number" value={payMin} onChange={e => setPayMin(e.target.value)} placeholder="min" style={{ ...input, width: 100 }} />
                 <span style={{ color: '#74756f' }}>–</span>
-                <input type="number" value={payMax} onChange={e => setPayMax(e.target.value)} placeholder="max" style={{ ...input, width: 100 }} />
+                <input aria-label="Maximum hourly pay" min="0" max="10000" step="1" type="number" value={payMax} onChange={e => setPayMax(e.target.value)} placeholder="max" style={{ ...input, width: 100 }} />
                 {tpl.tips && (
                   <div style={{ display: 'flex', gap: 6, marginLeft: 4 }}>
                     <motion.button type="button" whileTap={tapScale} onClick={() => setTips(false)} style={seg(!tips)}>No tips</motion.button>
@@ -183,6 +185,7 @@ export default function BusinessRoleNewScreen() {
             </motion.div>
 
             <motion.div variants={fadeUp}>
+              {payError && <p role="alert" style={{ fontSize: 12, color: '#C4561F' }}>{payError}</p>}
               <label style={lbl}>Shifts <span style={note}>when you need them</span></label>
               <Pick items={SHIFTS.map(s => ({ id: s, label: s }))} value={shifts} onPick={id => toggle(id, shifts, setShifts)} multi />
             </motion.div>

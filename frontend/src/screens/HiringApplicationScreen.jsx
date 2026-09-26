@@ -52,6 +52,7 @@ export default function HiringApplicationScreen() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -59,18 +60,19 @@ export default function HiringApplicationScreen() {
       try {
         const result = await getHiringRole({ roleId, invitationToken: searchParams.get('invite') })
         if (!live) return
-        setRole(result.role); setStatus('ready')
+        setRole(result.role)
         if (user?.emailVerified) {
           const token = await user.getIdToken()
           const existing = await getMyHiringApplication({ token, roleId })
-          if (live && existing.application) navigate(`/application/${existing.application.id}`, { replace: true })
+          if (live && existing.application) { navigate(`/application/${existing.application.id}`, { replace: true }); return }
         }
+        if (live) setStatus('ready')
       } catch (cause) {
-        if (live) { setError(cause.message || 'This role is unavailable.'); setStatus('error') }
+        if (live) { setError(cause.status ? cause.message || 'This role is unavailable.' : 'Could not connect to CookCredit. Check your connection and retry.'); setStatus('error') }
       }
     })()
     return () => { live = false }
-  }, [roleId, user, searchParams, navigate])
+  }, [roleId, user, searchParams, navigate, reloadKey])
 
   const requiredComplete = useMemo(() => (role?.questions || []).every(question => {
     if (!question.required) return true
@@ -110,7 +112,7 @@ export default function HiringApplicationScreen() {
   }
 
   if (status === 'loading') return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', color: '#888' }}>Loading role…</main>
-  if (status === 'error' || !role) return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 30, textAlign: 'center' }}><div><CircleAlert /><p>{error}</p></div></main>
+  if (status === 'error' || !role) return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 30, textAlign: 'center' }}><div><CircleAlert /><p role="alert">{error}</p><button type="button" onClick={() => { setError(''); setStatus('loading'); setReloadKey(key => key + 1) }} style={{ border: 0, background: GREEN, color: '#fff', padding: '12px 22px', cursor: 'pointer' }}>Retry</button><p style={{ fontSize: 13, color: '#70706b' }}>If the role is closed or your invitation has expired, ask the employer for a current link.</p></div></main>
   const brandColor = /^#[0-9A-F]{6}$/i.test(role.company?.brandColor || '') ? role.company.brandColor : GREEN
 
   return <main className="cc-hiring-page" style={{ minHeight: '100svh', background: '#F7F5F0', color: INK }}>

@@ -31,7 +31,7 @@ export default function BusinessBillingScreen() {
   }, [user])
 
   useEffect(() => {
-    if (earlyAccess) return undefined
+    if (biz?.loading || !biz?.org || earlyAccess) return undefined
     let live = true
     let timer
     ;(async () => {
@@ -52,7 +52,7 @@ export default function BusinessBillingScreen() {
       } catch (cause) { if (live) setError(cause.message || 'Billing status is unavailable.') }
     })()
     return () => { live = false; if (timer) window.clearInterval(timer) }
-  }, [refresh, params, earlyAccess])
+  }, [refresh, params, earlyAccess, biz?.loading, biz?.org])
 
   async function startCheckout(plan) {
     setPending(plan); setError(''); setMsg('')
@@ -86,8 +86,14 @@ export default function BusinessBillingScreen() {
       <ArrowLeft size={14} color="#999" strokeWidth={1.5} /><span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>{biz?.org?.name || 'Workspace'}</span>
     </button>
     <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Plans & billing</h1>
-    <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
+    <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{biz?.loading || !biz?.org ? 'Your workspace access and billing details.' : earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
   </div>
+
+  if (biz?.loading || !biz?.org) return <BusinessShell header={header} showNav={false}>
+    <section style={{ padding: '32px 28px' }}>
+      {biz?.loading ? <p role="status">Loading workspace access…</p> : <><p role="alert">Workspace access could not be loaded.</p><button onClick={biz?.refresh}>Retry</button></>}
+    </section>
+  </BusinessShell>
 
   if (earlyAccess) return <BusinessShell header={header} showNav={false}>
     <section style={{ padding: '32px 28px', maxWidth: 720, margin: '0 auto' }}>

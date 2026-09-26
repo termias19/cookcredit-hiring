@@ -86,7 +86,7 @@ function Sidebar() {
       <div style={{ flex: 1 }} />
       <div style={{ padding: '0 8px' }}>
         <div style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: '#70706b' }}>{t.bn_plan}</div>
-        <div style={{ fontSize: 13, color: '#1a1a1a', textTransform: 'capitalize', marginTop: 2 }}>{biz?.org?.plan || 'trial'}</div>
+        <div style={{ fontSize: 13, color: '#1a1a1a', textTransform: 'capitalize', marginTop: 2 }}>{biz?.org?.integrationAccess?.earlyAccess ? t.bn_included : biz?.org?.plan || '—'}</div>
         <ProfileLink />
       </div>
     </aside>

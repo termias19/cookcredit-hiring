@@ -1,6 +1,7 @@
 // Hiring-specific copy extends the shared language provider; proper names are not translated.
 export const BUSINESS_STRINGS = {
   EN: {
+    bn_included: 'Included access', bp_included_hint: 'Five open roles are included. No subscription payment or card is required.',
     bp_profile: 'Profile & company', bp_account: 'Your account', bp_intro: 'Your details, preferences, and subscription.',
     bp_personal: 'Personal details', bp_name: 'Full name', bp_phone: 'Phone', bp_optional: 'Optional', bp_email: 'Email address',
     bp_verified: 'Email verified', bp_save_personal: 'Save personal details', bp_saving: 'Saving…', bp_saved: 'Your details have been saved.',
@@ -31,6 +32,7 @@ export const BUSINESS_STRINGS = {
     loc_cook: 'Cook', loc_verified: 'Verified assessment', loc_hour: '/ hour',
   },
   ES: {
+    bn_included: 'Acceso incluido', bp_included_hint: 'Se incluyen cinco puestos abiertos. No se requiere suscripción de pago ni tarjeta.',
     bp_profile: 'Perfil y empresa', bp_account: 'Tu cuenta', bp_intro: 'Tus datos, preferencias y suscripción.',
     bp_personal: 'Datos personales', bp_name: 'Nombre completo', bp_phone: 'Teléfono', bp_optional: 'Opcional', bp_email: 'Correo electrónico',
     bp_verified: 'Correo verificado', bp_save_personal: 'Guardar datos personales', bp_saving: 'Guardando…', bp_saved: 'Tus datos se han guardado.',

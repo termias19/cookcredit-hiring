@@ -3,7 +3,7 @@
  * shortlist on one screen. Applications remain in submission order while employment validation is
  * incomplete; the recorded work sample is evidence for a person to review, never an automatic rank.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Star, ShieldCheck, Link2, ChevronRight, Video } from 'lucide-react'
@@ -27,6 +27,7 @@ export default function BusinessRoleScreen() {
   const navigate = useNavigate()
   const biz = useBusiness()
   const [invited, setInvited] = useState(false)
+  const [copyError, setCopyError] = useState('')
   const [changingStatus, setChangingStatus] = useState(false)
   const [statusError, setStatusError] = useState('')
   const [data, setData] = useState({ role: null, pipeline: [], applications: [], status: 'loading' })
@@ -34,23 +35,30 @@ export default function BusinessRoleScreen() {
   const [nextCursor, setNextCursor] = useState(null)
   const [loadingMore, setLoadingMore] = useState(false)
 
+  const requestVersion = useRef(0)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [loadError, setLoadError] = useState('')
+
   // The pipeline is owned by THIS screen (not the global store): each card carries the server's
   // frozen match snapshot, so we render the audited numbers rather than recomputing client-side.
   // Depend on the STABLE getToken (memoized in the context), never the whole `biz` value object —
-  // that object is recreated every provider render, which would re-fire the fetch. All setData
-  // calls sit past an await (no synchronous setState in the effect → no cascading renders).
+  // that object is recreated every provider render, which would re-fire the fetch.
+  // Invalidate pending pagination whenever the role or selected filters change.
   const getToken = biz?.getToken
   useEffect(() => {
+    const version = ++requestVersion.current
     let live = true
+    setData(d => ({ ...d, role: d.role?.id === id ? d.role : null, pipeline: [], applications: [], status: 'loading' }))
+    setNextCursor(null); setLoadingMore(false); setLoadError('')
     ;(async () => {
-      const token = getToken ? await getToken() : null
-      if (!token) { if (live) setData(d => ({ ...d, status: 'error' })); return }
       try {
+        const token = getToken ? await getToken() : null
+        if (!token) throw new Error('Sign in again to load applications.')
         const [res, applicationResult] = await Promise.all([
           getBusinessRole({ token, id }),
           getHiringApplications({ token, roleId: id, status: filters.status, city: filters.city, outcome: filters.outcome }),
         ])
-        if (!live) return
+        if (!live || version !== requestVersion.current) return
         setData({
           role: res?.role || null,
           pipeline: Array.isArray(res?.pipeline) ? res.pipeline : [],
@@ -59,21 +67,31 @@ export default function BusinessRoleScreen() {
         })
         setNextCursor(applicationResult?.page?.nextCursor || null)
       } catch {
-        if (live) setData(d => ({ ...d, status: 'error' }))
+        if (!live || version !== requestVersion.current) return
+        setData(d => ({ ...d, status: 'error' }))
+        setLoadError('Applications could not be loaded. Retry to see current results.')
       }
     })()
-    return () => { live = false }
-  }, [id, getToken, filters.status, filters.city, filters.outcome])
+    return () => { live = false; requestVersion.current += 1 }
+  }, [id, getToken, filters.status, filters.city, filters.outcome, reloadKey])
 
   async function loadMore() {
-    if (!nextCursor || loadingMore) return
-    setLoadingMore(true)
+    if (!nextCursor || loadingMore || data.status !== 'ready') return
+    const version = requestVersion.current
+    setLoadingMore(true); setLoadError('')
     try {
       const token = await getToken()
+      if (!token) throw new Error('Sign in again.')
       const result = await getHiringApplications({ token, roleId: id, status: filters.status, city: filters.city, outcome: filters.outcome, cursor: nextCursor })
-      setData(current => ({ ...current, applications: [...current.applications, ...(result.applications || [])] }))
+      if (version !== requestVersion.current) return
+      setData(current => {
+        const existing = new Set(current.applications.map(application => application.id))
+        return { ...current, applications: [...current.applications, ...(result.applications || []).filter(application => !existing.has(application.id))] }
+      })
       setNextCursor(result?.page?.nextCursor || null)
-    } finally { setLoadingMore(false) }
+    } catch {
+      if (version === requestVersion.current) setLoadError('More applications could not be loaded. Use Load more applications to retry.')
+    } finally { if (version === requestVersion.current) setLoadingMore(false) }
   }
 
   // Use the fetched role; fall back to the list summary for the title while the detail loads.
@@ -90,7 +108,8 @@ export default function BusinessRoleScreen() {
   )
 
   if (data.status === 'loading' && !role) return <BusinessShell header={header} showNav={false}><p style={{ textAlign: 'center', color: '#74756f', padding: '60px 20px' }}>Loading…</p></BusinessShell>
-  if (data.status === 'notfound' || (!role && data.status !== 'loading')) return <BusinessShell header={header} showNav={false}><p style={{ textAlign: 'center', color: '#74756f', padding: '60px 20px' }}>Role not found.</p></BusinessShell>
+  if (data.status === 'error' && !role) return <BusinessShell header={header} showNav={false}><div style={{ padding: 28 }}><p role="alert">{loadError}</p><button onClick={() => setReloadKey(key => key + 1)}>Retry</button></div></BusinessShell>
+  if (data.status === 'notfound') return <BusinessShell header={header} showNav={false}><p style={{ textAlign: 'center', color: '#74756f', padding: '60px 20px' }}>Role not found.</p></BusinessShell>
 
   const pipelineByCook = new Map(data.pipeline.map(card => [card.cookId, card]))
   const cards = data.applications.length || filters.status || filters.city || filters.outcome
@@ -144,12 +163,14 @@ export default function BusinessRoleScreen() {
         {statusError && <p role="alert" style={{ color: TERRA }}>{statusError}</p>}
         <motion.button {...buttonPress} onClick={async () => {
             const link = `${window.location.origin}/apply/${role.id}`
-            try { await navigator.clipboard.writeText(link) } catch { /* clipboard unavailable */ }
-            setInvited(true)
+            setInvited(false); setCopyError('')
+            try { await navigator.clipboard.writeText(link); setInvited(true) }
+            catch { setCopyError('Could not copy automatically. Select and copy the application link below.') }
           }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 14,
           background: GREEN, color: '#fff', border: 'none', borderRadius: 2, padding: '11px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
           <Link2 size={15} strokeWidth={1.5} /> {invited ? 'Application link copied' : 'Copy application link'}
         </motion.button>
+        {copyError && <div><p role="alert" style={{ fontSize: 12, color: TERRA }}>{copyError}</p><input aria-label="Application link" readOnly value={`${window.location.origin}/apply/${role.id}`} style={{ width: '100%', maxWidth: 620, padding: 10 }} onFocus={event => event.target.select()} /></div>}
         {invited && <p style={{ fontSize: 11, color: '#74756f', margin: '8px 0 0' }}>Applicants see this role, answer your configured questions, share approximate location, and then open the existing CookCredit assessment.</p>}
         <p style={{ fontSize: 12, color: '#777', lineHeight: 1.5, margin: '12px 0 0', maxWidth: 720 }}>Applications stay in submission order. CookCredit shows the recorded measurements, limitations, and attempt history; a person reviews the evidence and makes the hiring decision.</p>
       </motion.div>
@@ -171,6 +192,8 @@ export default function BusinessRoleScreen() {
           <PlaybackViewControl />
             <input aria-label="Filter by applicant city" value={filters.city} onChange={event => setFilters(current => ({ ...current, city: event.target.value }))} placeholder="Filter city" style={filterField} />
         </div>
+        {data.status === 'loading' && <p role="status">Loading applications…</p>}
+        {loadError && <div><p role="alert" style={{ color: TERRA }}>{loadError}</p>{data.status === 'error' && <button onClick={() => setReloadKey(key => key + 1)}>Retry</button>}</div>}
         <div className="cc-pipeline" tabIndex={0} role="region" aria-label="Hiring pipeline">
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, minmax(190px, 1fr))`, gap: 12, alignItems: 'start', minWidth: 1180 }}>
           {STAGES.map(stage => {
@@ -230,7 +253,7 @@ export default function BusinessRoleScreen() {
         </div>
         </div>
         {withdrawn.length > 0 && <details style={{ borderTop: '1px solid #e7dfd3', marginTop: 12, paddingTop: 12 }}><summary style={{ cursor: 'pointer', color: '#786f65', fontSize: 12 }}>Archived · {withdrawn.length} withdrawn</summary><p style={{ color: '#968d83', fontSize: 11, margin: '8px 0 0' }}>Withdrawn applicants remain in the audit history and outside the active six-stage pipeline.</p></details>}
-        {!cards.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>No candidates yet — invite cooks to assess for this role.</p>}
+        {data.status === 'ready' && !cards.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>{filters.status || filters.city || filters.outcome ? 'No applications match these filters.' : 'No candidates yet — invite cooks to assess for this role.'}</p>}
         {nextCursor && <button onClick={loadMore} disabled={loadingMore} style={{ border: '1px solid #1a1a1a', background: '#fff', color: '#1a1a1a', padding: '10px 16px', cursor: 'pointer' }}>{loadingMore ? 'Loading…' : 'Load more applications'}</button>}
       </div>
     </BusinessShell>

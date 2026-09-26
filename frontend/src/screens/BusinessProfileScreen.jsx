@@ -49,8 +49,8 @@ function Details({ profile, org }) {
       </form>
       <section style={panel}>
         <h2 className="cc-profile-heading">{t.bp_subscription}</h2>
-        <p style={{ fontSize: 15, textTransform: 'capitalize' }}>{org.plan || 'Trial'} · {t.bn_plan}</p>
-        <p style={{ margin: '12px 0 20px', fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{t.bp_billing_hint}</p>
+        <p style={{ fontSize: 15, textTransform: 'capitalize' }}>{org.integrationAccess?.earlyAccess ? t.bn_included : org.plan || '—'} · {t.bn_plan}</p>
+        <p style={{ margin: '12px 0 20px', fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{org.integrationAccess?.earlyAccess ? t.bp_included_hint : t.bp_billing_hint}</p>
         <Link className="cc-profile-link" to="/business/billing">{t.bn_billing}<ArrowRight size={16} /></Link>
       </section>
       <LocationFinder />
