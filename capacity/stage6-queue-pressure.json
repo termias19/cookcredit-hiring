@@ -1,0 +1,15 @@
+{
+  "requests": 400,
+  "concurrentClients": 40,
+  "databasePoolConnections": 5,
+  "admitted": 100,
+  "rejectedAtCap": 300,
+  "duplicateReplays": 100,
+  "duplicatesAdded": 0,
+  "acceptedAfterDrain": 20,
+  "seconds": 3.925,
+  "p95Seconds": 2.567,
+  "productionTraffic": false,
+  "externalEmail": false,
+  "cloudResourcesCreated": false
+}

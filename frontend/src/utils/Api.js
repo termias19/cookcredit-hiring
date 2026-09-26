@@ -259,6 +259,9 @@ export async function getBusinessRoles({ token }) {
 export async function createBusinessRole({ token, role }) {
   return http('/api/business/roles', { method: 'POST', token, body: role, throwOnError: true })
 }
+export async function changeBusinessRoleStatus({ token, id, status }) {
+  return http(`/api/business/role/${id}/status`, { method: 'POST', token, body: { status }, throwOnError: true })
+}
 export async function getBusinessRole({ token, id }) {
   return http(`/api/business/role/${id}`, { token })
 }

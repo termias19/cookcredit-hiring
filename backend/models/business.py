@@ -124,6 +124,7 @@ class RolePosting(Base):
     def to_dict(self):
         r = self.requirements or {}
         return {"id": str(self.id), "title": self.title, "status": self.status,
+                "integrationManaged": bool(self.integration_managed),
                 "required": r.get("required", []), "preferred": r.get("preferred", []),
                 "skillFloor": r.get("skillFloor"), "certsRequired": r.get("certsRequired", []),
                 "cuisines": r.get("cuisines", []), "loc": r.get("loc"), "radiusM": r.get("radiusM"),

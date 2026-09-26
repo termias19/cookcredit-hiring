@@ -755,6 +755,40 @@ def _role_owned(session, rid, user_id):
     return r if (r and r.org_id == org.id and r.integration_environment == 'live') else None
 
 
+@business_bp.route('/role/<rid>/status', methods=['POST'])
+@require_auth
+@require_verified_email
+@limiter.limit('30 per hour', key_func=lambda: g.user_id)
+def change_role_status(rid):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {'status'} or data['status'] not in ('open', 'closed'):
+        return jsonify(error='Choose open or closed'), 400
+    with db_session() as session:
+        if not _can(session, g.user_id, 'roles'):
+            return jsonify(error='This seat cannot manage roles'), 403
+        role = _role_owned(session, rid, g.user_id)
+        if not role:
+            return jsonify(error='Not found'), 404
+        if role.integration_managed:
+            return jsonify(error='Manage this role through its integration'), 409
+        # Same workspace lock/order as publication: reopening must not bypass quota.
+        org = session.query(Org).filter_by(id=role.org_id).with_for_update().one()
+        role = session.query(RolePosting).filter_by(id=role.id).populate_existing().with_for_update().one()
+        target = data['status']
+        if target == 'open' and role.status != 'open':
+            if not (role.requirements or {}).get('locationLabel'):
+                return jsonify(error='Work location required for an open role'), 400
+            limit = open_role_limit(org)
+            opened = session.query(RolePosting).filter_by(org_id=org.id, status='open', integration_managed=False).count()
+            if limit is not None and opened >= limit:
+                return jsonify(error='Your open-role limit has been reached. Close another role first.',
+                               code='open_role_limit_reached', openRoleLimit=limit), 409
+        role.status = target
+        session.flush()
+        result = role.to_dict()
+    return jsonify(role=result), 200
+
+
 @business_bp.route("/role/<rid>", methods=["GET"])
 @require_auth
 def role_detail(rid):

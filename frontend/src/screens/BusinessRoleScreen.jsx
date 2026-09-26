@@ -12,7 +12,7 @@ import PlaybackViewControl from '../components/PlaybackViewControl'
 import HiringCvDownload from '../components/HiringCvDownload'
 import { useBusiness } from '../context/BusinessContext'
 import { labelOf } from '../data/culinaryTaxonomy'
-import { getBusinessRole, getHiringApplications } from '../utils/Api'
+import { getBusinessRole, getHiringApplications, changeBusinessRoleStatus } from '../utils/Api'
 import { fadeUp, scaleIn, staggerContainer, tapScale, buttonPress } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
@@ -27,6 +27,8 @@ export default function BusinessRoleScreen() {
   const navigate = useNavigate()
   const biz = useBusiness()
   const [invited, setInvited] = useState(false)
+  const [changingStatus, setChangingStatus] = useState(false)
+  const [statusError, setStatusError] = useState('')
   const [data, setData] = useState({ role: null, pipeline: [], applications: [], status: 'loading' })
   const [filters, setFilters] = useState({ status: '', city: '', outcome: '' })
   const [nextCursor, setNextCursor] = useState(null)
@@ -105,6 +107,17 @@ export default function BusinessRoleScreen() {
       }
     })
     : data.pipeline.map(card => ({ ...card, cook: biz?.candidateById?.(card.cookId) || null }))
+  async function changeStatus() {
+    if (changingStatus) return
+    setChangingStatus(true); setStatusError('')
+    try {
+      const token = await getToken()
+      const result = await changeBusinessRoleStatus({ token, id, status: role.status === 'open' ? 'closed' : 'open' })
+      setData(current => ({ ...current, role: result.role }))
+      biz?.refresh?.()
+    } catch (error) { setStatusError(error.message || 'Could not update this role. Please retry.') }
+    finally { setChangingStatus(false) }
+  }
   const withdrawn = cards.filter(card => card.stage === 'withdrawn')
 
   return (
@@ -121,6 +134,14 @@ export default function BusinessRoleScreen() {
           {(role?.required || []).map(idr => <motion.span key={idr} variants={scaleIn} style={chip(true)}>{labelOf(idr)}</motion.span>)}
           {(role?.preferred || []).map(idr => <motion.span key={idr} variants={scaleIn} style={chip(false)}>{labelOf(idr)} · nice-to-have</motion.span>)}
         </motion.div>
+        <p role="status" style={{ fontSize: 13, color: GREEN, marginTop: 14 }}>
+          {role.status === 'open' ? 'Open for applications' : 'Closed to new applications and assessment submissions. Existing applications remain available for review.'}
+        </p>
+        {!role.integrationManaged && <button type="button" disabled={changingStatus} onClick={changeStatus}
+          style={{ border: '1px solid #1F6F5C', color: GREEN, background: 'transparent', padding: '10px 16px', cursor: changingStatus ? 'wait' : 'pointer', marginRight: 12 }}>
+          {changingStatus ? 'Saving…' : role.status === 'open' ? 'Close role' : 'Reopen role'}
+        </button>}
+        {statusError && <p role="alert" style={{ color: TERRA }}>{statusError}</p>}
         <motion.button {...buttonPress} onClick={async () => {
             const link = `${window.location.origin}/apply/${role.id}`
             try { await navigator.clipboard.writeText(link) } catch { /* clipboard unavailable */ }
