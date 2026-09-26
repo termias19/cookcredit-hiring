@@ -137,7 +137,7 @@ export default function HiringApplicationScreen() {
       {!user && <section style={{ background: '#fff', border: '1px solid #dedbd4', padding: 22, textAlign: 'center' }}>
         <ShieldCheck size={24} color={GREEN} />
         <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 25, margin: '10px 0 8px' }}>Apply with CookCredit</h2>
-        <p style={{ color: '#666', fontSize: 13, lineHeight: 1.55 }}>Sign in to keep your answers, attempts, consent, and assessment history under your control.</p>
+        <p style={{ color: '#666', fontSize: 13, lineHeight: 1.55 }}>Sign in or create an account, verify your email, then return to this role. Add your details and CV, record your knife assessment, and review it before sharing it with {role.company.name}.</p>
         <button onClick={() => navigate('/login', { state: { from: routeLocation } })} style={{ background: brandColor, border: 0, color: '#fff', padding: '13px 28px', cursor: 'pointer' }}>Sign in to apply</button>
         <button onClick={() => navigate('/signup', { state: { from: routeLocation } })} style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 0, color: INK, textDecoration: 'underline', cursor: 'pointer' }}>Create an account</button>
       </section>}
@@ -164,7 +164,7 @@ export default function HiringApplicationScreen() {
           </label>
           {error && <p style={{ margin: 0, color: '#A44320', fontSize: 13 }}>{error}</p>}
           <motion.button {...buttonPress} type="button" disabled={busy || (locationRequired && !city.trim()) || !requiredComplete || !consent} onClick={submit} style={{ border: 0, background: brandColor, color: '#fff', padding: 14, cursor: 'pointer', opacity: busy || (locationRequired && !city.trim()) || !requiredComplete || !consent ? 0.45 : 1 }}>
-            {busy ? 'Submitting…' : 'Submit and continue'}
+            {busy ? 'Saving application…' : 'Save application and continue to assessment'}
           </motion.button>
         </div>
       </section>}

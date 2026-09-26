@@ -195,7 +195,7 @@ export function AuthProvider({ children }) {
         // A successful login must request mail before asking the user to check
         // their inbox. Mail failure stays recoverable in the signed-in session.
         await requestVerificationEmail(cred.user).catch(() => {})
-        return { needsVerification: true }
+        return { needsVerification: true, uid: cred.user.uid }
       }
 
       const data = await fetchMeWithHeal(cred.user)
@@ -206,7 +206,7 @@ export function AuthProvider({ children }) {
 
       // Return the resolved profile so the caller routes by role off THIS value, not the async
       // `user`/`profile` state — that's what makes the post-auth destination race-free.
-      return { needsVerification: false, profile: data }
+      return { needsVerification: false, profile: data, uid: cred.user.uid }
     } finally { authActionRef.current = false; setAuthActionPending(false) }
   }
 

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import { ArrowLeft } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
-import { rememberDestination, rememberAccountDestination, safeAuthDestination } from '../utils/homeFor'
+import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
 import { REGION, normalizePhone, isValidPhone } from '../utils/region'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -28,7 +28,7 @@ export default function SignupScreen() {
   const [phone, setPhone]   = useState('')
   const [pass, setPass]     = useState('')
   // Pre-select "Cook" when arriving from a "Become a cook" CTA (LandingScreen passes state.role).
-  const requested = safeAuthDestination(location.state?.from)
+  const requested = safeAuthDestination(location.state?.from) || pendingDest()
   const applicantInvitation = requested?.startsWith('/apply/') || requested?.startsWith('/application/') || requested?.startsWith('/application-assessment-return/')
   const [role, setRole] = useState(applicantInvitation || location.state?.role === 'cook' ? 'cook' : 'eat')
   const [err, setErr]       = useState('')
@@ -61,7 +61,6 @@ export default function SignupScreen() {
       rememberAccountDestination(account.uid, dest)
       navigate('/verify', { state: { from: dest }, replace: true })
     } catch (e) {
-      try { sessionStorage.removeItem('postAuthDest') } catch { /* ignore */ }
       setErr(e.code === 'auth/email-already-in-use' ? 'Email already in use' : e.message)
     } finally { setBusy(false) }
   }

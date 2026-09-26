@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { authDestination } from '../utils/homeFor'
+import { authDestination, pendingDest, safeAuthDestination, rememberDestination } from '../utils/homeFor'
 import AuthShell from '../components/AuthShell'
 import { Mail, ArrowRight } from 'lucide-react'
 import { fadeUp, fadeIn, scaleIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
@@ -84,7 +84,12 @@ export default function VerifyEmailScreen() {
           </motion.button>
 
           <motion.div variants={fadeUp} style={{ textAlign: 'center', marginTop: 8 }}>
-            <motion.span whileTap={tapScale} onClick={async () => { await logout(); navigate('/login') }} style={{ fontSize: 13, color: '#999', cursor: 'pointer', borderBottom: '1px solid #e5e5e5', paddingBottom: 2, display: 'inline-block' }}>Use a different account</motion.span>
+            <motion.span whileTap={tapScale} onClick={async () => {
+              const from = safeAuthDestination(location.state?.from) || pendingDest()
+              await logout()
+              rememberDestination(from)
+              navigate('/login', { state: { from } })
+            }} style={{ fontSize: 13, color: '#999', cursor: 'pointer', borderBottom: '1px solid #e5e5e5', paddingBottom: 2, display: 'inline-block' }}>Use a different account</motion.span>
           </motion.div>
         </motion.div>
     </AuthShell>

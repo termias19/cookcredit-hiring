@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
-import { authDestination, rememberDestination } from '../utils/homeFor'
+import { authDestination, rememberDestination, rememberAccountDestination } from '../utils/homeFor'
 import { profileFailure } from '../utils/profileFailure'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -45,6 +45,7 @@ export default function LoginScreen() {
       if (location.state?.from) rememberDestination(location.state.from)
       const result = await login(email, pass)
       const dest = authDestination(result.profile, location.state?.from)
+      rememberAccountDestination(result.uid, dest)
       if (result?.needsVerification) { navigate('/verify', { state: { from: dest }, replace: true }); return }
       navigate(dest, { replace: true })
     } catch (e) {

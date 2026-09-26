@@ -52,8 +52,8 @@ export default function AccountActionScreen() {
       {state === 'done' && <><p role="status">{mode === 'resetPassword' ? 'Your password has been changed. Sign in with your new password.' : `Email verified: ${verifiedEmail}.`}</p>
         {mode === 'verifyEmail' && auth.currentUser && !sameAccountEmail(auth.currentUser, verifiedEmail) && <p>You are currently signed in as {auth.currentUser.email}. Switch accounts to continue with the email you just verified.</p>}
         <button style={{ ...linkStyle, background: 'none', border: 0, padding: '14px 0', cursor: 'pointer' }} onClick={async () => {
-          if (mode === 'verifyEmail' && sameAccountEmail(auth.currentUser, verifiedEmail)) navigate(destination || '/verify', { replace: true, state: { from: '/applications' } })
-          else { if (auth.currentUser) await logout(); navigate('/login', { replace: true, state: { email: verifiedEmail, from: '/applications' } }) }
+          if (mode === 'verifyEmail' && sameAccountEmail(auth.currentUser, verifiedEmail)) navigate(destination || '/verify', { replace: true })
+          else { if (auth.currentUser) await logout(); navigate('/login', { replace: true, state: { email: verifiedEmail } }) }
         }}>{destination ? 'Continue to your application' : 'Sign in to continue'}</button></>}
       {['verify', 'reset'].includes(state) && <form onSubmit={submit} style={{ display: 'grid', gap: 20 }}>
         {state === 'verify' ? <p>Confirm that this is your email address to finish creating your CookCredit account.</p> : <><label>New password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={password} onChange={e => setPassword(e.target.value)} /></label><label>Confirm new password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={confirm} onChange={e => setConfirm(e.target.value)} /></label><p style={{ fontSize: 13 }}>Use at least 12 characters. A longer, unique passphrase works well.</p></>}

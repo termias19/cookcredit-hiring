@@ -26,6 +26,25 @@ export function sharedHiringAuthSource(source) {
   return source.replace(original, '    await this.auth.authStateReady(); // Retain the hiring app persistence across tabs.')
 }
 
+// Adapt only the pinned bridge's deployment addresses. Never trust a link's
+// query parameters to extend the allowlist or change the assessment/scorer.
+export function hiringBridgeSource(source, env) {
+  const deployments = {
+    production: ['https://cookcredit-hiring-915097816203.us-central1.run.app', 'https://hiring.cookcredit.com'],
+    staging: ['https://cookcredit-hiring-staging-915097816203.us-central1.run.app', 'https://cookcredit-hiring-staging.web.app'],
+  }
+  const addresses = deployments[env.VITE_DEPLOYMENT_ENVIRONMENT]
+  if (!addresses || env.VITE_API_URL !== addresses[0] || env.VITE_AUTH_EMAIL_CONTINUE_URL !== `${addresses[1]}/login`) {
+    throw new Error('Assessment bridge deployment addresses do not match hiring configuration')
+  }
+  for (const [name, origin] of [['API', addresses[0]], ['RETURN', addresses[1]]]) {
+    const pattern = new RegExp(`const DEFAULT_${name}_ORIGINS = Object\\.freeze\\(\\[\\n  \\.\\.\\.PRODUCTION_${name}_ORIGINS,\\n  \\.\\.\\.DEVELOPMENT_${name}_ORIGINS,\\n\\]\\);`, 'g')
+    if ([...source.matchAll(pattern)].length !== 1) throw new Error('Pinned assessment bridge allowlist changed')
+    source = source.replace(pattern, `const DEFAULT_${name}_ORIGINS = Object.freeze([${JSON.stringify(origin)}]);`)
+  }
+  return source
+}
+
 export async function copyHiringAssessment({ dest = resolve('dist'), env = process.env, fetchImpl = fetch } = {}) {
   const manifest = JSON.parse(await readFile(new URL('./hiring-assessment-release.json', import.meta.url), 'utf8'))
   if (manifest.sourceOrigin !== 'https://cookcredit-knife-demo.web.app') throw new Error('Unexpected assessment source')
@@ -56,6 +75,8 @@ export async function copyHiringAssessment({ dest = resolve('dist'), env = proce
   await writeFile(resolve(dest, `assessment-overlays/${rendererId}.mjs`), originalEngineRenderer(originalApp))
   const libraryPath = resolve(dest, 'landing/assessment/cloud-library.mjs')
   await writeFile(libraryPath, sharedHiringAuthSource(await readFile(libraryPath, 'utf8')))
+  const bridgePath = resolve(dest, 'landing/assessment/hiring-bridge.mjs')
+  await writeFile(bridgePath, hiringBridgeSource(await readFile(bridgePath, 'utf8'), env))
   const configPath = resolve(dest, 'landing/assessment/firebase-client-config.mjs')
   const { firebaseConfig } = await import(pathToFileURL(configPath).href)
   const config = hiringFirebaseConfig(firebaseConfig, env)

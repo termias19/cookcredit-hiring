@@ -61,6 +61,27 @@ test('an explicit new invitation wins over old session intent; signout clears in
   clearPendingDestination()
   assert.equal(pendingDest(), null)
 })
+
+test('existing applicant login preserves the invitation in a new verification tab', () => {
+  const invitation = '/apply/role-123?invite=cci_example'
+  rememberDestination(invitation)
+  rememberAccountDestination('candidate', authDestination(null))
+  sessionStorage = storage() // Email link opens a fresh tab on the same browser.
+  clearPendingDestination('/account/action')
+  assert.equal(authDestination({ id: 'candidate' }), invitation)
+  assert.equal(authDestination({ id: 'another-account' }), '/applications')
+  clearPendingDestination()
+})
+
+test('account switch retains only the explicitly requested validated invitation', () => {
+  const from = safeAuthDestination({pathname:'/apply/role-456',search:'?invite=cci_next'})
+  rememberAccountDestination('previous-account', '/business/roles')
+  clearPendingDestination() // Existing sign-out clears account-bound state.
+  rememberDestination(from)
+  assert.equal(authDestination({id:'new-applicant'}), from)
+  assert.equal(localStorage.getItem('cc_account_destination'), null)
+  clearPendingDestination()
+})
 test('culinary evidence retains its meaning instead of inherited domestic-service labels', () => {
   const lookup = Object.fromEntries(NODES.map(node => [node.id, node]))
   assert.equal(lookup.food_safety_cert.label, 'Food-safety certification')
