@@ -11,7 +11,6 @@ import io
 import json
 import os
 import smtplib
-import resource
 import socketserver
 import struct
 import time
@@ -27,10 +26,14 @@ from urllib.parse import unquote
 
 from sqlalchemy.engine import make_url
 url = make_url(os.environ.get('DATABASE_URL', ''))
-assert os.environ.get('COOKCREDIT_EPHEMERAL_VERIFICATION') == '1'
-assert url.host == '127.0.0.1' and url.username == 'cookcredit_test' and url.database == 'cookcredit_test'
-assert not os.environ.get('CLOUD_SQL_CONNECTION')
-assert os.environ['FIREBASE_STORAGE_BUCKET'] == 'cookcredit-hiring-load-915097816203'
+if not __debug__:
+    raise SystemExit('Run verification without Python optimization; verification assertions are required.')
+if (os.environ.get('COOKCREDIT_EPHEMERAL_VERIFICATION') != '1'
+        or url.host != '127.0.0.1' or url.username != 'cookcredit_test'
+        or url.database != 'cookcredit_test' or os.environ.get('CLOUD_SQL_CONNECTION')
+        or os.environ.get('FIREBASE_STORAGE_BUCKET') != 'cookcredit-hiring-load-915097816203'):
+    raise SystemExit('Only the disposable local database and private load-test bucket are allowed.')
+import resource
 from cryptography.fernet import Fernet
 os.environ['WEBHOOK_SECRET_ENCRYPTION_KEY'] = Fernet.generate_key().decode()
 os.environ['PARTNER_API_KEY_PEPPER'] = uuid.uuid4().hex
