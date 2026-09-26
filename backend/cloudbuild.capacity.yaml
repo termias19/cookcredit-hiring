@@ -1,0 +1,79 @@
+# Test containers share the Cloud Build network for existing ADC; no credential files.
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+  - run
+  - -d
+  - --network
+  - cloudbuild
+  - --name
+  - cc-test-postgres
+  - -e
+  - POSTGRES_USER=cookcredit_test
+  - -e
+  - POSTGRES_PASSWORD=isolated-test-only
+  - -e
+  - POSTGRES_DB=cookcredit_test
+  - postgis/postgis:16-3.5
+  id: Start disposable database
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - -t
+  - cookcredit-hiring-verification
+  - -f
+  - Dockerfile.verify
+  - .
+  id: Build test harness
+- name: gcr.io/cloud-builders/docker
+  args:
+  - run
+  - --rm
+  - --network
+  - container:cc-test-postgres
+  - -e
+  - DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test
+  - cookcredit-hiring-verification
+  - python
+  - migrations/run_migrations.py
+  id: Apply disposable migrations
+- name: gcr.io/cloud-builders/docker
+  args:
+  - run
+  - --rm
+  - --network
+  - container:cc-test-postgres
+  - -e
+  - DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test
+  - -e
+  - COOKCREDIT_EPHEMERAL_VERIFICATION=1
+  - -e
+  - FIREBASE_STORAGE_BUCKET=cookcredit-hiring-load-915097816203
+  - -e
+  - LOAD_APPLICANTS=8
+  - cookcredit-hiring-verification
+  - python
+  - scripts/verify_integrated_capacity.py
+  id: Eight applicant smoke
+- name: gcr.io/cloud-builders/docker
+  args:
+  - run
+  - --rm
+  - --network
+  - container:cc-test-postgres
+  - -e
+  - DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test
+  - -e
+  - COOKCREDIT_EPHEMERAL_VERIFICATION=1
+  - -e
+  - FIREBASE_STORAGE_BUCKET=cookcredit-hiring-load-915097816203
+  - -e
+  - LOAD_APPLICANTS=240
+  - cookcredit-hiring-verification
+  - python
+  - scripts/verify_integrated_capacity.py
+  id: Five minute integrated workload
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
