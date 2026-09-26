@@ -1,0 +1,64 @@
+{
+  "releasedAt": "2026-09-26",
+  "sourceCommit": "967337e09c4b2abe4953d48a1a1b68f68e04c551",
+  "ciRun": "https://github.com/termias19/cookcredit-hiring/actions/runs/36264014054",
+  "publicUrl": "https://hiring.cookcredit.com",
+  "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:30a2a7a7980c04c9b4548a8a2b82670f73c7f3e03fbb31009ccf5276edd32aaa",
+  "backendRevision": "cookcredit-hiring-00003-pwh",
+  "stagingRevision": "cookcredit-hiring-staging-00025-9w5",
+  "rollback": {
+    "backendRevision": "cookcredit-hiring-00002-48s",
+    "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:0e348ccc9d2a34d60e519e64d2c1da0f80bde5847816f2588e0c97504aa59e49"
+  },
+  "backendOnly": true,
+  "schemaChanged": false,
+  "paidCapacityUpgrades": false,
+  "capacityAndSettingsUnchanged": true,
+  "frontendAndLearningUnchanged": true,
+  "tests": {
+    "localBackend": {
+      "passed": 577,
+      "skipped": 8
+    },
+    "githubBackend": {
+      "passed": 568,
+      "skipped": 17
+    },
+    "githubFrontend": {
+      "passed": 55
+    },
+    "realRedisOutage": "503 with Retry-After, recovered to 200",
+    "concurrentMailCap": "passed",
+    "databaseLockTimeout": "passed",
+    "secretScan": "passed",
+    "publicOrigin": [
+      {
+        "path": "/",
+        "status": 200,
+        "frontendApiOriginMatches": true
+      },
+      {
+        "path": "/api/ready",
+        "status": 200,
+        "frontendCorsAllowed": true
+      },
+      {
+        "path": "/api/business/org",
+        "status": 401,
+        "frontendCorsAllowed": true
+      },
+      {
+        "path": "/api/access/owner/requests",
+        "status": 401,
+        "frontendCorsAllowed": true
+      }
+    ]
+  },
+  "stage5": "complete under existing-budget scope",
+  "stage6": "fresh real production applicant journey acceptance remains",
+  "limits": [
+    "Not a mass-traffic or high-availability certification.",
+    "Existing Google SMTP quota, zonal SQL and BASIC Redis remain.",
+    "Autoscaling caps do not impose an absolute billing cap."
+  ]
+}
