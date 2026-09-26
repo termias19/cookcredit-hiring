@@ -49,6 +49,9 @@ def access_allowed(email, *, legacy_setting='STAGING_ALLOWED_EMAILS'):
 def enqueue_access_mail(session, row, kind):
     recipient = OWNER_EMAIL if kind == 'access_requested' else row.email
     key = hashlib.sha256(f'{kind}:{row.id}:{row.revision}'.encode()).hexdigest()
+    from services.email_capacity import reserve_email_slot
+    if not reserve_email_slot(session, key):
+        return
     session.execute(insert(AccountEmail).values(
         id=uuid.uuid4(), dedupe_key=key, kind=kind, recipient=recipient,
         access_request_id=row.id, access_revision=row.revision,

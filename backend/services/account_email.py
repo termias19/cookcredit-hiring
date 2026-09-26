@@ -29,6 +29,9 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
     identity = user_id if kind == 'welcome' else recipient.strip().casefold()
     window = 'once' if kind == 'welcome' else str(int(utcnow().timestamp()) // 300)
     key = hashlib.sha256(f'{kind}:{identity}:{window}'.encode()).hexdigest()
+    from services.email_capacity import reserve_email_slot
+    if not reserve_email_slot(session, key):
+        return
     session.execute(insert(AccountEmail).values(
         id=uuid.uuid4(), dedupe_key=key, kind=kind, recipient=recipient,
         user_id=user_id, status='pending', attempts=0,

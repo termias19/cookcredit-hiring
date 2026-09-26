@@ -181,7 +181,11 @@ def ready():
 # ── Rate limit error handler ───────────────────────────────────────────────────
 @app.errorhandler(429)
 def ratelimit_handler(e):
-    retry_after = None
+    retry_after = 60
+    current_limit = limiter.current_limit
+    if current_limit is not None:
+        import math
+        retry_after = max(1, math.ceil(current_limit.reset_at - time.time()))
     if hasattr(e, "retry_after") and e.retry_after:
         reset = e.retry_after
         if isinstance(reset, datetime.datetime):
@@ -219,6 +223,18 @@ def handle_exception(e):
     # generic 500 with the real cause logged server-side only.
     if isinstance(e, HTTPException):
         return jsonify({"error": e.name}), e.code
+    from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeout
+    from redis.exceptions import RedisError
+    from limits.errors import StorageError
+    from services.email_capacity import EmailQueueBusy
+    if isinstance(e, (OperationalError, PoolTimeout, RedisError, StorageError, EmailQueueBusy)):
+        from services.operations import emit_event
+        emit_event('dependency_unavailable', severity='ERROR', requestId=g.request_id,
+                   exception=type(e).__name__, endpoint=request.endpoint or 'unmatched')
+        response = jsonify(error='Temporarily busy. Please try again shortly.', requestId=g.request_id)
+        response.status_code = 503
+        response.headers['Retry-After'] = '60' if isinstance(e, EmailQueueBusy) else '5'
+        return response
     import traceback
     from pathlib import Path
     from services.operations import emit_event

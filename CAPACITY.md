@@ -1,6 +1,6 @@
 # Stage 5 capacity validation
 
-Stage 4 integration work is implemented. Stage 5 (capacity validation) is active. Stage 6 production deployment is live, but mass-launch acceptance remains open. A live URL alone does not close capacity or account acceptance.
+Stage 5 is complete for the agreed existing-budget scope: bounded early traffic, shared limits, overload handling, failure recovery and a documented scale-up path. The owner chose to keep current infrastructure while there is no traction. This is not a large-traffic capacity certification. Stage 6 is deployed; a fresh real production applicant journey remains an acceptance check.
 
 ## Reusable integrated workload
 
@@ -16,22 +16,28 @@ The sustained workload schedules eight synthetic applicants every ten seconds fo
 
 Identity and assessment-source metadata are adapters. SMTP and webhook receivers are loopback services. Playback uses a loopback adapter downloading the actual private GCS generation; IAM URL signing is not benchmarked. Rate limits are disabled to isolate component capacity and are verified separately across processes. This test cannot certify Google SMTP, Firebase login, production Cloud SQL throughput, browser responsiveness, raw camera capture or genuine scoring accuracy.
 
-## Production rollout gates
+## Future traffic expansion gates (not required purchases now)
 
-1. Agree expected peak applicants, signup volume and recurring budget. Do not increase the three-instance API cap by assumption.
+1. Before a campaign or increasing the three-instance API cap, agree expected peak applicants, signup volume and recurring budget. No infrastructure upgrade or paid provider change is part of the current release.
 2. Size a dedicated-core regional Cloud SQL instance from sustained database measurements. Maintain backups/PITR, reserve administrative connections, and plan for the restart required by settings changes.
 3. For Redis high availability, create a separate Standard instance with AUTH, TLS and private access. Basic-to-Standard is not an in-place tier change. Coordinate the rate-limit counter transition; do not reset quotas across a rolling split between two stores. Retain the previous store during the rollback window.
-4. Provision valid transactional mail access and a verified CookCredit sender using the existing SendGrid adapter. Store the credential in Secret Manager, not Git or chat. Verify quota, sender/domain authentication and bounce handling before changing `AUTH_EMAIL_PROVIDER`. Preserve templates and disabled tracking. Test an explicitly authorized recipient before sending applicant traffic.
+4. If signup demand exceeds the current mail allowance, provision valid transactional mail access and a verified CookCredit sender using the existing adapter. The owner-approval runtime validation currently requires Google SMTP: update and test that validation before switching providers. Store credentials in Secret Manager, not Git or chat. Verify quota, sender/domain authentication and bounce handling. Preserve templates and disabled tracking. Test an explicitly authorized recipient before sending applicant traffic.
 5. Run production-sized sustained integrated tests and verify queue draining, database connections, request latency, throttling and dependency-failure recovery. Local SMTP acceptance does not demonstrate inbox delivery.
 6. Complete a fresh real production applicant journey: employer link, signup/login and verification, CV, consent, assessment submission, employer playback/resume and review outcome. The agent must not supply a user's consent or employment decision.
 
-Connection budget: maximum instances Ã— Gunicorn workers Ã— (pool size + overflow), plus jobs/migrations and operational reserve. Check the database's actual max_connections and memory before changing these values. Max instance concurrency does not equal tested throughput.
+Connection budget: maximum instances * Gunicorn workers * (pool size + overflow), plus jobs/migrations and operational reserve. Check the database's actual max_connections and memory before changing these values. Max instance concurrency does not equal tested throughput.
 
 ## Current operational boundaries
 
 Production remains three capped API instances, db-g1-small zonal SQL and BASIC 1GiB Redis. Read-only inspection on 2026-09-26 found max_connections=50. One Gunicorn worker per instance with pool3+overflow2 gives a15-connection API budget; preserve headroom for jobs, reserved/admin connections and overlapping revisions during rollout. Shared limits, request/release tracing, queue-age/failure alerts, backups and rollback records are enabled. Google SMTP has provider quotas and a five-message dispatcher batch cap. No mass-capacity certificate is claimed.
 
 Official references: [Cloud SQL production settings](https://docs.cloud.google.com/sql/docs/postgres/instance-settings), [Cloud SQL high availability](https://docs.cloud.google.com/sql/docs/postgres/high-availability), [Redis tiers and pricing](https://cloud.google.com/memorystore/docs/redis/pricing), [Google Workspace sending limits](https://knowledge.workspace.google.com/admin/gmail/gmail-sending-limits-in-google-workspace).
+
+## Existing-budget safeguards and red team
+
+Account and employer-access mail share a transactionally enforced 100-message pending/sending cap. Duplicate enqueue requests do not consume another slot. A full queue returns 503 with Retry-After: 60; SQL/Redis dependency failures return 503 with Retry-After: 5. Rate-limited responses provide Retry-After. Database connections have a five-second connect timeout, 30-second statement timeout, three-second lock timeout and 60-second idle-transaction timeout. Recording import remains outside database transactions.
+
+The local full regression suite passed 577 tests (8 skipped). A real disposable Redis pause produced 503 and recovered to 200 on resume; concurrent PostgreSQL queue admissions could not exceed the cap; a real conflicting database lock timed out and the connection recovered after rollback. Shared Redis admitted 60 and rejected 20 of 80 requests across two processes and preserved counters in a new process. See [the red-team record](capacity/stage5-redteam-2026-09-26.md) for scope and limitations. No live saturation traffic or real applicant mail was generated.
 
 ## Measured 2026-09-26 result
 

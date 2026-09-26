@@ -58,6 +58,7 @@ def init_db():
     max_overflow = max(0, min(40, int(os.environ.get('DB_MAX_OVERFLOW', '10'))))
     engine = create_engine(
         url,
+        connect_args={"connect_timeout": 5, "options": "-c statement_timeout=30000 -c lock_timeout=3000 -c idle_in_transaction_session_timeout=60000"},
         pool_size=pool_size,
         max_overflow=max_overflow,
         pool_pre_ping=True,

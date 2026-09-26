@@ -37,6 +37,14 @@ Database connection budget is instances * gunicorn workers * (DB_POOL_SIZE + DB_
 
 Google Workspace SMTP has account/provider sending quotas independent of API autoscaling. The bounded dispatcher and queue alerts prevent silent failure but do not increase that quota. Before a mass signup campaign, provision/verify an appropriate transactional delivery allowance or provider, test delivery and bounce handling, and publish the tested signup envelope. Never promise unlimited concurrency or mail delivery based on local tests.
 
+## Overload response
+
+The existing-budget release caps pending/sending account and access email at 100 across all instances. A full queue returns HTTP 503 and Retry-After: 60; the surrounding transaction rolls back. Dedupe replays retain their existing slot. Do not raise the cap to conceal a provider outage. Inspect queue_health, message age and terminal failures first. At five messages per scheduled batch, a full queue already represents approximately twenty minutes of work before retries or provider delays.
+
+SQL/Redis failures return HTTP 503 with Retry-After: 5 and a request ID. Rate-limit rejections return 429 with Retry-After. Clients should wait and retry deliberately, not loop immediately. Look for dependency_unavailable and match the request ID and release commit; responses and logs do not expose SQL or secret values.
+
+Database runtime timeouts: connect 5 seconds, statement 30 seconds, lock 3 seconds, idle transaction 60 seconds. Recording transfer takes place outside a database transaction. Keep the current three-instance cap and 15-connection API budget. Repeated 503/429 responses, rising queue age, sustained latency or exhausted pool capacity are signals to investigate and measure demand before approving a capacity change. Basic Redis and zonal SQL remain availability limitations; retry handling is not high availability.
+
 ## Retention and access
 
 Private hiring recording, landmark and CV prefixes expire after 30 days. Active company logos are excluded from that lifecycle. CV links report expiration/unavailability instead of endless retries. Existing sharing checks and five-minute signed playback links still apply. Firebase disabled/revoked sessions are checked on verification with a maximum 30-second cache; company approval and application consent are checked separately.
