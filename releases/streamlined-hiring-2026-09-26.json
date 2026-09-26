@@ -1,0 +1,15 @@
+{
+  "version": "sites/cookcredit-hiring/versions/cde0753ae8e98a48",
+  "frontendCommit": "466fd94b26d1446225512631352c4f8db39f99e1",
+  "rollbackVersion": "sites/cookcredit-hiring/versions/99aed239927de541",
+  "preservedAssessmentAssets": 33,
+  "changedAssessmentAssets": [],
+  "hostingConfigurationUnchanged": true,
+  "release": "sites/cookcredit-hiring/releases/1790467150984000",
+  "backendRevision": "cookcredit-hiring-00004-mxr",
+  "ci": "https://github.com/termias19/cookcredit-hiring/actions/runs/36280988597",
+  "frontendTests": 74,
+  "backendTests": 571,
+  "backendSkipped": 17,
+  "productionAcceptance": "Fresh applicant email, consent, recording and employer playback remain pending."
+}
