@@ -1,0 +1,36 @@
+{
+  "releasedAt": "2026-09-26",
+  "sourceCommit": "b8fc36ca3c66d84478ecc5558c84019c9417a4ff",
+  "ciRun": "https://github.com/termias19/cookcredit-hiring/actions/runs/36259061097",
+  "publicUrl": "https://hiring.cookcredit.com",
+  "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:0e348ccc9d2a34d60e519e64d2c1da0f80bde5847816f2588e0c97504aa59e49",
+  "backendRevision": "cookcredit-hiring-00002-48s",
+  "frontendVersion": "sites/cookcredit-hiring/versions/cb88a450baaa6b00",
+  "frontendRelease": "sites/cookcredit-hiring/releases/1790444201303000",
+  "mainSiteVersion": "sites/foodnlit-1123e/versions/6048580107bb60ec",
+  "rollback": {
+    "backendRevision": "cookcredit-hiring-00001-2rl",
+    "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:be77a2480c8d0e1c02c869ebd3531ea6070c8aa8c3400fb92f48d5c39b8adfe0",
+    "frontendVersion": "sites/cookcredit-hiring/versions/6835422ee13fc78b",
+    "mainSiteVersion": "sites/foodnlit-1123e/versions/b12bbe1f529729d6"
+  },
+  "tests": {
+    "backend": {
+      "passed": 545,
+      "skipped": 17
+    },
+    "frontend": {
+      "passed": 55
+    },
+    "isolatedMetadataRequests": 400,
+    "isolatedMetadataFailures": 0,
+    "rateLimitsAcrossProcesses": true,
+    "assessmentAssetsUnchanged": 32
+  },
+  "limits": [
+    "Isolated metadata load probe is not a production upload/scoring/email capacity certificate.",
+    "Production database remains shared-core and zonal; Redis remains BASIC.",
+    "Google Workspace SMTP throughput and daily quota remain separate limits.",
+    "Fresh production signed-in applicant/CV/recording/employer-review acceptance remains pending."
+  ]
+}
