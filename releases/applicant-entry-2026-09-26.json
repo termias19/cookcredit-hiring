@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-26",
+  "frontendCommit": "ebcb35ed0467da0a153fb5fe8b891650806091cc",
+  "backendCommit": "f7eb46e9b4ce37da2673eb5dfb1f4950e80f3d1d",
+  "backendRevision": "cookcredit-hiring-00004-mxr",
+  "hostingVersion": "sites/cookcredit-hiring/versions/dd41f131ca798c76",
+  "hostingRelease": "sites/cookcredit-hiring/releases/1790460065838000",
+  "rollbackHostingVersion": "sites/cookcredit-hiring/versions/f175fd4677cc04ba",
+  "ci": "https://github.com/termias19/cookcredit-hiring/actions/runs/36274506774",
+  "tests": {
+    "frontendPassed": 60,
+    "backendPassed": 571,
+    "backendSkipped": 17,
+    "publicHistorySecretScan": "passed"
+  },
+  "preservedAssessmentAssets": 32,
+  "changedAssessmentAssets": [
+    "/landing/assessment/hiring-bridge.mjs"
+  ],
+  "backendChanged": false,
+  "hostingConfigurationChanged": false,
+  "capacityChanged": false,
+  "schemaChanged": false,
+  "learningAssessmentChanged": false,
+  "scoringChanged": false,
+  "liveChecks": [
+    "Production origin rejection reproduced before changes with a synthetic session ID.",
+    "After release the same URL passes bridge validation and restores the existing signed-in account.",
+    "The server correctly rejects the nonexistent session; camera remains disabled.",
+    "Public bridge and release metadata match the built source; backend readiness returns 200 with unchanged source header."
+  ],
+  "acceptance": "INCOMPLETE: fresh applicant inbox verification, consent, CV/recording submission, employer retrieval and playback still need acceptance.",
+  "reportedCopyIssue": "Exact professional-cook test-program screen not identified. Current production-build login and applicant signup do not show this wording; reported URL requested."
+}
