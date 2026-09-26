@@ -1,0 +1,48 @@
+{
+  "releasedAt": "2026-09-26",
+  "backendCommit": "f7eb46e9b4ce37da2673eb5dfb1f4950e80f3d1d",
+  "frontendCommit": "b19168e4e5a7e3e079e2878e3700b3dd8666fcb6",
+  "ciRun": "https://github.com/termias19/cookcredit-hiring/actions/runs/36270224693",
+  "backendRevision": "cookcredit-hiring-00004-mxr",
+  "stagingRevision": "cookcredit-hiring-staging-00026-z7d",
+  "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:65d4cf301e43c60362a4b6573d954f557fc54f3c00657eb734bb7728d7f0bfd1",
+  "hostingVersion": "sites/cookcredit-hiring/versions/f175fd4677cc04ba",
+  "assessmentAssetsPreserved": 33,
+  "rollback": {
+    "backendRevision": "cookcredit-hiring-00003-pwh",
+    "hostingVersion": "sites/cookcredit-hiring/versions/cb88a450baaa6b00"
+  },
+  "schemaChanged": false,
+  "capacityAndSettingsUnchanged": true,
+  "paidCapacityUpgrades": false,
+  "tests": {
+    "githubBackend": {
+      "passed": 571,
+      "skipped": 17
+    },
+    "frontendPassed": 55,
+    "localCombinedBackend": {
+      "passed": 580,
+      "skipped": 8
+    },
+    "runtimeNpmAdvisories": 0,
+    "queuePressure": {
+      "requests": 400,
+      "concurrentClients": 40,
+      "accepted": 100,
+      "capacityRejected": 300,
+      "duplicateRetries": 100,
+      "duplicateRowsAdded": 0,
+      "acceptedAfterDrain": 20
+    }
+  },
+  "liveOwnerWorkflow": "Role created, measurement ranges saved, closed, reopened, then left closed. Closed applicant URL refuses access. Existing signed-in session preserved.",
+  "stage5": "complete within existing-budget scope",
+  "stage6": "technical release deployed; fresh production applicant acceptance remains",
+  "remainingAcceptance": "Real applicant email verification, consent, CV and assessment submission, then employer CV download and recording playback.",
+  "limitations": [
+    "Not a mass-traffic or high-availability certification.",
+    "Runtime npm audit is clear; development dependency advisories remain.",
+    "No real email delivery or fresh production applicant media round-trip was certified."
+  ]
+}
