@@ -285,4 +285,6 @@ def dispatch_emails():
         return jsonify(claimed=0, sent=0, skipped=0, failed=0), 200
     from services.account_email import dispatch_account_emails
     result = dispatch_account_emails()
+    from services.operations import report_queue_health
+    report_queue_health('email')
     return jsonify(result), 503 if result['failed'] else 200

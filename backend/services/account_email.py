@@ -50,7 +50,7 @@ def account_email_content(kind, link):
                              'Open your private owner queue to review the request. Receiving a request does not grant access.',
                              'Review access requests', 'Only the verified CookCredit owner can approve access.'),
         'access_approved': ('Your CookCredit hiring access is approved', 'Your hiring access is ready',
-                            'Create an account or sign in using this email address, verify your email, and set up your own company workspace. CookCredit hiring is in invited testing; assessment results require human review and billing is disabled.',
+                            'Create an account or sign in using this email address, verify your email, and set up your own company workspace. Your team reviews assessment results and makes the hiring decisions. No subscription payment is required.',
                             'Open CookCredit hiring', 'This invitation follows an owner-approved request for hiring access. It does not add you to another company’s workspace.'),
     }
     subject, title, body, button, footer = content[kind]

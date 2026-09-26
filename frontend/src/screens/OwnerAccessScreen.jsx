@@ -95,7 +95,7 @@ export default function OwnerAccessScreen() {
         </article>)}
       </div>}
       <div className="cc-access-actions">{cursor && <button onClick={() => setCursor('')} disabled={loading}>First page</button>}{page.nextCursor && <button onClick={() => setCursor(page.nextCursor)} disabled={loading}>Next page</button>}</div>
-      <p className="cc-access-note">Revoking access blocks this email’s hiring API access. It does not delete their account, company, recordings, or other team members. Test applicants still need their own approved access during invited testing.</p>
+      <p className="cc-access-note">Revoking access blocks this email’s hiring API access. It does not delete their account, company, recordings, or other team members. Applicants can apply through an employer’s role link without employer-access approval.</p>
       <Link to="/business/roles">Return to your workspace</Link>
     </>}
   </div></main>

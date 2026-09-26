@@ -23,7 +23,7 @@ export default function HiringAccessRequestScreen() {
   }
   return <main className="cc-access-page"><div className="cc-access-wrap">
     <CookCreditBrand />
-    <p className="cc-access-eyebrow">CookCredit / Invited hiring access</p>
+    <p className="cc-access-eyebrow">CookCredit / Hiring access</p>
     <h1>Let’s meet your kitchen.</h1>
     {done ? <section className="cc-access-card" role="status">
       <h2>Thank you for your request.</h2>
@@ -44,6 +44,6 @@ export default function HiringAccessRequestScreen() {
       <p className="cc-access-note">Prefer email? Write to <a href="mailto:connectwithus@cookcredit.com?subject=CookCredit%20hiring%20access">connectwithus@cookcredit.com</a> with “hiring access” in the subject.</p>
       <p className="cc-access-note">Already approved? <Link to="/signup?next=/business/onboarding">Create your account</Link> or <Link to="/login" state={{ from: '/business/onboarding' }}>sign in</Link>.</p>
     </>}
-    <p className="cc-access-note">Hiring is in invited testing. Assessment results require human review. Subscriptions and automatic hiring decisions are not enabled.</p>
+    <p className="cc-access-note">Employer access is reviewed by CookCredit. Your team makes every hiring decision. No subscription payment is required.</p>
   </div></main>
 }

@@ -14,6 +14,7 @@ from pathlib import Path
 import time
 from urllib.parse import urlsplit
 import uuid
+from threading import Lock
 import requests
 
 
@@ -73,10 +74,14 @@ def main():
         p.error(str(exc))
     run_id = 'load-' + uuid.uuid4().hex
     headers = {'Authorization': 'Bearer ' + token}
+    active = 0
+    peak_active = 0
+    active_lock = Lock()
     start = time.perf_counter()
     started_at = datetime.now(timezone.utc).isoformat()
 
     def one(index):
+        nonlocal active, peak_active
         delay = start + index / args.rps - time.perf_counter()
         if delay > 0:
             time.sleep(delay)
@@ -84,6 +89,9 @@ def main():
         identity = 0 if args.scenario == 'retry' else index
         body = assessment_request_body(run_id, identity)
         resource_id = None
+        with active_lock:
+            active += 1
+            peak_active = max(peak_active, active)
         try:
             if args.scenario in ('create', 'retry'):
                 response = requests.post(origin + '/api/partner/v1/assessment-requests', json=body,
@@ -101,6 +109,9 @@ def main():
                         status = -2
         except (requests.RequestException, ValueError):
             status = 0
+        finally:
+            with active_lock:
+                active -= 1
         return status, (time.perf_counter() - begin) * 1000, resource_id
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
@@ -113,7 +124,7 @@ def main():
                    len(identities) == args.requests if args.scenario == 'create' else True)
     report = {'startedAt': started_at, 'target': origin, 'environment': health['environment'],
               'revision': health.get('revision'), 'runId': run_id, 'scenario': args.scenario,
-              'requests': len(results), 'workers': args.workers, 'targetRps': args.rps,
+              'requests': len(results), 'workers': args.workers, 'peakInflight': peak_active, 'targetRps': args.rps,
               'achievedRps': round(len(results) / wall, 2), 'statusCounts': dict(Counter(str(row[0]) for row in results)),
               'success': success, 'errors': len(results) - success, 'identityChecksPassed': identity_ok,
               'latencyMs': {name: round(timings[min(len(timings)-1, math.ceil(len(timings)*q)-1)], 2)

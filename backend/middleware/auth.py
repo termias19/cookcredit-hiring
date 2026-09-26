@@ -43,11 +43,9 @@ def require_verified_email(f):
     blocks unverified login, so legitimate in-app users are always verified and pass cleanly — this
     just closes the gap where a token from an unverified account hits the API directly.
 
-    NOT YET APPLIED to any route (ready infrastructure). BEFORE enabling it on the cook/skill/
-    business actions, add the companion client UX: after a user clicks the verification link, the
-    cached Firebase ID token still says email_verified=false for up to ~1h, so the client must
-    user.reload() + getIdToken(true) (force refresh) — otherwise a just-verified user keeps getting
-    403s. Pair this decorator with a "verify your email (resend)" gate + token refresh on submit."""
+    The client must refresh its token after verification; privileged routes
+    enforce this decorator in addition to company/owner authorization.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         if not getattr(g, "email_verified", False):
@@ -64,7 +62,7 @@ def require_verified_email(f):
 # endpoint. Trade-off: a revoked token keeps working for up to _TTL seconds.
 # In-process per gunicorn worker (no infra); swap for Redis when multi-instance.
 # We key by SHA-256 of the token, never storing the raw token.
-_TTL = 300        # max seconds to trust a cached verification
+_TTL = 30        # max seconds to trust a cached verification
 _SKEW = 30        # never cache past (token-exp - skew)
 _MAX = 5000       # bound memory
 _cache = {}       # sha256(token) -> (claims, expiry_epoch)
@@ -81,7 +79,7 @@ def _verify_token(token: str) -> dict:
         if hit and hit[1] > now:
             return hit[0]
 
-    claims = get_auth().verify_id_token(token)   # network verify (signature/exp/revocation)
+    claims = get_auth().verify_id_token(token, check_revoked=True)
 
     exp = float(claims.get("exp", now + _TTL))
     ttl = min(_TTL, max(0.0, exp - now - _SKEW))
@@ -135,7 +133,7 @@ def require_auth(f):
                 ('hiring.withdraw_application', 'POST'), ('hiring.application_cv', 'GET'),
             }
             if not applicant_route and not access_allowed(g.email):
-                return jsonify(error='This CookCredit staging environment is limited to invited testers', code='staging_access_denied'), 403
+                return jsonify(error='Employer access requires approval from CookCredit', code='staging_access_denied'), 403
             # An invited new account must be able to create its own inert
             # profile before email verification. Otherwise signup stops at
             # /sync and never reaches the verification-email step. Exact

@@ -19,6 +19,7 @@
  *     with { timeoutMs }.
  */
 
+import { errorReference } from './errorReference.js'
 import { PREVIEW } from '../config'
 import { previewBusinessRequest } from '../data/previewBusinessApi'
 
@@ -97,10 +98,16 @@ export async function http(path, opts = {}) {
 
   if (res.ok && opts.responseType === 'blob') return res.blob()
   const data = await res.json().catch(() => ({}))
+  const reference = errorReference(data, res)
+  if (reference && data && typeof data === 'object') {
+    data.requestId = reference
+    data.error = `${data.error || 'Request failed'}. Reference: ${reference}`
+  }
   if (throwOnError && !res.ok) {
     const error = new Error(data?.error || `${path} failed (${res.status})`)
     error.status = res.status
     error.code = data?.code
+    error.requestId = reference
     throw error
   }
   return data

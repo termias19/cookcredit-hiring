@@ -68,3 +68,27 @@ def test_revoked_employer_cannot_use_applicant_cv_exemption(monkeypatch):
     result = app.test_client().get(f'/hiring/applications/{aid}/cv', headers={'Authorization': 'Bearer test'})
     assert result.status_code == 404
     download.assert_not_called()
+
+
+def test_expired_cv_is_not_advertised_or_downloaded(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    meta={'expiresAt':(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat()}
+    assert not hiring_cv.available(meta)
+    monkeypatch.setattr(hiring_cv,'get_storage_bucket',lambda:pytest.fail('No storage read after expiry'))
+    with pytest.raises(hiring_cv.CvUnavailable):hiring_cv.download_cv('application',meta)
+
+
+def test_legacy_cv_uses_application_submission_date():
+    from datetime import datetime,timedelta,timezone
+    meta={'path':'legacy'};now=datetime.now(timezone.utc)
+    assert hiring_cv.available(meta,now-timedelta(days=29))
+    assert not hiring_cv.available(meta,now-timedelta(days=30))
+
+
+def test_missing_cv_has_terminal_unavailable_status(monkeypatch):
+    from google.api_core.exceptions import NotFound
+    digest='a'*64;meta={'path':f'hiring_cv/test/{digest}.pdf','sha256':digest,'generation':'1'}
+    blob=Mock();blob.download_as_bytes.side_effect=NotFound('absent')
+    bucket=Mock();bucket.blob.return_value=blob
+    monkeypatch.setattr(hiring_cv,'get_storage_bucket',lambda:bucket)
+    with pytest.raises(hiring_cv.CvUnavailable):hiring_cv.download_cv('test',meta)

@@ -87,11 +87,14 @@ def main():
         else:
             raise RuntimeError('Synthetic test server did not become ready')
         reports = []
+        workers = int(os.environ.get('LOAD_CLIENTS', '8'))
+        rps = float(os.environ.get('LOAD_RPS', '20'))
+        assert 1 <= workers <= 100 and 0 < rps <= 200
         for scenario, count in [('requests', 200), ('create', 100), ('retry', 100)]:
             output = Path('/tmp') / f'cookcredit-load-{scenario}.json'
             subprocess.run([sys.executable, 'scripts/hiring_read_load.py',
                 '--base-url', 'http://127.0.0.1:8799', '--scenario', scenario,
-                '--requests', str(count), '--workers', '8', '--rps', '20',
+                '--requests', str(count), '--workers', str(workers), '--rps', str(rps),
                 '--output', str(output)], check=True)
             report = json.loads(output.read_text())
             report.update(seedAssessmentRequests=10000, processes=2, threadsPerProcess=4,

@@ -268,7 +268,7 @@ def configure():
         api(session, 'POST', endpoint.rsplit('/', 1)[0], params={'project': PROJECT}, json={
             'name': BUCKET, 'location': REGION, 'labels': LABELS,
             'iamConfiguration': {'uniformBucketLevelAccess': {'enabled': True}, 'publicAccessPrevention': 'enforced'},
-            'lifecycle': {'rule': [{'action': {'type': 'Delete'}, 'condition': {'age': 30}}]}})
+            'lifecycle': __import__('media_lifecycle').hiring_media_lifecycle()})
     else:
         require_labels(current.get('labels', {}))
     policy = api(session, 'GET', endpoint+'/iam')

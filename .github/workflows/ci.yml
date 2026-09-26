@@ -1,0 +1,55 @@
+name: Verify hiring release
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_USER: cookcredit_test
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: cookcredit_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U cookcredit_test" --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt pytest==8.3.5
+      - name: Migrations and regression tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test
+          HIRING_TEST_DATABASE_URL: postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test
+        run: |
+          python migrations/run_migrations.py
+          python -m pytest tests ../deploy/tests -q -p no:cacheprovider
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: node --test tests/*.test.mjs
+        working-directory: frontend
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --config /repo/.gitleaks.toml --redact --no-banner

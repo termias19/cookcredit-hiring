@@ -86,7 +86,7 @@ export default function BusinessBillingScreen() {
       <ArrowLeft size={14} color="#999" strokeWidth={1.5} /><span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>{biz?.org?.name || 'Workspace'}</span>
     </button>
     <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Plans & billing</h1>
-    <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{earlyAccess ? 'Your workspace has free early access. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
+    <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
   </div>
 
   if (earlyAccess) return <BusinessShell header={header} showNav={false}>

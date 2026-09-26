@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from models import (User, EaterProfile, CookProfile, Org, OrgAssessmentUsage, OrgMembership, OrgInvitation, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent,
-                    AssessmentShare, AssessmentAccessLog, HiringApplication,
+                    AssessmentShare, AssessmentAccessLog, HiringApplication, ResumeKeypoints,
                     HiringAssessmentSession, HiringApplicationEvent, StripeEvent,
                     PartnerApiKey, PartnerInvitation, PartnerWebhook, PartnerWebhookDelivery)
 from services import database, assessment_media, skill_attempts, scoring_dispatch, partner_integrations
@@ -35,7 +35,7 @@ def db(monkeypatch):
         conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine = create_engine(url, connect_args={'options': f'-csearch_path={schema},public'})
     try:
-        for model in (User, EaterProfile, CookProfile, Org, OrgMembership, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent):
+        for model in (User, EaterProfile, CookProfile, Org, OrgMembership, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent, ResumeKeypoints):
             model.__table__.create(engine)
         migration = (Path(__file__).parents[1] / 'migrations/011_hiring_evidence_sharing.sql').read_text()
         with engine.connect().execution_options(isolation_level='AUTOCOMMIT') as conn:

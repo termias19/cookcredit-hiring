@@ -703,7 +703,10 @@ def partner_application(application_id):
 def internal_dispatch_webhooks():
     if not internal_request_authorized(request):
         return jsonify(error='Forbidden'), 403
-    return jsonify(dispatch_partner_webhooks(limit=50)), 200
+    result = dispatch_partner_webhooks(limit=50)
+    from services.operations import report_queue_health
+    report_queue_health('webhook')
+    return jsonify(result), 503 if result['failed'] else 200
 
 
 @partner_bp.route('/internal/expire-assessment-requests', methods=['POST'])

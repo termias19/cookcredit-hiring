@@ -40,7 +40,8 @@ APPLICATION_CONSENT_TEXT = (
     'Share my name, CV if supplied, answers, approximate location, and each submitted assessment attempt, including '
     'its recording, measurements and review status, with the named company for this role. '
     'Browser measurements are provisional; a person must make the hiring decision. I may revoke '
-    'future recording access; already issued playback links expire within five minutes.'
+    'future recording access; already issued playback links expire within five minutes. '
+    'Hiring copies of recordings, landmarks and CVs are retained for up to 30 days.'
 )
 ANSWER_TEXT_LIMIT = 2000
 SESSION_TTL = timedelta(hours=2)
@@ -170,7 +171,7 @@ def _application_view(application, sessions):
         'id': str(application.id), 'roleId': str(application.role_posting_id),
         'status': application.status, 'answers': application.answers or {},
         'applicantName': (application.applicant_details or {}).get('name'),
-        'hasCv': bool((application.applicant_details or {}).get('cv')) and application.status != 'withdrawn',
+        'hasCv': hiring_cv.available((application.applicant_details or {}).get('cv'), application.submitted_at) and application.status != 'withdrawn',
         'questions': application.question_schema or [], 'location': application.location,
         'assessmentCriteria': application.assessment_criteria,
         'screeningResult': application.screening_result if application.status != 'withdrawn' else None,
@@ -770,8 +771,12 @@ def application_cv(application_id):
         metadata = (application.applicant_details or {}).get('cv')
         if not metadata:
             return jsonify(error='Not found'), 404
+        if not hiring_cv.available(metadata, application.submitted_at):
+            return jsonify(error='This CV has expired under the 30-day retention policy.', code='cv_expired'), 410
         try:
             data = hiring_cv.download_cv(application.id, metadata)
+        except hiring_cv.CvUnavailable as exc:
+            return jsonify(error=str(exc), code='cv_unavailable'), 410
         except Exception:
             return jsonify(error='CV is temporarily unavailable. Please try again.'), 503
         session.add(HiringApplicationEvent(application_id=application.id, actor_id=g.user_id,
@@ -817,7 +822,7 @@ def candidate_applications(cook_id):
             user=session.get(User, application.applicant_id)
             result.append({'id':str(application.id),'roleId':str(role.id),'roleTitle':role.title,
                 'applicantName':(application.applicant_details or {}).get('name') or (user.name if user else ''),
-                'hasCv':bool((application.applicant_details or {}).get('cv')),
+                'hasCv':hiring_cv.available((application.applicant_details or {}).get('cv'), application.submitted_at),
                 'questions':application.question_schema or [], 'answers':application.answers or {},
                 'review':hiring_reviews.review_view(events, session=session),
                 'employerUpdate':hiring_reviews.review_view(events, public=True)})

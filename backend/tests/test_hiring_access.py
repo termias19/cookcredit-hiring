@@ -80,6 +80,9 @@ def test_inbox_failure_cannot_block_account_email_dispatch(monkeypatch):
     monkeypatch.setattr(hiring_access_inbox, 'sync_hiring_inbox', importer)
     sender = Mock(return_value={'claimed': 1, 'sent': 1, 'failed': 0, 'skipped': 0})
     monkeypatch.setattr(account_email, 'dispatch_account_emails', sender)
+    from services import operations
+    observer = Mock(return_value=True)
+    monkeypatch.setattr(operations, 'report_queue_health', observer)
     app = Flask(__name__)
     app.register_blueprint(auth_bp, url_prefix='/auth')
     response = app.test_client().post('/auth/internal/dispatch-emails')

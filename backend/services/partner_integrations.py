@@ -245,6 +245,7 @@ def dispatch_partner_webhooks(*, send=None, limit=50) -> dict:
     limit = max(1, min(50, int(limit)))
     now = _utcnow()
     claimed = []
+    exhausted = 0
     with db_session() as session:
         rows = (session.query(PartnerWebhookDelivery)
                 .filter(PartnerWebhookDelivery.status.in_(('pending', 'delivering')),
@@ -256,12 +257,14 @@ def dispatch_partner_webhooks(*, send=None, limit=50) -> dict:
         for row in rows:
             hook = session.get(PartnerWebhook, row.webhook_id)
             if not hook or not hook.active:
+                exhausted += 1
                 row.status = 'failed'; row.last_error = 'webhook disabled'
                 row.lock_token = None; row.locked_until = None
                 continue
             # A crashed worker never reaches the response handler below. Enforce
             # the same budget when reclaiming its expired lease, before sending.
             if row.attempts >= MAX_DELIVERY_ATTEMPTS:
+                exhausted += 1
                 row.status = 'failed'; row.last_error = 'delivery attempt budget exhausted'
                 row.lock_token = None; row.locked_until = None
                 continue
@@ -274,7 +277,7 @@ def dispatch_partner_webhooks(*, send=None, limit=50) -> dict:
             claimed.append((row.id, token, hook.id, hook.url, hook.secret_ciphertext,
                             row.payload, row.attempts))
 
-    stats = {'claimed': len(claimed), 'delivered': 0, 'failed': 0, 'retrying': 0}
+    stats = {'claimed': len(claimed), 'delivered': 0, 'failed': exhausted, 'retrying': 0}
     def deliver(item):
         _, _, _, url, ciphertext, payload, _ = item
         error = None

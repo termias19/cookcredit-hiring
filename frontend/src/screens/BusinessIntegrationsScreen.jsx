@@ -176,7 +176,7 @@ export default function BusinessIntegrationsScreen() {
   </div>
 
   return <BusinessShell header={header} showNav={false}>
-    {access?.earlyAccess && <p role="status" style={{ padding: '12px 20px', margin: 0, background: '#E8F1EC', color: GREEN, fontSize: 13 }}>Free early access · No subscription charge.{access.earlyAccessMonthlyLimit ? ` Up to ${access.earlyAccessMonthlyLimit} API assessment requests per month in each environment.` : ''}</p>}
+    {access?.earlyAccess && <p role="status" style={{ padding: '12px 20px', margin: 0, background: '#E8F1EC', color: GREEN, fontSize: 13 }}>Included with your workspace · No subscription charge.{access.earlyAccessMonthlyLimit ? ` Up to ${access.earlyAccessMonthlyLimit} API assessment requests per month in each environment.` : ''}</p>}
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '24px 28px 40px' }}>
       <div aria-label="Integration method" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #E3E0D9', marginBottom: 24, paddingBottom: 16 }}>
         {[['link', 'Branded link'], ['widget', 'Embedded widget'], ['api', 'API + webhooks']].map(([id, label]) => <button key={id} aria-pressed={method === id} onClick={() => setMethod(id)} style={{ border: `1px solid ${method === id ? GREEN : '#E3E0D9'}`, background: method === id ? GREEN : '#fff', color: method === id ? '#fff' : '#555', padding: '11px 16px', fontSize: 13, cursor: 'pointer' }}>{label}</button>)}

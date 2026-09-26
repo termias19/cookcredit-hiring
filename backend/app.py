@@ -1,4 +1,6 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
+import time
+import uuid
 from dotenv import load_dotenv
 import datetime
 import logging
@@ -43,6 +45,27 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 84 * 1024 * 1024
+
+@app.before_request
+def trace_request():
+    # Generate our own ID: do not trust or log arbitrary caller header values.
+    g.request_id = uuid.uuid4().hex
+    g.request_started = time.monotonic()
+
+@app.after_request
+def trace_response(response):
+    from services.operations import emit_event
+    request_id = getattr(g, 'request_id', uuid.uuid4().hex)
+    response.headers['X-Request-ID'] = request_id
+    response.headers['Access-Control-Expose-Headers'] = 'X-Request-ID, X-Release-Commit, Retry-After'
+    response.headers['X-Release-Commit'] = os.getenv('RELEASE_COMMIT', 'unrecorded')
+    if response.status_code >= 500:
+        emit_event('request_failed', severity='ERROR', requestId=request_id,
+                   endpoint=request.endpoint or 'unmatched', status=response.status_code,
+                   durationMs=round((time.monotonic()-getattr(g,'request_started',time.monotonic()))*1000))
+    return response
+
 
 # Behind Cloud Run's proxy, trust ONE hop of X-Forwarded-* so request.remote_addr is the real
 # client IP (not the front-end proxy). Without this, every per-IP rate limit collapses to a single
@@ -66,7 +89,7 @@ _prod     = [
     "https://foodnlit-1123e.firebaseapp.com",
     "https://cookcredit-knife-demo.web.app",
 ]
-_origins  = list(dict.fromkeys(_extra if deployment_environment() == 'staging' else _dev + _prod + _extra))
+_origins  = list(dict.fromkeys(_extra if deployment_environment() in ('staging', 'production') else _dev + _prod + _extra))
 print(f"CORS allowed origins: {_origins}", flush=True)
 
 @app.route("/api/<path:path>", methods=["OPTIONS"])
@@ -196,8 +219,14 @@ def handle_exception(e):
     # generic 500 with the real cause logged server-side only.
     if isinstance(e, HTTPException):
         return jsonify({"error": e.name}), e.code
-    log.exception("Unhandled exception on %s %s", request.method, request.path)
-    return jsonify({"error": "Internal server error"}), 500
+    import traceback
+    from pathlib import Path
+    from services.operations import emit_event
+    emit_event('unhandled_exception', severity='ERROR', requestId=g.request_id,
+               exception=type(e).__name__, endpoint=request.endpoint or 'unmatched',
+               frames=[{'file': Path(frame.filename).name, 'line': frame.lineno, 'function': frame.name}
+                       for frame in traceback.extract_tb(e.__traceback__)])
+    return jsonify({"error": "Internal server error", "requestId": g.request_id}), 500
 
 
 if __name__ == "__main__":
