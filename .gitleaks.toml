@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact public Firebase browser identifiers already shipped on the website; no private service credentials."
+targetRules = ["gcp-api-key", "generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''frontend[\\/]public[\\/]firebase\-messaging\-sw\.js$''','''frontend[\\/]landing[\\/]main\.js$''','''frontend[\\/]src[\\/]firebase\.js$''','''\.gitleaks\.toml$''']
+regexes = ['''^AIzaSyAHVJ\-y1JkGTWUA\-ONEpPWQ0KWQ08YHyX8$''']

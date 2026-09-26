@@ -1,0 +1,165 @@
+
+<h2 class="sr-only">Animated scoring rubric with exponential penalty curves</h2>
+<style>
+canvas{display:block;width:100%;border-radius:var(--border-radius-lg)}
+.score-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.score-cell{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:14px 10px;text-align:center;transition:all 0.5s}
+.score-cell.pulse{border-color:#1D9E75}
+.sc-icon{font-size:16px;color:var(--color-text-tertiary);margin-bottom:6px}
+.sc-name{font-size:10px;font-family:var(--font-mono);color:var(--color-text-tertiary);letter-spacing:1px;margin-bottom:4px}
+.sc-val{font-size:28px;font-weight:500;font-family:var(--font-mono);color:var(--color-text-primary);transition:color 0.3s}
+.sc-sub{font-size:9px;font-family:var(--font-mono);color:var(--color-text-tertiary);margin-top:4px}
+.sc-weight{font-size:10px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-top:2px}
+.formula-strip{margin-top:12px;padding:10px 14px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);display:flex;justify-content:space-between;align-items:center;transition:all 0.4s}
+.formula-strip.active{border-color:#1D9E75;color:#1D9E75}
+.pass-badge{font-family:var(--font-mono);font-size:12px;padding:4px 14px;border-radius:var(--border-radius-md);font-weight:500}
+</style>
+<canvas id="sc" height="320"></canvas>
+<div class="score-grid">
+<div class="score-cell" id="cell-fin"><div class="sc-icon"><i class="ti ti-ruler-measure" aria-hidden="true"></i></div><div class="sc-name">fineness</div><div class="sc-val" id="sv-fin">--</div><div class="sc-sub" id="ss-fin">target distance</div><div class="sc-weight">w = 0.35</div></div>
+<div class="score-cell" id="cell-con"><div class="sc-icon"><i class="ti ti-chart-histogram" aria-hidden="true"></i></div><div class="sc-name">consistency</div><div class="sc-val" id="sv-con">--</div><div class="sc-sub" id="ss-con">robust CV penalty</div><div class="sc-weight">w = 0.45</div></div>
+<div class="score-cell" id="cell-spd"><div class="sc-icon"><i class="ti ti-bolt" aria-hidden="true"></i></div><div class="sc-name">speed</div><div class="sc-val" id="sv-spd">--</div><div class="sc-sub" id="ss-spd">quality-gated</div><div class="sc-weight">w = 0.20</div></div>
+<div class="score-cell" id="cell-raw"><div class="sc-icon"><i class="ti ti-certificate" aria-hidden="true"></i></div><div class="sc-name">composite</div><div class="sc-val" id="sv-raw">--</div><div class="sc-sub" id="ss-raw">weighted sum</div><div class="sc-weight"></div></div>
+</div>
+<div class="formula-strip" id="fstrip"><span id="f-text">waiting for measurement...</span><span class="pass-badge" id="f-badge" style="opacity:0">--</span></div>
+<script>
+const sc=document.getElementById('sc'),sx=sc.getContext('2d');
+const SW=sc.offsetWidth,SH=320;
+sc.width=SW*2;sc.height=SH*2;sx.scale(2,2);
+const dk=getComputedStyle(document.documentElement).getPropertyValue('--color-text-primary').trim().startsWith('#f');
+const BG=dk?'#1a1a1a':'#f7f5f0';
+const GRN='#1D9E75';const BLU='#378ADD';const ORA='#D85A30';const AMB='#EF9F27';
+const TXT=dk?'#e0e0e0':'#2C2C2A';const TXTS=dk?'#666':'#999';
+const GRID=dk?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)';
+
+let t=0;
+const SIM_DUR=600;
+const targetArea=100;
+const k=1.25,c=1.8;
+
+function scoreFineness(obs){
+  if(obs<=0)return 0;
+  const logErr=Math.abs(Math.log(obs/targetArea));
+  return 100*Math.exp(-k*logErr);
+}
+function scoreConsistency(cv){
+  return 100*Math.exp(-c*Math.max(0,cv));
+}
+
+function drawCurve(x0,y0,w,h,fn,xLabel,yLabel,curX,color,title,paramStr){
+  sx.strokeStyle=dk?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
+  sx.lineWidth=0.5;
+  for(let i=0;i<=4;i++){
+    const yy=y0+i*h/4;
+    sx.beginPath();sx.moveTo(x0,yy);sx.lineTo(x0+w,yy);sx.stroke();
+  }
+  for(let i=0;i<=4;i++){
+    const xx=x0+i*w/4;
+    sx.beginPath();sx.moveTo(xx,y0);sx.lineTo(xx,y0+h);sx.stroke();
+  }
+  sx.strokeStyle=dk?'#444':'#ccc';sx.lineWidth=0.5;
+  sx.strokeRect(x0,y0,w,h);
+  sx.font='500 11px monospace';sx.fillStyle=TXT;
+  sx.fillText(title,x0,y0-8);
+  sx.font='9px monospace';sx.fillStyle=TXTS;
+  sx.fillText(paramStr,x0+w-sx.measureText(paramStr).width,y0-8);
+  sx.font='9px monospace';sx.fillStyle=TXTS;
+  sx.fillText(xLabel,x0+w/2-20,y0+h+14);
+  sx.save();sx.translate(x0-10,y0+h/2);sx.rotate(-Math.PI/2);
+  sx.fillText(yLabel,-15,0);sx.restore();
+  const steps=100;
+  sx.strokeStyle=color;sx.lineWidth=2;sx.beginPath();
+  for(let i=0;i<=steps;i++){
+    const xv=i/steps;
+    const yv=fn(xv)/100;
+    const px2=x0+xv*w;
+    const py2=y0+h-yv*h;
+    if(i===0)sx.moveTo(px2,py2);else sx.lineTo(px2,py2);
+  }
+  sx.stroke();
+  if(curX>=0&&curX<=1){
+    const cxp=x0+curX*w;
+    const cyp=y0+h-(fn(curX)/100)*h;
+    sx.setLineDash([3,3]);sx.strokeStyle=TXTS;sx.lineWidth=0.5;
+    sx.beginPath();sx.moveTo(cxp,y0+h);sx.lineTo(cxp,cyp);sx.stroke();
+    sx.beginPath();sx.moveTo(x0,cyp);sx.lineTo(cxp,cyp);sx.stroke();
+    sx.setLineDash([]);
+    sx.fillStyle=color;
+    sx.beginPath();sx.arc(cxp,cyp,4,0,Math.PI*2);sx.fill();
+    sx.fillStyle=dk?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.8)';
+    sx.beginPath();sx.arc(cxp,cyp,2,0,Math.PI*2);sx.fill();
+    sx.font='500 10px monospace';sx.fillStyle=color;
+    sx.fillText(Math.round(fn(curX)),cxp+8,cyp-6);
+  }
+  sx.font='9px monospace';sx.fillStyle=TXTS;
+  sx.fillText('0',x0-12,y0+h+4);
+  sx.fillText('100',x0-24,y0+6);
+}
+
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
+
+function animate(){
+  t=(t+1)%SIM_DUR;
+  const progress=t/SIM_DUR;
+  const ep=easeInOut(Math.min(progress*2,1));
+  sx.fillStyle=BG;sx.fillRect(0,0,SW,SH);
+  const simArea=40+ep*120;
+  const simCV=0.05+ep*0.45;
+  const simSpeed=ep*80;
+  const normArea=simArea/200;
+  const normCV=simCV/0.5;
+  const finFn=(x)=>{const obs=x*200;if(obs<=0)return 0;return 100*Math.exp(-k*Math.abs(Math.log(obs/targetArea)))};
+  const conFn=(x)=>{const cv2=x*0.5;return 100*Math.exp(-c*cv2)};
+  const pad=24;
+  const cw=(SW-pad*4)/3;
+  const ch=SH-90;
+  drawCurve(pad,40,cw,ch,finFn,'observed / target','score',normArea,ORA,
+    'fineness','S = 100·exp(-k·|ln(obs/tgt)|)');
+  drawCurve(pad*2+cw,40,cw,ch,conFn,'coefficient of variation','score',normCV,BLU,
+    'consistency','S = 100·exp(-c·CV)');
+  const spdFn=(x)=>{
+    const hz=x*5;
+    const expert=4,beg=1;
+    return Math.min(100,100*(hz-beg)/(expert-beg));
+  };
+  const conScore=scoreConsistency(simCV);
+  const qualityGate=Math.min(1,(conScore/100)*0.85);
+  const spdGated=(x)=>{return spdFn(x)*qualityGate};
+  drawCurve(pad*3+cw*2,40,cw,ch,spdGated,'stroke cadence (Hz)','score',ep,GRN,
+    'speed (gated)','S_spd · clamp(C/100 · conf)');
+  if(qualityGate<0.7){
+    sx.font='9px monospace';sx.fillStyle=ORA;
+    sx.fillText('quality gate: '+qualityGate.toFixed(2),pad*3+cw*2,40+ch+28);
+  }
+  const fin=scoreFineness(simArea);
+  const con=conScore;
+  const spd=spdGated(ep);
+  const raw=0.35*fin+0.45*con+0.20*spd;
+  if(progress>0.1){
+    document.getElementById('sv-fin').textContent=Math.round(fin);
+    document.getElementById('sv-con').textContent=Math.round(con);
+    document.getElementById('sv-spd').textContent=Math.round(spd);
+    document.getElementById('sv-raw').textContent=Math.round(raw);
+    document.getElementById('ss-fin').textContent='obs='+Math.round(simArea)+'mm² tgt=100';
+    document.getElementById('ss-con').textContent='CV='+simCV.toFixed(2);
+    document.getElementById('ss-spd').textContent='gate='+qualityGate.toFixed(2);
+    const cells=['cell-fin','cell-con','cell-spd','cell-raw'];
+    cells.forEach((id,i)=>{
+      document.getElementById(id).className=progress>0.15+i*0.15?'score-cell pulse':'score-cell';
+    });
+    const ftxt=document.getElementById('f-text');
+    const fbadge=document.getElementById('f-badge');
+    ftxt.textContent='raw = 0.35('+Math.round(fin)+') + 0.45('+Math.round(con)+') + 0.20('+Math.round(spd)+') = '+Math.round(raw);
+    if(progress>0.8){
+      const pass=raw>=70&&0.85>=0.65;
+      fbadge.style.opacity='1';
+      fbadge.textContent=pass?'PASS':'FAIL';
+      fbadge.style.background=pass?(dk?'#085041':'#E1F5EE'):(dk?'#501313':'#FCEBEB');
+      fbadge.style.color=pass?'#1D9E75':'#A32D2D';
+      document.getElementById('fstrip').className='formula-strip active';
+    }
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>

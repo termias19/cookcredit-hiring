@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - CookCredit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .legal { max-width: 720px; margin: 0 auto; padding: 6rem 2rem 4rem; }
+    .legal h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .legal .updated { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 3rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .legal h2 { font-size: 0.95rem; font-weight: 700; margin: 2.5rem 0 0.75rem; }
+    .legal p, .legal li { font-size: 0.8rem; font-weight: 400; color: var(--text-muted); line-height: 1.85; margin-bottom: 0.75rem; }
+    .legal ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+    .legal li { margin-bottom: 0.4rem; }
+    .legal a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+    .legal a:hover { border-color: var(--accent); }
+    .legal-back { display: inline-block; font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); text-decoration: none; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 2px; }
+    .legal-back:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<div class="legal">
+  <a href="index.html" class="legal-back">Back to CookCredit</a>
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: May 25, 2026</p>
+
+  <p>CookCredit LLC ("CookCredit," "we," "us," or "our") operates the CookCredit platform, which includes the CookCredit website, mobile applications, and related scoring and assessment services (collectively, the "Service"). This Privacy Policy describes how we collect, use, disclose, and protect information when you use our Service.</p>
+
+  <p>By accessing or using the Service, you agree to the collection and use of information as described in this policy. If you do not agree, please do not use the Service.</p>
+
+  <h2>1. Information We Collect</h2>
+
+  <p><strong>Account Information.</strong> When you create an account or join the waitlist, we collect your email address, name, and role preference (cook, eater, or both). If you later onboard as a cook through our marketplace, we may collect additional profile information including your location, a profile photo, and payment details via our third-party payment processor (Stripe).</p>
+
+  <p><strong>Assessment Data.</strong> When you use the CookCredit scoring feature, our software processes video from your device's camera in real time. This processing extracts:</p>
+  <ul>
+    <li>Hand landmark coordinates (21 keypoints per hand per frame)</li>
+    <li>Blade trajectory and orientation estimates</li>
+    <li>Stroke count, rhythm, and timing data</li>
+    <li>Piece size and uniformity measurements derived from image segmentation</li>
+  </ul>
+
+  <p><strong>We do not store raw video or images from assessment sessions.</strong> The camera feed is processed on-device using local inference models. Only the extracted numerical data (hand poses, blade trajectories, stroke metrics, and computed scores) is transmitted to our servers or retained.</p>
+
+  <p><strong>Device and Usage Information.</strong> We automatically collect standard technical information when you interact with our Service, including device type, operating system, browser type, IP address, referring URL, pages visited, and timestamps. This data is collected through standard server logs and analytics tools.</p>
+
+  <p><strong>Communications.</strong> If you contact us at info@cookcredit.com, we retain the content of your messages and our responses for customer support purposes.</p>
+
+  <h2>2. How We Use Your Information</h2>
+
+  <ul>
+    <li><strong>Provide the Service.</strong> Process assessment sessions, compute scores, and deliver results to you.</li>
+    <li><strong>Improve Scoring Accuracy.</strong> Use anonymized and aggregated assessment data to refine and validate our scoring algorithms, detection models, and measurement systems.</li>
+    <li><strong>Research and Development.</strong> Use de-identified, aggregated skill data to advance the understanding of manual food preparation techniques. This may include publishing research findings in academic venues using only aggregate statistics. No individual user's data is identifiable in any published research.</li>
+    <li><strong>Communication.</strong> Send you service-related notices, respond to inquiries, and, with your consent, send product updates related to the CookCredit platform.</li>
+    <li><strong>Safety and Security.</strong> Detect, investigate, and prevent fraudulent, unauthorized, or illegal activity.</li>
+    <li><strong>Marketplace Operations.</strong> If you participate in the CookCredit marketplace, facilitate connections between cooks and eaters, process payments, and manage reviews.</li>
+  </ul>
+
+  <h2>3. Data Processing: On-Device vs. Server-Side</h2>
+
+  <p>CookCredit is designed with a privacy-first processing architecture.</p>
+
+  <p><strong>On-device processing.</strong> Hand landmark detection, blade tracking, and stroke counting run locally on your device using on-device inference. The camera feed is not streamed, uploaded, or stored on our servers.</p>
+
+  <p><strong>Server-side processing.</strong> After a session completes, the extracted numerical data (landmark coordinates, timing arrays, computed measurements) may be transmitted to our servers for final score calculation, calibration, and storage. This data does not include images, video, or audio.</p>
+
+  <p><strong>Session recordings.</strong> We do not record, store, or have access to the video feed from your camera. The visual processing happens entirely within the application on your device.</p>
+
+  <h2>4. Data Retention</h2>
+
+  <p>We retain account information for as long as your account is active or as needed to provide the Service. Assessment data (extracted metrics and scores) is retained to support session history, progress tracking, and scoring model improvement. You may request deletion of your account and associated data at any time by contacting info@cookcredit.com. We will delete or de-identify your personal data within 30 days of a verified request, except where retention is required by law.</p>
+
+  <h2>5. How We Share Information</h2>
+
+  <p>We do not sell your personal information. We may share information in the following limited circumstances:</p>
+  <ul>
+    <li><strong>Service Providers.</strong> With third-party vendors who assist in operating the Service (hosting, analytics, payment processing). These providers are contractually obligated to use your data only to perform services on our behalf.</li>
+    <li><strong>Aggregate and De-identified Data.</strong> We may share aggregated, anonymized datasets that contain no personally identifiable information. Such datasets may be used for academic research, industry benchmarking, or to train machine learning models. Individual users are not identifiable from this data.</li>
+    <li><strong>Legal Requirements.</strong> When required by law, subpoena, or legal process, or to protect the rights, property, or safety of CookCredit, our users, or the public.</li>
+    <li><strong>Business Transfers.</strong> In connection with a merger, acquisition, or sale of all or a portion of our assets, your information may be transferred to the acquiring entity.</li>
+  </ul>
+
+  <h2>6. Data Security</h2>
+
+  <p>We implement commercially reasonable technical and organizational measures to protect the information we collect. These include encryption of data in transit (TLS), secure cloud infrastructure, access controls, and regular security reviews. No system is completely secure, and we cannot guarantee the absolute security of your data.</p>
+
+  <h2>7. Your Rights and Choices</h2>
+
+  <p>Depending on your jurisdiction, you may have the right to:</p>
+  <ul>
+    <li>Access the personal data we hold about you.</li>
+    <li>Request correction of inaccurate data.</li>
+    <li>Request deletion of your personal data.</li>
+    <li>Object to or restrict certain processing activities.</li>
+    <li>Withdraw consent at any time where processing is based on consent.</li>
+    <li>Receive a copy of your data in a portable format.</li>
+  </ul>
+  <p>To exercise any of these rights, contact us at info@cookcredit.com. We will respond within 30 days.</p>
+
+  <h2>8. Children's Privacy</h2>
+
+  <p>The Service is not directed at individuals under the age of 16. We do not knowingly collect personal information from children under 16. If we learn that we have collected data from a child under 16, we will delete that information promptly.</p>
+
+  <h2>9. Third-Party Services</h2>
+
+  <p>Our Service may integrate with or contain links to third-party services, including Stripe for payment processing and Firebase for authentication and data storage. These services have their own privacy policies, and we encourage you to review them. We are not responsible for the privacy practices of third-party services.</p>
+
+  <h2>10. International Data Transfers</h2>
+
+  <p>CookCredit is based in Atlanta, Georgia, United States. If you access the Service from outside the United States, your information may be transferred to and processed in the United States. By using the Service, you consent to the transfer of your information to the United States, where data protection laws may differ from those in your jurisdiction.</p>
+
+  <h2>11. California Privacy Rights</h2>
+
+  <p>If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA), including the right to know what personal information we collect and how it is used, the right to request deletion, and the right to opt out of the sale of personal information. We do not sell personal information. To exercise your California rights, contact info@cookcredit.com.</p>
+
+  <h2>12. Changes to This Policy</h2>
+
+  <p>We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy on this page and updating the "Last updated" date. Your continued use of the Service after any changes constitutes acceptance of the revised policy.</p>
+
+  <h2>13. Contact</h2>
+
+  <p>If you have questions about this Privacy Policy or our data practices, contact us at:</p>
+  <p>CookCredit LLC<br>Atlanta, GA<br><a href="mailto:info@cookcredit.com">info@cookcredit.com</a></p>
+</div>
+
+</body>
+</html>

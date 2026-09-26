@@ -1,0 +1,13 @@
+{
+  "appId": "com.cookcredit.app",
+  "appName": "CookCredit",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

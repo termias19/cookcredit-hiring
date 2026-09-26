@@ -1,0 +1,24 @@
+
+.cc-candidate-player {position:relative;width:100%;aspect-ratio:16/9;background:#151916;}
+.cc-candidate-player video {display:block;width:100%;height:100%;object-fit:contain;}
+.cc-video-recovery {position:absolute;inset:16px 76px auto 16px;background:#fffdf8;color:#1a1a1a;padding:14px;border-radius:6px;font-size:13px;z-index:2;}
+.cc-video-recovery button,.cc-video-recovery a {display:inline-block;min-height:44px;padding:12px;color:#1f6f5c;background:white;border:1px solid #d5d8ce;margin:4px;text-decoration:none;}
+
+.cc-playback-view {display:flex;gap:2px;background:#eae7df;border-radius:10px;padding:3px;}
+.cc-playback-view button {flex:1;border:0;border-radius:8px;padding:10px 16px;min-height:40px;background:transparent;color:#214b40;font-size:12px;}
+.cc-playback-view button[aria-pressed=true] {background:#1f6f5c;color:#fff;}
+.cc-report-view {position:absolute;top:10px;right:10px;z-index:5;}
+.cc-playback-landmarks {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;}
+.cc-landmark-status {position:absolute;top:12px;left:12px;max-width:65%;background:#18231ecc;color:#fff;padding:6px 9px;border-radius:5px;font-size:10px;pointer-events:none;z-index:2;}
+.cc-report-view~.cc-landmark-status {top:64px;}
+.cc-video-tap {position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;color:white;display:grid;place-items:center;}
+.cc-video-tap svg {filter:drop-shadow(0 1px 4px #000);}
+.cc-reel-transport {position:absolute;bottom:6px;left:12px;right:12px;display:flex;align-items:center;gap:6px;z-index:3;}
+.cc-reel-transport button {width:42px;height:44px;border:0;background:transparent;color:white;}
+.cc-reel-transport input {flex:1;min-width:0;accent-color:#f7f5f0;height:24px;}
+.cc-player-reel::after {content:'';position:absolute;bottom:0;left:0;right:0;height:180px;background:linear-gradient(transparent,#000b);pointer-events:none;}
+.cc-video-recovery {z-index:6;}
+.cc-reel-transport input[type=range] {appearance:none;-webkit-appearance:none;min-height:0;height:3px;padding:0;margin:0 4px;border:0;border-radius:3px;background:#ffffff70;box-shadow:none;}
+.cc-reel-transport input[type=range]::-webkit-slider-thumb {appearance:none;-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#fff;}
+.cc-reel-transport input[type=range]::-moz-range-thumb {width:10px;height:10px;border:0;border-radius:50%;background:#fff;}
+.cc-reel-transport input[type=range]:focus-visible {outline:2px solid #86d9b4;outline-offset:7px;}

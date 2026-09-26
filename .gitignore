@@ -1,0 +1,41 @@
+# Firebase credentials — never commit
+backend/firebase-credentials.json
+backend/serviceAccountKey.json
+serviceAccountKey.json
+backend/.env
+
+# Any .env variant / backup anywhere holds secrets — block them all (keep *.example).
+**/.env
+**/.env.*
+!**/.env.example
+*.bak
+*.bak.*
+
+# Deploy secrets — filled-in secret VALUES, NEVER commit (only *.example is tracked)
+deploy/secrets.env
+deploy/*.env
+!deploy/*.env.example
+
+# Python
+backend/venv/
+**/__pycache__/
+*.pyc
+backend/_tr4_out.txt
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/dist-staging/
+frontend/preview-dist/
+frontend/.preview-bin/
+frontend/.firebase/
+
+# Env files
+.env
+.env.local
+.env.*.local
+frontend/.env
+
+# Large generated/demo media — keep out of git (exceeds GitHub 100MB; use external storage).
+# Root-anchored so the intentional small landing clips (frontend/landing/*.mp4) stay tracked.
+/overlay_intermediate_pristine.mp4

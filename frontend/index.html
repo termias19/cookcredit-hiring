@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      The company is CookCredit. This page is served from cookcredit.com, so its identity —
+      title, author, og:site_name, canonical — names the company.
+
+      The canonical here previously read https://mise.app, which is not a redirect or an alias:
+      it TOLD Google the authoritative copy of this homepage lives on another domain, so
+      cookcredit.com had every reason to be dropped from search in favour of it. That domain does
+      not resolve at all (connection failure, not a 404), so the og:image and og:url pointed at
+      nothing either and every shared link rendered with a broken preview.
+    -->
+    <title>CookCredit — Knife skill assessment</title>
+    <meta name="description" content="Add a knife skill assessment to your hiring process. Review applicants, recordings, measured results, and attempt history with CookCredit." />
+    <meta name="author" content="CookCredit" />
+    <meta name="theme-color" content="#1F6F5C" />
+    <link rel="canonical" href="https://cookcredit.com/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="CookCredit — Knife skill assessment" />
+    <meta property="og:description" content="Knife skill assessments for hiring. Branded links, embedded widgets, and API integrations." />
+    <meta property="og:image" content="https://cookcredit.com/images/og-image.jpg" />
+    <meta property="og:url" content="https://cookcredit.com/" />
+    <meta property="og:site_name" content="CookCredit" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CookCredit — Knife skill assessment" />
+    <meta name="twitter:description" content="Knife skill assessments for hiring. Review the recording and evidence before the next stage." />
+    <meta name="twitter:image" content="https://cookcredit.com/images/og-image.jpg" />
+
+    <!-- Preconnect for fonts so they load as early as possible -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400&display=swap" rel="stylesheet" />
+
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- iOS standalone (home-screen) app: status bar + title. Needed for a proper installed
+         look and for web push to work on iOS 16.4+ once added to the home screen. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="CookCredit" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

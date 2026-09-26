@@ -1,0 +1,161 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CookCredit Firestore Security Rules
+//
+// Key principle: Firestore rules are OR-based — ANY matching "allow" grants
+// access. A specific "allow create: if false" is overridden by a broader
+// "allow write: if true" on the same path. To block houses creation from
+// clients we must NOT have any overlapping allow-write rule on that path.
+//
+// To deploy:
+//   firebase deploy --only firestore:rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Houses ───────────────────────────────────────────────────────────────
+    // create is BLOCKED for clients — only the Flask backend (Firebase Admin
+    // SDK) can create house documents. This enforces the server-side 3/day
+    // rate limit at the database layer so it cannot be bypassed via the SDK.
+    match /houses/{houseId} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow update: if request.auth != null;
+      allow delete: if false;
+
+      // Subcollections (spinSession, spins) — members only
+      match /{subcollection}/{doc} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read:   if request.auth != null;
+      allow write:  if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── House Meals ───────────────────────────────────────────────────────────
+    // All writes are BLOCKED for clients — only the Flask backend (Firebase Admin
+    // SDK) can create or modify meal documents. This enforces server-side auth
+    // checks on every join, leave, cancel, serve, and status update. Prevents
+    // clients from forging joiners arrays, payment fields, or meal status.
+    match /houseMeals/{mealId} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── House Posts ───────────────────────────────────────────────────────────
+    match /housePosts/{postId} {
+      allow read:   if request.auth != null;
+      allow write:  if request.auth != null;
+    }
+
+    // ── House Invites ─────────────────────────────────────────────────────────
+    match /houseInvites/{inviteId} {
+      allow read:   if request.auth != null;
+      allow write:  if request.auth != null;
+    }
+
+    // ── Messages ──────────────────────────────────────────────────────────────
+    // All writes are BLOCKED for clients — Flask endpoints enforce that the
+    // caller is a conversation participant (senderId check on delete,
+    // receiverId check on mark-read). Prevents spoofed senderIds or a user
+    // reading/deleting another user's messages.
+    //
+    // ⚠ Read scoping note: the current read rule allows ANY authenticated user
+    // to read ANY message doc if they know the ID. Proper scoping would restrict
+    // reads to participants only (resource.data.participants.hasAny([request.auth.uid]))
+    // but that requires a "participants" array on every doc and a composite index.
+    // Flagged as a post-launch hardening task — not a launch blocker since message
+    // IDs are not guessable and clients only query by conversationId they belong to.
+    match /messages/{msgId} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── Requests ──────────────────────────────────────────────────────────────
+    match /requests/{reqId} {
+      allow read:   if request.auth != null;
+      allow write:  if request.auth != null;
+    }
+
+    // ── Cook Offers ───────────────────────────────────────────────────────────
+    match /cookOffers/{offerId} {
+      allow read:   if request.auth != null;
+      allow write:  if request.auth != null;
+    }
+
+    // ── Reviews ───────────────────────────────────────────────────────────────
+    // All writes are BLOCKED for clients. Flask verifies:
+    //   • mealId path:    caller is in houseMeals.joiners + meal is served
+    //   • requestId path: caller is the request creator (the eater)
+    //   • duplicate:      one review per (reviewerId, mealId|requestId)
+    // Cook rating recomputation also runs server-side, preventing clients from
+    // forging a cook's public rating via direct writes to /users.
+    match /reviews/{reviewId} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── Tips ──────────────────────────────────────────────────────────────────
+    // All writes are BLOCKED for clients. Tips are only created by the Flask
+    // backend as a result of a completed Stripe payment flow (create_tip_checkout,
+    // webhook handlers). A client writing directly could forge tip amounts,
+    // statuses, or recipient IDs. Admin SDK bypasses these rules server-side.
+    match /tips/{tipId} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── Reports (user-submitted) ──────────────────────────────────────────
+    // Any authenticated user can file a report. Only admins can read/delete.
+    match /reports/{reportId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+
+    // ── Disputes (server-side only) ───────────────────────────────────────────
+    match /disputes/{disputeId} {
+      allow read:   if request.auth != null && (
+        resource.data.eaterId == request.auth.uid ||
+        resource.data.cookId  == request.auth.uid
+      );
+      allow write:  if false;
+    }
+
+    // ── Payment Failures (server-side only) ───────────────────────────────────
+    match /paymentFailures/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ── Waitlist (landing page signups) ───────────────────────────────────────
+    // Public landing page — no auth required.
+    // Validates shape: must have email, role, timestamp, source.
+    // Reads allowed only for duplicate-email checks (query by email, limit 1).
+    match /waitlist/{docId} {
+      allow create: if
+        request.resource.data.keys().hasAll(['email', 'role', 'timestamp', 'source'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 4
+        && request.resource.data.email.size() < 256
+        && request.resource.data.role is string
+        && request.resource.data.role in ['general', 'cook', 'eater', 'both'];
+      allow list:   if request.query.limit <= 1;
+      allow get:    if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+.cc-metric-range { border: 0; padding: 0; margin: 16px 0; min-width: 0; font: inherit; }
+.cc-metric-range legend { font-size: 13px; padding: 0; }
+.cc-metric-range-track { height: 5px; margin: 12px 0 8px; border-radius: 2px; background: linear-gradient(to right, #E3E0D9 var(--range-start), #1F6F5C var(--range-start), #1F6F5C var(--range-end), #E3E0D9 var(--range-end)); }
+.cc-metric-range-controls { display: flex; gap: 16px; }
+.cc-metric-range-controls label { flex: 1; min-width: 0; font-size: 12px; color: #70706b; }
+.cc-metric-range-controls input { display: block; width: 100%; margin: 0; min-height: 36px; accent-color: #1F6F5C; cursor: pointer; }
+.cc-metric-range-controls input:focus-visible { outline: 2px solid #1F6F5C; outline-offset: 2px; }

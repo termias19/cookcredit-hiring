@@ -1,0 +1,52 @@
+#root:has(.cc-mobile-candidates) {height:100svh;display:flex;flex-direction:column;}
+#root:has(.cc-mobile-candidates)>aside {flex-shrink:0;}
+#root:has(.cc-mobile-candidates) #route-focus-root {flex:1;min-height:0;}
+.cc-mobile-candidates {height:100%;display:flex;flex-direction:column;background:#F7F5F0;color:#1a1a1a;}
+.cc-feed-header {display:flex;gap:16px;align-items:center;padding:14px 16px 8px;}
+.cc-feed-header h1 {font-family:var(--cc-display);font-size:25px;font-weight:400;margin:0;}
+.cc-feed-header label {display:flex;align-items:center;gap:6px;min-width:0;flex:1;border-bottom:1px solid #ccc8be;}
+.cc-feed-header input {width:100%;min-width:0;border:0;background:transparent;padding:10px 0;font-size:14px;}
+.cc-feed-order {margin:0;padding:0 16px 10px;font-size:11px;color:#625f58;}
+.cc-reel-list {flex:1;min-height:0;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;}
+.cc-candidate-reel {position:relative;height:100%;min-height:400px;scroll-snap-align:start;scroll-snap-stop:always;background:#151916;color:white;overflow:hidden;}
+.cc-reel-loading {height:100%;display:grid;align-content:center;text-align:center;padding:24px 80px 180px 24px;}
+.cc-reel-caption {position:absolute;bottom:52px;left:0;right:76px;padding:36px 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.84));pointer-events:none;}
+.cc-reel-caption h2 {font:400 27px/1.2 var(--cc-display);margin:0 0 5px;color:white;}
+.cc-reel-caption p {font-size:13px;line-height:1.5;margin:4px 0;}
+.cc-reel-caption small {font-size:10px;}
+.cc-reel-caption dl {display:flex;gap:18px;margin:12px 0;}
+.cc-reel-caption dt {text-transform:capitalize;font-size:10px;}
+.cc-reel-caption dd {font-size:17px;margin:3px 0 0;}
+.cc-reel-actions {position:absolute;right:10px;bottom:90px;display:flex;flex-direction:column;gap:14px;}
+.cc-reel-actions button {width:58px;min-height:56px;border:1px solid #ffffff60;border-radius:10px;color:white;background:#18231ee8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;}
+.cc-reel-actions button[aria-pressed=true] {color:#f3d17e;}
+.cc-reel-actions span {font-size:9px;}
+.cc-mobile-candidates button:focus-visible,.cc-candidate-sheet button:focus-visible {outline:3px solid #c99f52;outline-offset:2px;}
+.cc-candidate-sheet {position:fixed;inset:auto 0 0;margin:0;width:100%;max-width:none;max-height:78svh;overflow:auto;border:0;border-radius:16px 16px 0 0;padding:24px 20px max(24px,env(safe-area-inset-bottom));background:#fffdf8;color:#1a1a1a;}
+.cc-candidate-sheet::backdrop {background:#0009;}
+.cc-candidate-sheet header {display:flex;align-items:center;justify-content:space-between;gap:15px;}
+.cc-candidate-sheet h2 {font:400 28px var(--cc-display);margin:0;}
+.cc-candidate-sheet header button {width:44px;height:44px;background:transparent;border:0;}
+.cc-candidate-sheet p {font-size:14px;line-height:1.6;}
+.cc-candidate-sheet dl>div {display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #ddd9cf;}
+.cc-sheet-review {padding:14px 18px;background:#1f6f5c;color:white;border:0;border-radius:4px;width:100%;}
+.cc-feed-empty {padding:30px 20px;}
+.cc-candidate-reel .cc-candidate-player {height:100%;aspect-ratio:auto;}
+
+.cc-feed-header {justify-content:space-between;padding:12px 18px 8px;}
+.cc-feed-brand {font:400 28px var(--cc-display);text-decoration:none;color:#1f6f5c;}
+.cc-feed-header>button {border:0;background:transparent;color:#1f6f5c;width:44px;height:44px;}
+.cc-feed-filters {padding:4px 16px 12px;}
+.cc-feed-filters label {display:flex;align-items:center;gap:8px;}
+.cc-feed-filters input {min-width:0;width:100%;padding:9px;border:1px solid #d7d1c5;background:#fffdf8;}
+.cc-feed-filters p {font-size:11px;color:#625f58;}
+.cc-feed-order {font-size:10px;padding-bottom:6px;}
+.cc-reel-actions {bottom:118px;right:10px;gap:12px;z-index:4;}
+.cc-reel-actions button {border:0;border-radius:0;background:transparent;filter:drop-shadow(0 1px 3px #000);}
+.cc-reel-actions button[aria-pressed=true] {color:#a6dfbe;}
+.cc-reel-actions svg {width:26px;height:26px;}
+.cc-reel-actions span {font-size:10px;}
+.cc-reel-caption {z-index:3;bottom:50px;background:transparent;}
+.cc-reel-caption h2 {font-size:26px;text-shadow:0 1px 3px #000;}
+.cc-candidate-sheet {padding-top:28px;}
+.cc-candidate-sheet::before {content:'';display:block;position:absolute;top:10px;left:calc(50% - 18px);width:36px;height:4px;border-radius:3px;background:#c9c6bd;}

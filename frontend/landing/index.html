@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CookCredit</title>
+  <meta name="description" content="Your hands tell the story. We just learned how to read it.">
+  <meta property="og:title" content="CookCredit">
+  <meta property="og:description" content="Your hands tell the story. We just learned how to read it.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cookcredit.com/landing/">
+  <link rel="canonical" href="https://cookcredit.com/landing/">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <!-- Absolute: og:image is fetched by a scraper with no page context, so a relative path
+       ("icon-512.png") resolves against nothing and the card renders imageless everywhere. -->
+  <meta property="og:image" content="https://cookcredit.com/landing/icon-512.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <span class="nav-wordmark"><svg class="nav-logo" width="24" height="24" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><g transform="translate(100,95)"><path d="M 8,-8 C 30,-25 55,-38 72,-42 Q 78,-43 80,-38" stroke="#c4884d" fill="none" stroke-width="3.5" stroke-linecap="round"/><g transform="translate(80,-38) rotate(25)"><rect fill="#888" x="-1.5" y="-6" width="3" height="8" rx="1"/><rect fill="#aaa" x="-0.8" y="1" width="1.6" height="16" rx="0.5"/></g><rect fill="#C4A265" x="68" y="-24" width="22" height="4" rx="1"/><rect fill="#E8833A" x="72" y="-27" width="3" height="3" rx="0.5" transform="rotate(10,73,-25)"/><rect fill="#E8833A" x="78" y="-28" width="2.5" height="3" rx="0.5"/><rect fill="#E8833A" x="83" y="-27" width="3" height="2.5" rx="0.5" transform="rotate(-8,84,-25)"/><path d="M -8,-8 C -30,-30 -52,-50 -65,-58 Q -72,-62 -75,-57" stroke="#c4884d" fill="none" stroke-width="4" stroke-linecap="round"/><ellipse fill="#333" cx="-80" cy="-60" rx="14" ry="4"/><ellipse fill="none" stroke="#666" cx="-80" cy="-60" rx="14" ry="4" stroke-width="1"/><path d="M 0,10 C -5,30 -6,55 -3,72 Q -2,78 2,80" stroke="#c4884d" fill="none" stroke-width="3" stroke-linecap="round"/><path d="M 5,10 C 10,28 12,50 10,68 Q 9,75 14,78" stroke="#a06040" fill="none" stroke-width="2.5" stroke-linecap="round"/><path d="M -10,4 C -30,14 -55,25 -70,28 Q -78,29 -80,24" stroke="#c4884d" fill="none" stroke-width="3" stroke-linecap="round"/><path d="M 10,4 C 30,15 52,28 65,30 Q 72,31 75,26" stroke="#a06040" fill="none" stroke-width="2.5" stroke-linecap="round"/><rect fill="#c4884d" x="-11" y="-11" width="22" height="22" rx="3" transform="rotate(45,0,0)"/><rect fill="#d4a070" x="-7" y="-7" width="14" height="14" rx="2" transform="rotate(45,0,0)"/></g></svg>CookCredit</span>
+    <div class="nav-links">
+      <a href="#how">System</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#scoring">Scoring</a>
+        <a href="#demo">Demo</a>
+      <a href="#toque">Toque</a>
+      <a href="#waitlist">Waitlist</a>
+    </div>
+  </nav>
+
+  <!-- THESIS HERO -->
+  <section class="thesis-hero" id="thesis">
+    <div class="thesis-wrap">
+      <div class="axiom-line">COOKCREDIT RESEARCH</div>
+      <h1 class="thesis-heading">The bottleneck in kitchen manipulation isn't the policy.<br>It's the <em>reward</em>.</h1>
+      <p class="sub-thesis">Egocentric manipulation datasets capture what hands do. They rarely capture whether what hands did was any good. We produce structured reward signals from real cooking — fineness, uniformity, speed — as a byproduct of scoring the cook.</p>
+
+      <div class="eq-block">
+        R(t) = w1 * exp(-k * |ln(A_obs / A_tgt)|) + w2 * exp(-c * CV_robust) + w3 * S_speed * clamp(C/100 * s)<br>
+        <span class="eq-note">where t is a manipulation episode, A_obs the observed piece area, CV_robust the median absolute deviation ratio, and S_speed is quality-gated by consistency confidence s.</span>
+      </div>
+
+      <div class="section-mark">FIGURE 1</div>
+      <p class="fig-label">Reward signal density: scripted lab demonstrations vs. in-situ cooking sessions</p>
+      <canvas id="rc" height="280"></canvas>
+      <p class="fig-caption">Each dot represents a timestamped reward observation. Lab trajectories (left) produce sparse terminal rewards at episode end. CookCredit sessions (right) produce dense, per-stroke reward signals throughout the manipulation episode — piece measurements after every cut, quality metrics at every pause, and a composite score at session close. The density ratio exceeds 40:1 for a typical 60-second episode.</p>
+
+      <div class="section-mark">OBSERVATION</div>
+      <p class="body-text">Current egocentric datasets — Ego4D, EgoExo4D, EgoVerse — provide <strong>observation-rich, reward-sparse</strong> episodes. A hand pose trajectory tells a policy where to move. It does not tell the policy whether the result was a clean brunoise or a ragged hack. The missing signal is structured output quality: <strong>what did the cut produce, and how close was it to the task specification?</strong></p>
+      <p class="body-text">CookCredit instruments the cook's phone to capture 21 hand landmarks per frame, a blade trajectory derived via wrist-anchored SE(2) prediction, and — critically — <strong>instance-level piece geometry at every measurement window</strong>. The scoring function R(t) above is not learned. It is calibrated against expert human evaluators (Spearman r > 0.7, n >= 30) and deployed as a deterministic, interpretable reward.</p>
+
+      <div class="section-mark">IMPLICATION</div>
+      <p class="body-text">A kitchen robot trained with CookCredit episodes receives not just a demonstration of how to chop, but a <strong>graded demonstration</strong> — this chop scored 84, that one scored 62, here is why. Reward-dense imitation learning converges faster and generalizes better than reward-sparse alternatives. The cook doesn't know they're training a robot. They're just trying to pass.</p>
+
+      <div class="cite-block">
+        [1] Xu et al. "EgoVerse: Scaling Egocentric Data for Robot Manipulation." GaTech RL2 Lab, 2025.<br>
+        [2] Chi et al. "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion." RSS 2023.<br>
+        [3] Grauman et al. "Ego4D: Around the World in 3,000 Hours." CVPR 2022.<br>
+        [4] CookCredit. "Wrist-Anchored Blade Localization for Cooking Skill Assessment." Internal, 2026.
+      </div>
+    </div>
+  </section>
+
+  <!-- HAND POSE & BLADE PREDICTION -->
+  <section class="explainer-section" id="handpose">
+    <div class="explainer-grid">
+      <div class="explainer-text">
+        <h2>Hand Pose Estimation + Blade Prediction</h2>
+        <p>Most hand pose research happens in labs, on scripted tasks, with controlled lighting and clean backgrounds. We think the interesting data is somewhere else — in a real kitchen, at dinner time, with a sharp knife and a pile of onions. CookCredit runs egocentric hand pose estimation on every frame of every session, building dense manipulation trajectories from the one environment that matters most and gets studied least: the home.</p>
+        <div class="terms" id="terms">
+          <span class="term" id="t-hpe">hand pose estimation</span>
+          <span class="term" id="t-se2">SE(2) wrist transform</span>
+          <span class="term" id="t-ema">EMA offset learning</span>
+          <span class="term" id="t-kpd">kinematic peak detection</span>
+          <span class="term" id="t-iou">blade IoU validation</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-val" id="s-kp">0</div><div class="stat-lbl">keypoints</div></div>
+          <div class="stat"><div class="stat-val" id="s-conf">0%</div><div class="stat-lbl">confidence</div></div>
+          <div class="stat"><div class="stat-val" id="s-str">0</div><div class="stat-lbl">strokes</div></div>
+          <div class="stat"><div class="stat-val" id="s-hz">0.0</div><div class="stat-lbl">Hz cadence</div></div>
+        </div>
+      </div>
+      <div class="explainer-canvas">
+        <canvas id="cv" height="420"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIECE SEGMENTATION -->
+  <section class="explainer-section" id="segmentation">
+    <div class="explainer-grid reverse">
+      <div class="explainer-text">
+        <h2>Piece Segmentation + Measurement</h2>
+        <p>A robot can learn to move its arm through space. The harder problem is knowing whether what it produced was any good. CookCredit closes that loop — every session generates instance-level measurements of the output, not just a recording of the motion. Piece geometry, uniformity metrics, and quality scores, structured and timestamped, ready to serve as reward signals for any system learning to use a blade.</p>
+        <div class="phase-bar" id="pbar"></div>
+        <div class="phase-labels" id="plbls"></div>
+        <div class="metrics-row">
+          <div class="metric-card" id="mc-n"><div class="mc-label">N pieces</div><div class="mc-val" id="mv-n">--</div><div class="mc-unit">contours extracted</div><div class="mc-formula">findContours(RETR_EXTERNAL)</div></div>
+          <div class="metric-card" id="mc-med"><div class="mc-label">median area</div><div class="mc-val" id="mv-med">--</div><div class="mc-unit">mm2</div><div class="mc-formula">P50(piece_areas)</div></div>
+          <div class="metric-card" id="mc-cv"><div class="mc-label">robust CV</div><div class="mc-val" id="mv-cv">--</div><div class="mc-unit">MAD / median</div><div class="mc-formula">1.4826 * MAD / median</div></div>
+        </div>
+      </div>
+      <div class="explainer-canvas">
+        <canvas id="pc" height="380"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCORING RUBRIC -->
+  <section class="explainer-section" id="scoring">
+    <div class="explainer-grid">
+      <div class="explainer-text">
+        <h2>Scoring Rubric</h2>
+        <p>Skill isn't one number. It's the relationship between what you intended, what you produced, and how efficiently you got there. Our scoring model separates target accuracy from consistency from speed, penalizes each on independent curves, and gates speed on quality so fast-and-sloppy never outscores slow-and-precise. The result is a score that agrees with expert evaluators — not because we tuned it to a benchmark, but because we calibrated it against their judgment directly.</p>
+        <div class="score-grid">
+          <div class="score-cell" id="cell-fin"><div class="sc-name">fineness</div><div class="sc-val" id="sv-fin">--</div><div class="sc-sub" id="ss-fin">target distance</div><div class="sc-weight">w = 0.35</div></div>
+          <div class="score-cell" id="cell-con"><div class="sc-name">consistency</div><div class="sc-val" id="sv-con">--</div><div class="sc-sub" id="ss-con">robust CV penalty</div><div class="sc-weight">w = 0.45</div></div>
+          <div class="score-cell" id="cell-spd"><div class="sc-name">speed</div><div class="sc-val" id="sv-spd">--</div><div class="sc-sub" id="ss-spd">quality-gated</div><div class="sc-weight">w = 0.20</div></div>
+          <div class="score-cell" id="cell-raw"><div class="sc-name">composite</div><div class="sc-val" id="sv-raw">--</div><div class="sc-sub" id="ss-raw">weighted sum</div><div class="sc-weight"></div></div>
+        </div>
+        <div class="formula-strip" id="fstrip"><span id="f-text">waiting for measurement...</span><span class="pass-badge" id="f-badge" style="opacity:0">--</span></div>
+      </div>
+      <div class="explainer-canvas">
+        <canvas id="sc" height="320"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA PIPELINE -->
+  <section class="explainer-section" id="pipeline">
+    <div class="explainer-grid reverse">
+      <div class="explainer-text">
+        <h2>Data Pipeline + Training Flywheel</h2>
+        <p>Every session a cook completes becomes a structured episode — hand poses, blade trajectories, stroke events, and quality labels — stored in a columnar format designed for cross-embodiment research. The same data that scores a cook today can train a manipulation policy tomorrow. We're not building a dataset. We're building a pipeline that grows every time someone picks up a knife.</p>
+        <div class="pipe-stats">
+          <div class="ps" id="ps-0"><div class="ps-v" id="pv-0">0</div><div class="ps-l">frames captured</div></div>
+          <div class="ps" id="ps-1"><div class="ps-v" id="pv-1">0</div><div class="ps-l">landmarks / s</div></div>
+          <div class="ps" id="ps-2"><div class="ps-v" id="pv-2">0</div><div class="ps-l">zarr arrays</div></div>
+          <div class="ps" id="ps-3"><div class="ps-v" id="pv-3">0</div><div class="ps-l">episodes in DB</div></div>
+          <div class="ps" id="ps-4"><div class="ps-v" id="pv-4">--</div><div class="ps-l">model mAP50</div></div>
+        </div>
+        <div class="flywheel-text" id="flytext">initializing capture pipeline...</div>
+      </div>
+      <div class="explainer-canvas">
+        <canvas id="dp" height="400"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- DYNAMIC MEDIA GRID -->
+  <section class="media-grid" id="media">
+    <div class="media-slot" data-slot="1"></div>
+    <div class="media-slot" data-slot="2"></div>
+    <div class="media-slot" data-slot="3"></div>
+  </section>
+
+  <!-- TWO THINGS -->
+  <section class="two-things">
+    <div class="thing">
+      <h3>What CookCredit does today.</h3>
+      <p>Measures what you made — the size of every piece, how uniform they are, how quickly you worked. A score that means something, from a camera that was watching closely.</p>
+    </div>
+    <div class="thing">
+      <h3>What CookCredit does next.</h3>
+      <p>Shows you how to get better. Live rhythm feedback. Blade angle consistency. Session-over-session progress. The score becomes a coach.</p>
+    </div>
+  </section>
+
+  <!-- THE DATA LINE -->
+  <section class="kitchen-line" id="data">
+    <h2>Every session teaches something.</h2>
+    <p>When you cook, your hands move with years of practice — techniques passed down, adapted, perfected in your own kitchen.</p>
+    <p>CookCredit captures that. Not video of you. The motion of your hands. The geometry of what you made. Anonymized skill, from real kitchens, preparing real food.</p>
+    <p class="strong">The kind of knowledge that's never been written down — until now.</p>
+  </section>
+
+  <!-- DEMO VIDEO -->
+  <section class="demo" id="demo">
+    <div class="demo-video-wrap">
+      <video controls playsinline poster="poster.jpg" preload="metadata">
+        <source src="hero-loop.mp4" type="video/mp4">
+      </video>
+    </div>
+    <p class="demo-caption">21 landmarks. Every frame. Your phone sees what a chef instructor sees.</p>
+
+    <!--
+      The live scorer. This link used to sit on the React homepage (LandingScreen.jsx, as
+      DEMO_URL) behind a "Try the demo" button, and was dropped when the frontend pivoted to the
+      household-help marketplace -- not deliberately retired. The demo itself never went away: it
+      is deployed as the `cookcredit-knife-demo` Firebase site and is verified serving.
+      The video shows the claim; this lets someone test it on their own hands.
+    -->
+    <p class="demo-try">
+      <a class="demo-cta" href="https://cookcredit-knife-demo.web.app" target="_blank" rel="noopener">Try the knife-skill demo &rarr;</a>
+      <span class="demo-try-note">Play mode scores a chop for fun; test mode runs the real one. Runs in your phone&rsquo;s browser.</span>
+    </p>
+  </section>
+
+  <!-- TOQUE — sibling product -->
+  <section class="sibling" id="toque">
+    <span class="sibling-label">Also from CookCredit</span>
+    <h2>Toque</h2>
+    <p class="sibling-lead">The same instinct, pointed at a different part of the kitchen. A kitchen runs on things you notice in passing — the coffee running low, the shelf that needs restocking, the machine nobody logged. Toque puts a governed action on a physical NFC sticker or QR code, so noticing and doing collapse into one half-second gesture.</p>
+    <div class="sibling-grid">
+      <div class="sibling-card">
+        <h3>Dumb sticker, smart server</h3>
+        <p>The chip stores a single link and nothing else. The behaviour lives on the server, so a sticker already on a shelf can be repointed, paused or retired without being peeled off.</p>
+      </div>
+      <div class="sibling-card">
+        <h3>Every tap on the record</h3>
+        <p>Who tapped, when, which action ran, and what came back — an attributed event, not a mystery to reconstruct from logs later.</p>
+      </div>
+      <div class="sibling-card">
+        <h3>Built for the room it&rsquo;s in</h3>
+        <p>A pantry shelf, a barber&rsquo;s chair, a supply cupboard, a table. The tag is the same object; only what it means changes.</p>
+      </div>
+    </div>
+    <a class="sibling-cta" href="https://toque.cookcredit.com" target="_blank" rel="noopener">toque.cookcredit.com &rarr;</a>
+  </section>
+  <!-- WAITLIST -->
+  <section class="marketplace" id="waitlist">
+    <h2>From your kitchen to theirs.</h2>
+    <p>CookCredit is building a way for home cooks to cook for the people around them. Scoring is how you prove you're ready.</p>
+    <form id="marketplace-form" class="signup-form">
+      <input type="email" placeholder="your@email.com" required aria-label="Email address">
+      <select aria-label="Role" required>
+        <option value="" disabled selected>I am a...</option>
+        <option value="cook">Cook</option>
+        <option value="eater">Eater</option>
+        <option value="both">Both</option>
+      </select>
+      <button type="submit">Sign up</button>
+    </form>
+  </section>
+
+
+  <!-- PROGRAMS — membership, deliberately not worded as investment -->
+  <section class="programs" id="programs">
+    <span class="programs-label">Programs</span>
+    <div class="programs-row">
+      <div class="program">
+        <span class="program-name">NVIDIA Inception</span>
+        <span class="program-role">Member</span>
+      </div>
+      <div class="program">
+        <span class="program-name">Google for Startups Cloud Program</span>
+        <span class="program-role">Member</span>
+      </div>
+    </div>
+    <p class="programs-note">CookCredit is a member of NVIDIA Inception and the Google for Startups Cloud Program.</p>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-top">
+      <span class="footer-wordmark">CookCredit</span>
+      <p class="footer-co">Atlanta, GA</p>
+      <p class="footer-email">info@cookcredit.com</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://www.linkedin.com/company/cookcredit/" target="_blank" rel="noopener" aria-label="LinkedIn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      </a>
+    </div>
+    <div class="footer-legal">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+    </div>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="main.js"></script>
+  <!-- Animated explainers -->
+  <script src="explainers.js"></script>
+</body>
+</html>

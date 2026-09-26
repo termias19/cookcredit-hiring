@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CookCredit Firebase Storage Security Rules
+//
+// Important: Firebase Storage rules are OR-based — any matching "allow" grants
+// access. A specific "allow write: if false" does NOT override a broader
+// "allow write: if true" on the same or parent path. Rules are enumerated
+// explicitly here to avoid accidental grants.
+//
+// Portfolio write path is locked to server-only (Flask Admin SDK bypasses
+// these rules). The size + contentType checks on avatar are a second layer —
+// primary enforcement for portfolio is in the Flask upload endpoint.
+//
+// To deploy:
+//   firebase deploy --only storage
+// ─────────────────────────────────────────────────────────────────────────────
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Profile avatars ───────────────────────────────────────────────────────
+    // Client-side upload is still allowed for avatars (not yet routed through
+    // Flask). Constrain to authenticated owner, 5 MB, image types only.
+    match /profiles/{userId}/avatar {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Portfolio images ──────────────────────────────────────────────────────
+    // Write is BLOCKED for all clients. Only the Flask backend can write here
+    // via the Firebase Admin SDK, which bypasses Storage rules entirely.
+    // This enforces that every portfolio image passes server-side validation,
+    // magic-byte checking, Pillow parsing, and EXIF stripping before storage.
+    //
+    // The "allow read" rule on this broader path does NOT override the specific
+    // "allow write: if false" because they cover different operations.
+    match /profiles/{userId}/{filename} {
+      allow read:  if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Deny everything else ──────────────────────────────────────────────────
+    // Firebase Storage default is deny, but this makes the intent explicit.
+    // Any path not matched above is rejected.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

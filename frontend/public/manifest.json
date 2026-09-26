@@ -1,0 +1,37 @@
+{
+  "name": "CookCredit",
+  "short_name": "CookCredit",
+  "description": "Knife skill assessment for hiring cooks. Review applications, recordings and measured evidence.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "en",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "theme_color": "#1F6F5C",
+  "background_color": "#FBF7F0",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

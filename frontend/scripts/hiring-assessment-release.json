@@ -1,0 +1,134 @@
+{
+  "sourceOrigin": "https://cookcredit-knife-demo.web.app",
+  "sourceRelease": "sites/cookcredit-knife-demo/releases/1790393768507000",
+  "files": {
+    "/hiring/app.js": {
+      "sha256": "741f6ae7cb43556404b49820f460c0a59f914b7bd25dc3414e19397c196bafa1",
+      "publishedHash": "8b1332c85b39a39e384b304c00d23344215f3e32a3b6c2484b0e46eabf4673d8"
+    },
+    "/hiring/cloud-contract.mjs": {
+      "sha256": "a1594887eb16509e53597f880628a20baa1445bd03fdaff2f153ab35a8d5b049",
+      "publishedHash": "620ec3f583bb5c709f049a710ffb370e775b2d28622fe6628b92cfe2e2cd6569"
+    },
+    "/hiring/cloud-library.mjs": {
+      "sha256": "2bd4903a45e3cad29a365d507898d588f4529ae67e6c864d6ad59e5cc9e01343",
+      "publishedHash": "62d82b98ef6becb610838034f3f63844b37ca5940965d7035c2ef2c4bde3a778"
+    },
+    "/hiring/coach.js": {
+      "sha256": "2a295269fb87f83b7c8a9ce6d3455f9ad2cf5ba44bd588a7a8e1fde1f2b06625",
+      "publishedHash": "47246cc3f255d76f8b26f1f1f29bf31c03311c585a7e9f86da216cd4489f573a"
+    },
+    "/hiring/cookcredit-mark-ink.svg": {
+      "sha256": "675e8bf5fc61682cf14ed016af2fa2e1e4275923792469012b12d47b81899ef2",
+      "publishedHash": "5d5b5049e3d7ae271f0feddcedbbd1ec47a7b3d83ab13bc09fa364705b117869"
+    },
+    "/hiring/feedback.mjs": {
+      "sha256": "985a09b9fcd092f37ff163addaf708466667af2c7b6d841e32c515642d5f068f",
+      "publishedHash": "19a6da7f3e9e81e0b8a407e9f025ff4adbdac892ade19fd675f95740050b04c8"
+    },
+    "/hiring/firebase-client-config.mjs": {
+      "sha256": "8e24d273ae5a03624e28a582cf2fdd84e167f8a6be8527d995c9ab9482a8d6e7",
+      "publishedHash": "56ae6169845858548500e1e4eaab6bc0e6a4eb7986c65680b7d20adb695d2c93"
+    },
+    "/hiring/game.js": {
+      "sha256": "8afd5d201fdea4a9e03d517c736d7db1b4e711f64bdefd59b21a16ed62ae59ad",
+      "publishedHash": "fa67ede7ab1b71e437da5c24048bf1ca5015fb0928a314c9d2355ab5242b5748"
+    },
+    "/hiring/hand_landmarker.task": {
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "publishedHash": "7c62a4d308a9ccd6d1ecb0a95dacbedae9edb2906dcf3378f365d3ecfc505b4b"
+    },
+    "/hiring/hiring-bridge.mjs": {
+      "sha256": "719e471d1541325a05b8b9c4448b736d44c43aa4b5d3cc516e5154c228d10bac",
+      "publishedHash": "b3dc9c44ec1119868fb3c5fba63e0ced046c2daba253772ab36fc950c90ec326"
+    },
+    "/hiring/hiring-capture.mjs": {
+      "sha256": "8c578ad11dc346f2214eeda971f804a8ff120c00a756c37422a72d8c37beb924",
+      "publishedHash": "7c1a29411302b82fcc2b79a6b7e2cd1fcc30492dcebee17256d5a204da4a0c4f"
+    },
+    "/hiring/index.html": {
+      "sha256": "f2a01b5677db11bcded36cad2e5e96c4bb466379f5e6f4b0c970b6237bb1b240",
+      "publishedHash": "c90d9d0b8af31c6614db212f1d468d27bfe1336152ea6cf9629817030fada21c"
+    },
+    "/hiring/knife.onnx": {
+      "sha256": "34e0f43c9695aa4b71f4c8b6df36dc0eb72ca9958104ddfb811b10e8af1ba179",
+      "publishedHash": "fdbd9b2e47359d93a57b245144d835e2495a86f196630e027f10e001043fb693"
+    },
+    "/hiring/legal/accessibility.html": {
+      "sha256": "b81fcd23a4880e982461c4cae71bb897605e8f4d4df5c2213a3f86907c2daf2a",
+      "publishedHash": "bf9c7d00abbdb29c1fad936e7fc159161d9cc7104bdb95136c7433efe7467006"
+    },
+    "/hiring/legal/biometric-schedule.html": {
+      "sha256": "567828ee49d15e54aaa4644a19930abfaf2c06ca414e813886d519317e246fa5",
+      "publishedHash": "167d6428df191138c6a603f52f23cafbb6be5c45e38b3932447b5e08a15ba6f2"
+    },
+    "/hiring/legal/biometric.html": {
+      "sha256": "646d55f375c53ecbee267c99c2061a36ebcb49c27cd3befc2faff9abe0c01430",
+      "publishedHash": "ba8ba67afb73d329486abf49cde066c00d6947e06f0956504aa1e9e2b9ee1271"
+    },
+    "/hiring/legal/privacy.html": {
+      "sha256": "9407bc69f0d25cbf5c8d2a42f52906384bed5ef08e9133adf937d6318a8bd807",
+      "publishedHash": "1e372ff1528e3c19f0833abfc7571d19fdc571d00c12cf8bb35cdec41064194f"
+    },
+    "/hiring/legal/terms.html": {
+      "sha256": "cffaee4e036b30fa2f71aa3bb4ae23faf80d610a5b736d1977c7adadf263adab",
+      "publishedHash": "4dab24f3694d9dfff50160f30bfde92babfd9c1c8cc4f90628e6f9eb454f6302"
+    },
+    "/hiring/ort/ort-wasm-simd-threaded.mjs": {
+      "sha256": "d870a377322c3053fb97432d548423f165dd15e2af232947592fc07b0d2f3639",
+      "publishedHash": "aaf6c9ec41c1d5b6ca1530069c6cfd7f8c5257bb45098315a7da1ec2ab81f3d4"
+    },
+    "/hiring/ort/ort-wasm-simd-threaded.wasm": {
+      "sha256": "1bf0b9ed7ad025cf9ca88ce6da29e54df3f128a169f8241d71823e81f078d578",
+      "publishedHash": "a78ec2d63d258fe3d6046f222aacd1097ec3ac3bed083aafeba00f86f64e7e35"
+    },
+    "/hiring/ort/ort.min.mjs": {
+      "sha256": "e6de4ce5269762d9e5560f7e6d03418e1358d14c6d7da7105b8e58c3ae8d560d",
+      "publishedHash": "53ba07fc989e60300f988a0ec81ba62e6f81087e189b116152751c1c7753ef29"
+    },
+    "/hiring/recording.mjs": {
+      "sha256": "aa7045734a3d3781370d9c3ad850a52ece3055892205dd951021da1933bc4f5a",
+      "publishedHash": "2ad4741f40246c39a2fb5b5f43f758d21ccddf226c6321403c9c123f52998906"
+    },
+    "/hiring/score.js": {
+      "sha256": "1be9ba8eea8360cbdda813b4bc49bb949ae2194fb7e8d37aeb51168222c60a1d",
+      "publishedHash": "f6ae35888a905f2b9b165b1b6273a932fd5167d984daa8e803d70316b5e92276"
+    },
+    "/hiring/style.css": {
+      "sha256": "f72c6d57e4b8197a24b6c067a9712e2d5ab701f8297d01d43b961fc6807883eb",
+      "publishedHash": "6bc5cadf7aea96515f1a1446e375605b42912c94066bde9d6c0acaa44821e9fd"
+    },
+    "/hiring/vision_bundle.mjs": {
+      "sha256": "012fb4219fc9d3fc88951a86fa44266f51ecd19bfc95e96b7ee6ed6827d2bdda",
+      "publishedHash": "d929e1de378755e8bcf8c4ceecc97fc6f28c44f614d6847a7064dbd08a6f74d3"
+    },
+    "/hiring/wasm/vision_wasm_internal.js": {
+      "sha256": "5b87478cba1d11379d4ce48734219e8e87b4ab5d1324b635e5a23ad05383a23c",
+      "publishedHash": "12a4b3ebb7fd2b7059d461dc7e53fbf24268e92fbb2bfc9e5c036bbf58df9b50"
+    },
+    "/hiring/wasm/vision_wasm_internal.wasm": {
+      "sha256": "5a2f55cde02ca808094df9a823539f2c1418053cc4d4662a3bad0fedd05df6c6",
+      "publishedHash": "0ea56951221fea7b5aaaa197fd060f3982e0b89ef3c7ecb7b9f0d553a8367728"
+    },
+    "/hiring/wasm/vision_wasm_nosimd_internal.js": {
+      "sha256": "c1a0650317103cffb988ddb7c4d3873741c4c67c3289cff127f75678990d34d4",
+      "publishedHash": "a12602bdbd7211de7b8c5902e7cce7f389e32069b4eae386a673aabfd52bc51f"
+    },
+    "/hiring/wasm/vision_wasm_nosimd_internal.wasm": {
+      "sha256": "74ae0e2cf1b682120c20ee13211ff283740992e2515217abbc1add60cbdb49fd",
+      "publishedHash": "bd50e3d61b48d3426c4edc71186f7eff0a2d01765cf30e029636b744b9fe27a5"
+    },
+    "/hiring/wrist.js": {
+      "sha256": "046790be9c6a2879659c956994d997f09c02502fe474de3c29ed631871135c1e",
+      "publishedHash": "6957a16d8ccbd1d82b06f90e2d33b9f9ddea1c4eea454f1503cb1e83a65c7986"
+    },
+    "/hiring/yolo_worker.js": {
+      "sha256": "a5caa08c3f19250dacf8408a68ca92f4a4666f142e539e1cd2aea2a515342f5f",
+      "publishedHash": "dcbf9f6f4d6b5a7427e7e412e6b5245c077519a24477abe0171ce4c9d745034a"
+    },
+    "/hiring/landmark-capture.mjs": {
+      "sha256": "daa7566ed0333e6cdfdd5ba123256b2b72912cb20ab54142e55add6332f11cc3",
+      "publishedHash": "cfdaefdbe1f485e6f9deb874fc35f543ace0cea86441c41352f34ca3fbde4e4b"
+    }
+  }
+}

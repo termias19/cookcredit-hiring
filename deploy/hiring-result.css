@@ -1,0 +1,51 @@
+/* Hiring results only. No camera, detector, recording or learning overrides. */
+.hiring-experience #screen-summary {
+ --bg:#F7F5F0;--bg-2:#FFFEFA;--fg:#1A1A1A;--dim:#625F58;
+ --line:#DDD9CF;--accent:#1F6F5C;--accent-2:#1F6F5C;
+ background:#F7F5F0;color:#1A1A1A;color-scheme:light;
+ padding:24px 16px 48px;font-family:Arial,sans-serif;
+}
+.hiring-experience #screen-summary .reveal-card {max-width:800px;padding:0;text-align:left;align-items:stretch;}
+.hiring-experience #screen-summary .result-header {padding:0 0 20px;border-bottom:1px solid #DDD9CF;}
+.hiring-experience #screen-summary .wordmark {color:#1A1A1A;}
+.hiring-experience #screen-summary .result-header .account-link,
+.hiring-experience #screen-summary .score-panel,
+.hiring-experience #screen-summary #feedback-card,
+.hiring-experience #screen-summary .result-actions,
+.hiring-experience #screen-summary #btn-share-video {display:none;}
+.hiring-experience #screen-summary .reveal-kicker {color:#625F58;letter-spacing:.04em;font-size:12px;animation:none;}
+.hiring-experience #screen-summary .result-grid {display:flex;flex-direction:column;border:0;}
+.hiring-experience #screen-summary .recording-card,
+.hiring-experience #screen-summary .breakdown-panel {padding:24px 0;border:0;border-bottom:1px solid #DDD9CF;background:transparent;}
+.hiring-experience #screen-summary .hiring-submit-panel {margin:0 0 28px;padding:0 0 24px;border:0;border-bottom:1px solid #DDD9CF;background:transparent;color:#1A1A1A;}
+.hiring-experience #screen-summary .eyebrow {color:#526057;font-size:12px;letter-spacing:.06em;}
+.hiring-experience #screen-summary h3 {font:400 32px/1.2 Georgia,serif;letter-spacing:-.02em;}
+.hiring-experience #screen-summary h2 {font:400 24px/1.3 Georgia,serif;letter-spacing:-.01em;}
+.hiring-experience #screen-summary p {font-size:14px;line-height:1.6;}
+.hiring-experience #screen-summary button {font-family:Arial,sans-serif;text-transform:none;letter-spacing:0;min-height:44px;font-size:14px;border-radius:4px;box-shadow:none;}
+.hiring-experience #screen-summary .primary {background:#1F6F5C;border:1px solid #1F6F5C;color:#fff;}
+.hiring-experience #screen-summary .secondary {background:#FFFEFA;border:1px solid #B8BDB4;color:#1F6F5C;}
+.hiring-experience #screen-summary button:disabled {background:#D8DDD3;color:#4B554C;border-color:#D8DDD3;opacity:1;cursor:wait;}
+.hiring-experience #screen-summary :focus-visible {outline:3px solid #1F6F5C;outline-offset:3px;}
+.hiring-experience #screen-summary .compact-actions {display:flex;flex-wrap:wrap;gap:12px;}
+.hiring-experience #screen-summary #hiring-submit-status {color:#743D24;background:#F0EAE0;border-radius:4px;padding:10px 12px;overflow-wrap:anywhere;}
+.hiring-experience #screen-summary #result-video {display:block;width:100%;max-height:440px;background:#171A17;object-fit:contain;border-radius:4px;}
+.hiring-experience #screen-summary .recording-details,
+.hiring-experience #screen-summary .recording-playback-status,
+.hiring-experience #screen-summary .upload-status {color:#625F58;}
+.hiring-experience #screen-summary .danger-link {color:#8A382B;}
+.hiring-experience #screen-summary .bar-track {background:#E2E5DB;}
+.hiring-experience #screen-summary .bar-track i {background:#1F6F5C;}
+.hiring-experience #screen-summary .bar-l {letter-spacing:0;font-family:Arial,sans-serif;}
+.hiring-experience #screen-summary .device-badge {color:#526057;border-color:#B8BDB4;}
+@media(max-width:560px) {
+ .hiring-experience #screen-summary .compact-actions {flex-direction:column;}
+ .hiring-experience #screen-summary .compact-actions button {width:100%;}
+ .hiring-experience #screen-summary h3 {font-size:28px;}
+}
+
+.hiring-experience #screen-splash[hidden],
+.hiring-experience #screen-summary[hidden] {display:none;}
+
+.hiring-experience #screen-summary,
+.hiring-experience #screen-summary * {animation:none;}

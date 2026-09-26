@@ -1,0 +1,97 @@
+/* Shared CookCredit public pages: homepage, learning and hiring. */
+.site-nav{flex-wrap:wrap;gap:.35rem 1.35rem;padding:.8rem 0}
+.entry-page{background:var(--ink);color:var(--text);color-scheme:dark}
+.entry-page .site-header{position:relative;display:flex;align-items:center;gap:1.25rem;background:var(--ink);border-color:var(--border)}
+.entry-page .wordmark,.entry-page .site-nav a{color:var(--text)}
+.entry-page .site-nav a:hover,.entry-page .text-link:hover{color:var(--signal)}
+.entry-page .wordmark-emblem{background:var(--paper)}
+.entry-page h1,.entry-page h2,.entry-page h3{font-family:inherit;font-weight:600;letter-spacing:-.035em}
+.entry-page h1{font-size:clamp(3.3rem,6.2vw,6rem);line-height:1.02;margin-bottom:1.6rem}
+.entry-page h2{font-size:clamp(2.2rem,4vw,4rem);line-height:1.12;max-width:20ch}
+.entry-page h3{font-size:1.8rem;line-height:1.2;margin-bottom:.8rem}
+.entry-page p{line-height:1.7}
+.entry-page .eyebrow{color:var(--signal)}
+.entry-hero{max-width:96rem;margin:auto;padding:clamp(3rem,7vw,7rem) var(--page-pad);display:grid;grid-template-columns:1fr;gap:clamp(2rem,5vw,6rem);align-items:center}
+.entry-summary{max-width:42rem;font-size:1.15rem;color:var(--text-muted)}
+.entry-actions{display:flex;flex-wrap:wrap;align-items:center;gap:1.3rem;margin:2rem 0 1rem}
+.entry-page .button-dark{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.entry-page .button-dark:hover{background:#fff}
+.entry-page .text-link{font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--signal);line-height:1.5}
+.entry-note{color:var(--text-muted);font-size:.82rem;max-width:42rem}
+.entry-small-link{display:inline-block;color:var(--signal);font-size:.85rem;padding:.5rem 0;line-height:1.6}
+
+
+.entry-section{max-width:96rem;margin:auto;padding:clamp(3rem,6vw,6rem) var(--page-pad);border-top:1px solid var(--border)}
+.entry-steps{list-style:none;padding:0;margin:2.5rem 0 1.5rem;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3rem}
+.entry-steps li{display:flex;gap:1.4rem}.entry-steps li>span{font:1rem ui-monospace,monospace;color:var(--accent);padding-top:.5rem}.entry-steps p{color:var(--text-muted);margin:0}
+.entry-split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(2rem,8vw,10rem);align-items:center}.entry-split>div>p{max-width:34rem}
+.entry-measures{margin:0}.entry-measures>div{padding:1.2rem 0;border-bottom:1px solid var(--border)}.entry-measures dt{font-size:1.6rem;font-weight:600;line-height:1.2;margin-bottom:.5rem}.entry-measures dd{margin:0;color:var(--text-muted);line-height:1.7}
+.entry-integrations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3rem;margin:2rem 0}.entry-integrations article{border-top:1px solid var(--border);padding-top:1.3rem}.entry-integrations p{color:var(--text-muted)}.entry-number{font-size:.8rem}
+.entry-aside{padding:0 0 0 2.5rem;border-left:1px solid var(--border);background:transparent}.entry-close{text-align:left;background:var(--ink-soft);max-width:none}.entry-close h2{max-width:24ch}
+.entry-page .site-footer{background:var(--ink);color:var(--text)}.entry-page .site-footer .wordmark{color:#f5f3ed}.entry-page .site-footer .wordmark-emblem{background:#f0eee7}
+@media(max-width:850px){.site-header{gap:1rem;flex-wrap:wrap;padding-top:.7rem;padding-bottom:.5rem}.site-nav{gap:.2rem 1rem}.site-nav a{font-size:.62rem;min-height:2rem}.entry-hero{grid-template-columns:1fr;padding-top:3rem}.entry-split{grid-template-columns:1fr}.entry-steps,.entry-integrations{grid-template-columns:1fr;gap:1.8rem}.entry-steps h3{font-size:1.7rem}.entry-section h2{max-width:24ch}.entry-integrations article{padding-top:1rem}.entry-summary{font-size:1.05rem}}
+@media(max-width:480px){.entry-page h1{font-size:3.25rem}.entry-aside{padding:1.5rem 0 0;border-left:0;border-top:1px solid var(--border)}.entry-page .site-nav{column-gap:1.3rem}.entry-page .site-nav a{font-size:.59rem}.entry-steps li{gap:1rem}.entry-actions{align-items:flex-start;flex-direction:column}}
+
+/* Homepage polish: existing palette and typography, scoped away from entry pages. */
+.homepage .site-header{display:flex;align-items:center;gap:1.25rem;background:rgba(7,8,7,.86)}
+.homepage .site-nav{margin-left:auto;gap:.35rem 1.05rem}
+.social-links{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
+.social-links a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;color:inherit;border:1px solid transparent;border-radius:4px;transition:color .15s,background .15s}
+.social-links a:hover{color:#96d2bc;background:rgba(255,255,255,.08)}
+.social-links a:focus-visible{outline:2px solid #96d2bc;outline-offset:3px}
+.social-links svg{display:block;flex-shrink:0}
+.homepage .hero-shade{background:linear-gradient(90deg,rgba(7,8,7,.9) 0%,rgba(7,8,7,.7) 45%,rgba(7,8,7,.22) 100%)}
+.homepage .hero h1{max-width:13ch;font-size:clamp(3rem,5.8vw,6.3rem);line-height:1.04}
+.homepage .hero-summary{max-width:35rem;line-height:1.7}
+.footer-social{justify-content:flex-end}
+@media(max-width:1150px){.homepage .site-header{flex-wrap:wrap}.homepage .site-nav{width:auto;margin-left:auto;flex:1;justify-content:flex-end}}
+@media(max-width:600px){.homepage .site-header{gap:.4rem 1rem}.homepage .site-nav{gap:.2rem 1rem;flex-basis:100%;margin-left:0;justify-content:flex-start}.homepage .hero-shade{background:rgba(7,8,7,.76)}.homepage .hero h1{font-size:clamp(2.8rem,10.5vw,3.8rem)}.footer-social{justify-content:flex-start}.homepage .hero-summary{font-size:1rem}}
+@media(prefers-reduced-motion:reduce){.social-links a{transition:none}}
+
+/* Keep the product introduction and recorded demonstration together. */
+.homepage .product-skill{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);align-items:center;border:0;background:transparent;gap:clamp(1.5rem,4vw,4rem)}
+.homepage .product-skill .product-copy{max-width:none;padding:0;border:0;background:transparent}
+.homepage .product-skill h3{margin-top:1.5rem;margin-bottom:1rem}
+.homepage .product-skill .product-facts{margin-bottom:1.5rem}
+.homepage .analysis-showcase{width:100%;min-width:0;min-height:0;padding:0;border:0;background:transparent}
+.homepage .analysis-showcase video{display:block;width:100%;height:auto;aspect-ratio:1280/800;object-fit:contain;background:#000}
+
+@media(max-width:760px){.homepage .product-skill{grid-template-columns:1fr}.homepage .analysis-showcase{padding:0}}
+
+/* Shared orientation and interaction feedback. */
+.entry-page .site-nav{margin-left:auto}
+.entry-page .entry-hero h1{max-width:18ch}
+.entry-page .entry-hero{padding-top:clamp(3rem,8vw,8rem);padding-bottom:clamp(3rem,7vw,7rem)}
+.site-nav a{position:relative;border-bottom:2px solid transparent;text-decoration:none;transition:color .18s,border-color .18s,text-shadow .18s}
+.site-nav a[aria-current],.site-nav a:hover{color:var(--signal);border-bottom-color:var(--signal);text-shadow:0 0 16px rgba(105,213,193,.35)}
+.footer-links a[aria-current]{color:var(--signal);text-decoration:underline;text-underline-offset:.4em}
+:is(a,button,input,select,textarea):focus-visible{outline:2px solid var(--signal);outline-offset:5px}
+:is(.button,button){transition:box-shadow .18s,background-color .18s,color .18s,transform .1s}
+:is(.button,button):hover{box-shadow:0 0 0 1px var(--signal),0 0 18px rgba(105,213,193,.16)}
+:is(.button,button):active{transform:translateY(1px);box-shadow:0 0 0 2px var(--signal)}
+:is(.text-link,.entry-small-link,.footer-links a):hover{text-decoration:underline;text-underline-offset:.3em}
+.entry-page .entry-measures dt{font-family:inherit;font-size:1.5rem;font-weight:600}
+@media(max-width:850px){.entry-page .site-nav{margin-left:0;width:100%}.entry-aside{padding:1.5rem 0 0;border-left:0;border-top:1px solid var(--border)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.site-nav a,:is(.button,button){transition:none}}
+
+/* Company research statement: quiet, paper-like typesetting within the shared shell. */
+.research-page main{background:var(--paper);color:#20251f}
+.research-paper{max-width:76ch;margin:auto;padding:clamp(3rem,7vw,6rem) 1.5rem;font-family:Georgia,'Times New Roman',serif;font-size:1.1rem;line-height:1.85}
+.research-paper h1,.research-paper h2{font-family:Georgia,'Times New Roman',serif;font-weight:400;letter-spacing:-.025em}
+.research-paper h1{font-size:clamp(2.8rem,5vw,4.8rem);max-width:16ch}
+.research-paper h2{font-size:1.8rem;max-width:none;margin:0 0 1rem}
+.research-paper section{margin-top:3rem}.research-paper p{line-height:1.85}
+.research-paper a{color:#205b4d;text-decoration:underline;text-underline-offset:.18em}
+.research-paper a:focus-visible{outline-color:#205b4d}
+.research-paper .eyebrow,.paper-meta{font-family:Inter,ui-sans-serif,sans-serif;font-size:.75rem;color:#526055}
+.paper-heading{border-bottom:1px solid #bac0b5;padding-bottom:2rem}.paper-subtitle{font-size:1.3rem;max-width:40ch}
+.paper-process{margin:2rem 0;padding:1.5rem 0;border-block:1px solid #bac0b5}
+.paper-process ol{display:flex;flex-wrap:wrap;gap:1rem 2rem;padding-left:1.2rem;font: .85rem/1.5 ui-sans-serif,sans-serif}
+.paper-process figcaption,.paper-references{font-size:.95rem}.paper-references li{margin-bottom:1rem}
+.contact-page{max-width:48rem;margin:auto;padding:clamp(3rem,7vw,6rem) var(--page-pad)}
+.contact-page h1{font-size:clamp(3rem,6vw,5rem)}
+#contact-form{margin:2.5rem 0 1.5rem}#contact-form label{display:block;margin:1.4rem 0 .5rem;font-size:.95rem}#contact-form label span{color:var(--text-muted)}
+#contact-form input,#contact-form textarea{width:100%;background:var(--ink-soft);color:var(--text);border:1px solid var(--border);border-radius:0;padding:.85rem;font:inherit;resize:vertical}
+#contact-form .entry-note{margin-top:.75rem}#contact-form button{margin-top:.75rem;cursor:pointer}#contact-form button:disabled{opacity:.65;cursor:wait}
+.contact-trap{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#contact-status{margin:1.25rem 0;line-height:1.6}#contact-status:empty{display:none}

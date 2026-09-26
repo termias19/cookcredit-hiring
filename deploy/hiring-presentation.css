@@ -1,0 +1,35 @@
+/* Scoped to the hiring page; camera, landmarks and scoring styles stay intact. */
+.hiring-experience #screen-splash {
+ --bg:#F7F5F0; --bg-2:#FFFEFA; --fg:#1A1A1A; --dim:#625F58;
+ --line:#DDD9CF; --accent:#1F6F5C; --accent-2:#927643; --signal:#1F6F5C;
+ color:var(--fg); background-color:var(--bg); color-scheme:light;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='720' height='620' viewBox='0 0 720 620'%3E%3Cg fill='none' stroke='%231F6F5C' stroke-opacity='.055' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(55 80) rotate(-18)'%3E%3Cpath d='M0 25h82v35c0 20-82 20-82 0zM-9 25h100M30 13h22M41 13v12M-14 36H0M82 36h14'/%3E%3C/g%3E%3Cg transform='translate(510 350) rotate(22)'%3E%3Cellipse cx='38' cy='35' rx='38' ry='25'/%3E%3Cpath d='M76 32h65v8H76'/%3E%3C/g%3E%3Cg transform='translate(300 510) rotate(-30)'%3E%3Cpath d='M0 0v54M-14 0v23c0 18 28 18 28 0V0M0 54v52'/%3E%3C/g%3E%3Cg transform='translate(560 85) rotate(15)'%3E%3Crect width='70' height='100' rx='12'/%3E%3Cpath d='M25 12h20M14 38h42M14 50h42M14 62h42'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.hiring-experience #screen-splash .brand {border-color:#DDD9CF;}
+.hiring-experience #screen-splash .wordmark {color:#1A1A1A;}
+.hiring-experience #screen-splash .wordmark-emblem {background:#1F6F5C;}
+.hiring-experience #screen-splash .brand-actions a,
+.hiring-experience #screen-splash .brand-actions button {color:#1F6F5C;border-color:#C8D3C9;}
+.hiring-experience #screen-splash .intro-block h1 {font-family:Georgia,'Times New Roman',serif;font-size:clamp(3rem,5.5vw,5.3rem);font-weight:400;letter-spacing:-.045em;line-height:1.04;max-width:10ch;}
+.hiring-experience #screen-splash .intro-copy {color:#4E514B;font-size:1rem;}
+.hiring-experience #screen-splash .session-scope {background:rgba(255,254,250,.8);}
+.hiring-experience #screen-splash .mode-seg {display:none;}
+.hiring-experience #screen-splash .hiring-context-banner {margin:28px 0 16px;background:#FFFEFA;border:1px solid #DDD9CF;max-width:35rem;}
+.hiring-experience #screen-splash .hiring-context-banner h2 {font-family:Georgia,serif;font-size:1.35rem;font-weight:400;}
+.hiring-experience #screen-splash .hiring-auth-row {color:#1F6F5C;font-size:.82rem;}
+.hiring-experience #screen-splash .hand-btn {color:#35453D;background:#FFFEFA;border:1px solid #CFCFC4;box-shadow:none;}
+.hiring-experience #screen-splash .hand-btn.selected {color:#1F6F5C;background:#E8EEE5;border-color:#1F6F5C;}
+.hiring-experience #screen-splash .meta-form input:not([type=checkbox]),
+.hiring-experience #screen-splash .meta-form select {background:#FFFEFA;color:#1A1A1A;border-color:#CECCC3;}
+.hiring-experience #screen-splash .meta-form label,
+.hiring-experience #screen-splash .hand-note,
+.hiring-experience #screen-splash .form-intro {color:#595C54;}
+.hiring-experience #screen-splash .meta-form label.consent {background:#FFFEFA;border-color:#DDD9CF;color:#454A42;}
+.hiring-experience #screen-splash #btn-start {background:#1F6F5C;color:#fff;border-color:#1F6F5C;box-shadow:none;}
+.hiring-experience #screen-splash #btn-start:disabled {background:#D8DDD3;color:#5B645A;border-color:#D8DDD3;opacity:1;}
+.hiring-experience #screen-splash :focus-visible {outline:2px solid #1F6F5C;outline-offset:3px;}
+@media(min-width:860px) {
+ .hiring-experience #screen-splash {grid-template-columns:minmax(0,1fr) minmax(21rem,1fr);column-gap:clamp(2rem,6vw,6rem);}
+ .hiring-experience #screen-splash > .hiring-context-banner {grid-column:2;grid-row:2;}
+ .hiring-experience #screen-splash > .intro-block {grid-column:1;grid-row:2 / span 5;}
+}

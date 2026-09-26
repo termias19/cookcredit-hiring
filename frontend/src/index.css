@@ -1,0 +1,172 @@
+/* Noto Sans Ethiopic — self-hosted variable subset (Ethiopic ranges only; ~194 KB,
+   precached by the PWA) so Amharic/Tigrinya never render as tofu. Latin stays Inter;
+   Ethiopic glyphs fall through to this face via unicode-range. */
+@font-face {
+  font-family: 'Noto Sans Ethiopic';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/noto-sans-ethiopic.woff2') format('woff2');
+  unicode-range: U+1200-1399, U+2D80-2DDE, U+AB01-AB2E, U+1E7E0-1E7E6, U+1E7E8-1E7EB, U+1E7ED-1E7EE, U+1E7F0-1E7FE;
+}
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes modalBgIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes modalSlideUp { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
+@keyframes slideUp { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
+
+@keyframes splashWheelIn {
+  0%   { transform: rotate(-180deg) scale(0.5); opacity: 0; }
+  100% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+@keyframes splashFadeUp {
+  0%   { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes splashPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT THEME (default in :root, active when data-theme="light")
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Brand ─────────────────────────────────────────── */
+  --mise-forest:      #1F6F5C;
+  --mise-forest-deep: #123F34;
+  --mise-forest-light:#E6F2EF;
+  --mise-terra:       #3B5166;
+  --mise-terra-dark:  #22303D;
+  --mise-terra-light: #EEF2F5;
+  --mise-amber:       #C9A227;
+  --mise-amber-light: #F8F1DC;
+
+  /* ── Surfaces ──────────────────────────────────────── */
+  --mise-cream:       #F8F7F4;
+  --mise-cream-warm:  #F0EFED;
+  --mise-bone:        #FFFFFF;
+  --mise-white:       #FFFFFF;
+
+  /* ── Text ──────────────────────────────────────────── */
+  --mise-espresso:    #1A1A1A;
+  --mise-espresso-50: #777777;
+  --mise-espresso-old:#5C2E0E;
+
+  /* ── UI ────────────────────────────────────────────── */
+  --mise-muted:       #999999;
+  --mise-border:      #E5E5E5;
+  --mise-danger:      #D32F2F;
+  --mise-success:     #2E7D32;
+
+  /* ── Cards & Modals ────────────────────────────────── */
+  --mise-card:        #FFFFFF;
+  --mise-card-border: #E5E5E5;
+  --mise-modal-bg:    #FFFFFF;
+  --mise-input-bg:    #FFFFFF;
+  --mise-hover:       #F8F7F4;
+
+  /* ── Misc ──────────────────────────────────────────── */
+  --mise-text-secondary: #777777;
+  --mise-text-hint:      #AAAAAA;
+  --mise-text-inverted:  #FFFFFF;
+  --mise-shadow:         rgba(0,0,0,.06);
+  --mise-overlay:        rgba(0,0,0,.6);
+  --mise-bg-pattern:     none;
+
+  /* ── Messages (WhatsApp-style) ──────────────────── */
+  --mise-chat-bg:        #ECE5DD;
+  --mise-msg-mine:       #DCF8C6;
+  --mise-msg-theirs:     #FFFFFF;
+  --mise-msg-text:       #1A1A1A;
+  --mise-msg-meta:       #999999;
+  --mise-msg-tick:       #53BDEB;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK THEME
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* ── Brand (slightly brighter for contrast on dark) ── */
+  --mise-forest:      #4CA890;
+  --mise-forest-deep: #2F7A68;
+  --mise-forest-light: rgba(31,111,92,.15);
+  --mise-terra:       #6E8AA3;
+  --mise-terra-dark:  #3B5166;
+  --mise-terra-light: rgba(59,81,102,.15);
+  --mise-amber:       #D9BA5C;
+  --mise-amber-light: rgba(201,162,39,.12);
+
+  /* ── Surfaces ──────────────────────────────────────── */
+  --mise-cream:       #1A1512;
+  --mise-cream-warm:  #252018;
+  --mise-bone:        #111111;
+  --mise-white:       #1E1915;
+
+  /* ── Text ──────────────────────────────────────────── */
+  --mise-espresso:    #E8DDD0;
+  --mise-espresso-50: #C8B8A0;
+  --mise-espresso-old:#D8C8B0;
+
+  /* ── UI ────────────────────────────────────────────── */
+  --mise-muted:       #8A7A68;
+  --mise-border:      #3A3028;
+  --mise-danger:      #EF5350;
+  --mise-success:     #4CAF50;
+
+  /* ── Cards & Modals ────────────────────────────────── */
+  --mise-card:        #1E1915;
+  --mise-card-border: #3A3028;
+  --mise-modal-bg:    #252018;
+  --mise-input-bg:    #252018;
+  --mise-hover:       #2A2420;
+
+  /* ── Misc ──────────────────────────────────────────── */
+  --mise-text-secondary: #9A8A78;
+  --mise-text-hint:      #6A5A48;
+  --mise-text-inverted:  #FFFFFF;
+  --mise-shadow:         rgba(0,0,0,.3);
+  --mise-overlay:        rgba(0,0,0,.7);
+  /* Subtle abstract dot-grid, replacing the old cookware silhouette pattern */
+  --mise-bg-pattern:     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Ccircle cx='2' cy='2' r='1.4' fill='%23FFFFFF' opacity='0.05'/%3E%3C/svg%3E");
+
+  /* ── Messages (WhatsApp-style dark) ─────────────── */
+  --mise-chat-bg:        #0A1929;
+  --mise-msg-mine:       #005C4B;
+  --mise-msg-theirs:     #1E2D3D;
+  --mise-msg-text:       #E8DDD0;
+  --mise-msg-meta:       #8A7A68;
+  --mise-msg-tick:       #53BDEB;
+}
+
+/* ── Shell: base background + subtle dot pattern in dark mode ──────────── */
+.mise-shell {
+  background-color: var(--mise-bone);
+  background-image: var(--mise-bg-pattern);
+  background-repeat: repeat;
+}
+
+[data-theme="light"] body {
+  background-color: var(--mise-bone);
+  background-image: none;
+}
+
+body {
+  font-family: 'Inter', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--mise-espresso);
+}
+
+input, button, textarea, select {
+  font-family: inherit;
+  -webkit-appearance: none;
+}
+
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }

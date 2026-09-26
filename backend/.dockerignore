@@ -1,0 +1,33 @@
+# Keep secrets + local-only files OUT of the image (defense in depth — prod reads
+# secrets from Secret Manager / Cloud Run env, never from a baked-in file).
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+firebase-credentials.json
+*.key
+*.pem
+
+# Local virtualenv + interpreters
+venv/
+.venv/
+env/
+
+# Python cruft
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+pytest-cache-files-*/
+.pytest_cache/
+
+# Local dev tooling / junk that has no place in a server image
+start.bat
+*.exe
+_tr4_out.txt
+
+# VCS / editor
+.git/
+.gitignore
+.idea/
+.vscode/

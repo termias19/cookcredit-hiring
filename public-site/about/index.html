@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About CookCredit | Knife Skills Research &amp; Invisible Labor</title><meta name="description" content="Explore CookCredit’s research on knife skills, computer vision and invisible labor: the EgoCut method, practical applications, and how we evaluate movement.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="website"><meta property="og:site_name" content="CookCredit">
+<meta property="og:title" content="About CookCredit | Knife Skills Research &amp; Invisible Labor">
+<meta property="og:description" content="Computer vision for practical knife skills and a clearer account of food work. Explore CookCredit’s purpose and the EgoCut research method.">
+<meta property="og:url" content="https://cookcredit.com/about/">
+<meta property="og:image" content="https://cookcredit.com/media/knife-analysis-showcase.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://cookcredit.com/about/"><link rel="icon" href="/cookcredit-mark-orange.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/cookcredit-entry.css?v=9d088fcb400a">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "AboutPage", "@id": "https://cookcredit.com/about/#webpage", "url": "https://cookcredit.com/about/", "name": "About CookCredit | Knife Skills Research & Invisible Labor", "description": "Explore CookCredit’s research on knife skills, computer vision and invisible labor: the EgoCut method, practical applications, and how we evaluate movement.", "inLanguage": "en", "dateModified": "2026-09-25", "isPartOf": {"@id": "https://cookcredit.com/#website"}, "mainEntity": {"@type": "Organization", "@id": "https://cookcredit.com/#organization", "name": "CookCredit", "url": "https://cookcredit.com/", "sameAs": ["https://www.linkedin.com/company/cookcredit/", "https://www.instagram.com/cookcredit_llc/"]}, "citation": ["https://github.com/termias19/egocut", "https://github.com/termias19/egocut/blob/main/docs/method.md", "https://github.com/termias19/egocut/blob/main/docs/evaluation.md"]}</script>
+</head><body class="entry-page research-page"><a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <a class="wordmark" href="/" aria-label="CookCredit home">
+      <span class="wordmark-emblem" aria-hidden="true"><img src="/cookcredit-mark-ink.svg" alt=""></span>
+      <span>CookCredit</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a href="/about/" aria-current="page">About</a>
+      <a href="/contact/">Contact</a>
+    </nav>
+  </header><main id="main"><article class="research-paper">
+<header class="paper-heading"><p class="eyebrow">CookCredit / Company &amp; research</p>
+<h1>Making invisible work legible.</h1>
+<p class="paper-subtitle">Practical skill, observable movement, and the limits of measurement</p>
+<p class="paper-meta">Research &amp; engineering statement · September 2026</p></header>
+<section aria-labelledby="abstract"><h2 id="abstract">Abstract</h2>
+<p>CookCredit builds tools for the people who prepare food and keep service moving. Much of that work is visible in its outcome but absent from the record: the repeated practice behind a controlled cut, the preparation before service, and the coordination that keeps a kitchen functioning. Our purpose is to make useful parts of this work observable, explainable, and available for learning and human review.</p>
+<p>Knife work is our starting point. EgoCut documents a method for following the relationship between a hand and a blade in ordinary cooking video, then identifying movement events that can support feedback. This statement describes that research direction, how it connects to CookCredit’s products, and what the measurements cannot establish.</p></section>
+<section aria-labelledby="company"><h2 id="company">About the company</h2>
+<p>CookCredit develops practical technology for food work: camera-based feedback for learning, recorded work samples for hiring, and tools for everyday restaurant service. The company’s starting point is the person doing the work. A useful system should explain what it observed, help that person or their reviewer understand it, and leave room for context.</p>
+<p>We start with knife skills because they bring together timing, repeated movement, tool control, and a visible task. They offer a concrete setting in which to study how computer vision can support practice. The longer-term purpose is broader: to build a useful record of work that is often recognized only after it is missing.</p></section>
+<section><h2>1. The problem: work without a useful record</h2>
+<p>A finished plate does not describe the effort that produced it. A résumé cannot show the timing of a person’s hands. A count of completed tasks can miss preparation, cleanup, interruptions, and the support one person gives another. We use <em>invisible labor</em> to describe work that is necessary but poorly represented in the information used to discuss progress, contribution, or skill.</p>
+<p>Making that labor visible is not the same as reducing a person to a score. A useful record should let someone inspect the evidence, understand the measurement, and challenge the interpretation. CookCredit connects camera-based practice, practical hiring review, and service tools through that principle.</p></section>
+<section><h2>2. Method: from video to movement evidence</h2>
+<p>The public EgoCut method begins with a single RGB video stream. It describes hand-pose extraction with MediaPipe and intermittent knife detections from YOLO. The technical idea is to estimate the blade’s position relative to wrist landmarks, rather than require the knife detector to succeed in every frame. Orientation is smoothed around the wrist; when the knife is obscured, its position is a prediction, not a directly observed fact. <a href="#ref-method">[1]</a></p>
+<p>Candidate cutting events are evaluated using three complementary signals: depth relative to recent motion, movement after a potential impact, and the timing of repeated strokes. These gates aim to distinguish cutting from repositioning and isolated movement. Their output is a sequence of events and associated measurements, rather than a judgment about the person performing them. <a href="#ref-method">[1]</a></p>
+<p>Wrist anchoring provides a reference that moves with the cook’s hand. A visible blade detection supplies an estimated offset from the wrist to the blade tip. Between detections, the hand trajectory carries that estimate forward. When another blade observation is available, it can update the estimate. This connects intermittent object detection to a more continuous movement trace, while retaining the distinction between an observed blade and an inferred one. <a href="#ref-method">[1]</a></p>
+<figure class="paper-process"><ol><li>Video frames</li><li>Hand &amp; blade estimates</li><li>Candidate strokes</li><li>Movement features</li><li>Human review</li></ol><figcaption>Figure 1. The documented measurement chain. Each step introduces uncertainty that must remain visible.</figcaption></figure>
+<p>The architecture separates trajectory handling, blade localization, stroke detection, and downstream consumers. The public repository describes a two-pass offline workflow and a target single-pass deployment. It exposes interfaces and documentation; the complete reference implementation, trained weights, and labeled benchmarks are not all publicly released. <a href="#ref-architecture">[2]</a> <a href="#ref-repository">[3]</a></p></section>
+<section><h2>3. Calculating what can be observed</h2>
+<p>For a recorded task, useful quantities include event count, time between events, variation across movements, and the portions of a recording where the work can be observed reliably. These are descriptions of a particular session under particular recording conditions. They are not universal measures of ability.</p>
+<h3>From stroke events to interpretable feedback</h3>
+<p>A detected stroke is a timestamped event. The gaps between successive events describe cadence; the variation in those gaps describes how regular the detected sequence is. Movement amplitude and trajectory features add context about how the action was performed. Looking at these quantities together helps separate a change in pace from a change in repeatability.</p>
+<p>For example, two recordings can contain the same number of detected strokes but show different patterns: one may contain steady repetitions, while the other contains a burst followed by a pause. The count alone conceals that difference. A timeline and the corresponding video let a learner or reviewer examine the pattern and decide whether the pause reflects repositioning, preparation, or something the camera could not capture.</p>
+<h3>Accounting for invisible labor</h3>
+<p>Our broader question is how such evidence can help account for labor that ordinary workflow records overlook. That requires more than detecting movement. Task definitions, preparation and recovery time, off-camera work, context, and the worker’s own account all matter. An unobserved interval must remain unknown; it must not be silently classified as inactivity.</p>
+<p>We do not claim that a stroke counter calculates the economic value of a person’s work, their productivity across a shift, or a fair wage. Connecting observed actions to a wider account of labor is a research direction, with validation and participation still required.</p></section>
+<section><h2>4. Evaluation and limits</h2>
+<p>EgoCut’s evaluation protocol calls for manual stroke annotation, cross-checks against audio impacts, and board-region annotation. It proposes stroke precision and recall, burst-level F1, and detection latency, reported separately by camera angle and frame rate. Those are evaluation criteria, not published proof that every capture condition performs equally. <a href="#ref-evaluation">[4]</a></p>
+<p>Camera motion, occlusion, lighting, technique, ingredient, and frame rate can change the observations. Image-space distances and angles are not calibrated physical measurements. Predicted landmarks can drift. A complete evaluation needs representative recordings and labeled reference events; this page does not present an accuracy benchmark.</p>
+<p>Evaluation must also examine disagreements. A useful error analysis distinguishes a missed cutting event from a movement incorrectly counted as a cut, and asks whether errors cluster around occlusion, a particular camera position, or a change in task. Comparing the detected timeline with annotated video makes these failures inspectable and helps identify which part of the measurement chain needs improvement.</p>
+<p>The research documentation and the published product are related artifacts with their own release histories. A method description should not be read as a guarantee that every documented feature is present in every live assessment.</p></section>
+<section><h2>5. Putting the mechanism to work</h2>
+<p><a href="/learn/">Learn &amp; Practice</a> gives people a way to examine a session and choose what to work on next. <a href="/hiring/">CookCredit for hiring</a> brings a practical work sample and its recording into a conversation about a role. The employer makes the hiring decision; CookCredit does not automatically decide who should be hired.</p>
+<p>For a learner, the practical question might be whether a repeated sequence became more regular under comparable conditions. For an educator, it might be which segment of a recording is worth discussing with a student. For a hiring manager, it is how a work sample relates to a particular kitchen role. The same observation can support each conversation, but the interpretation depends on the purpose and the people involved.</p>
+<p><a href="https://toque.cookcredit.com/">Toque</a> addresses the surrounding service workflow: making the next action accessible at a table, station, tool, or supply. These products serve different tasks, but share an aim: make everyday food work easier to understand and carry out.</p></section>
+<section><h2>6. Programs and support</h2>
+<p>CookCredit participates in <a href="https://www.nvidia.com/en-us/startups/">NVIDIA Inception</a> and the <a href="https://cloud.google.com/startup">Google for Startups Cloud Program</a>. These programs provide access to technical resources and cloud support. Participation does not imply investment, endorsement, or independent validation of the research.</p></section>
+<section class="paper-references"><h2>References and technical documentation</h2><ol>
+<li id="ref-method">Assefa, E. <a href="https://github.com/termias19/egocut/blob/main/docs/method.md">EgoCut: Method</a>. Public project documentation.</li>
+<li id="ref-architecture"><a href="https://github.com/termias19/egocut/blob/main/docs/architecture.md">EgoCut: Architecture</a>. Pipeline modules and deployment modes.</li>
+<li id="ref-repository">Assefa, E. (2026). <a href="https://github.com/termias19/egocut">EgoCut: Wrist-Anchored Blade Localization and Dense Reward Scoring from Egocentric Cooking Video</a>.</li>
+<li id="ref-evaluation"><a href="https://github.com/termias19/egocut/blob/main/docs/evaluation.md">EgoCut: Evaluation Protocol</a>. Reference annotations and reporting criteria.</li>
+</ol><p>We welcome questions about the method, evidence, and potential collaborations.</p><a class="paper-contact" href="/contact/">Contact CookCredit →</a></section></article></main>  <footer class="site-footer">
+    <div>
+      <a class="wordmark footer-wordmark" href="/" aria-label="CookCredit home">
+        <span class="wordmark-emblem" aria-hidden="true"><img src="/cookcredit-mark-ink.svg" alt=""></span>
+        <span>CookCredit</span>
+      </a>
+      <p>Better tools for people and restaurants.</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://toque.cookcredit.com">Toque</a>
+      <a href="https://cookcredit-knife-demo.web.app" target="_blank" rel="noopener">Knife-skill demo</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/accessibility.html">Accessibility</a>
+      <a href="/biometrics.html">Biometrics</a>
+    </div>
+    <nav class="social-links footer-social" aria-label="CookCredit social profiles">
+      <a href="https://www.instagram.com/cookcredit_llc/" target="_blank" rel="noopener noreferrer" aria-label="CookCredit on Instagram (opens in a new tab)" title="Instagram">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+      </a>
+      <a href="https://www.linkedin.com/company/cookcredit/" target="_blank" rel="noopener noreferrer" aria-label="CookCredit on LinkedIn (opens in a new tab)" title="LinkedIn">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M20.45 2H3.55C2.69 2 2 2.68 2 3.52v16.96C2 21.32 2.69 22 3.55 22h16.9c.86 0 1.55-.68 1.55-1.52V3.52C22 2.68 21.31 2 20.45 2ZM7.93 18.75H4.98V9.2h2.95v9.55ZM6.45 7.9a1.71 1.71 0 1 1 0-3.42 1.71 1.71 0 0 1 0 3.42Zm12.3 10.85H15.8V14.1c0-1.11-.02-2.54-1.55-2.54-1.55 0-1.79 1.21-1.79 2.46v4.73H9.51V9.2h2.83v1.3h.04c.39-.74 1.36-1.52 2.79-1.52 2.98 0 3.58 1.96 3.58 4.51v5.26Z"/></svg>
+      </a>
+    </nav>
+    <p class="copyright">&copy; <span id="year">2026</span> CookCredit</p>
+  </footer>
+<script src="/main.js" defer></script><script src="/site-navigation.js?v=443987e68753" defer></script>
+</body></html>

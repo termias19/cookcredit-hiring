@@ -1,0 +1,29 @@
+# What `gcloud run deploy --source .` uploads to Cloud Build. Mirror .dockerignore so
+# secrets + local junk never even reach Cloud Build's staging bucket. (gcloud falls back
+# to .gitignore if this file is absent; we make it explicit because .env / credentials
+# are present on disk untracked and MUST NOT be uploaded.)
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+firebase-credentials.json
+*.key
+*.pem
+
+venv/
+.venv/
+env/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+pytest-cache-files-*/
+.pytest_cache/
+
+start.bat
+*.exe
+_tr4_out.txt
+
+.git/
+.idea/
+.vscode/

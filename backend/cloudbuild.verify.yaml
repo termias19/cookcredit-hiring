@@ -1,0 +1,18 @@
+# Ephemeral verification only. No Cloud Run deploy, Cloud SQL connection,
+# IAM mutation, provider credential, or production environment is involved.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['run', '-d', '--name', 'cc-test-postgres', '-e', 'POSTGRES_USER=cookcredit_test', '-e', 'POSTGRES_PASSWORD=isolated-test-only', '-e', 'POSTGRES_DB=cookcredit_test', 'postgis/postgis:16-3.5']
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', 'cookcredit-hiring-verification', '-f', 'Dockerfile.verify', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['run', '--rm', '--network', 'container:cc-test-postgres', '-e', 'DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test', 'cookcredit-hiring-verification', 'python', 'migrations/run_migrations.py']
+  - name: gcr.io/cloud-builders/docker
+    args: ['run', '--rm', '--network', 'container:cc-test-postgres', '-e', 'DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test', 'cookcredit-hiring-verification', 'python', 'migrations/run_migrations.py', '--status']
+  - name: gcr.io/cloud-builders/docker
+    args: ['run', '--rm', '--network', 'container:cc-test-postgres', '-e', 'DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test', '-e', 'HIRING_TEST_DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test', 'cookcredit-hiring-verification']
+  - name: gcr.io/cloud-builders/docker
+    args: ['run', '--rm', '--network', 'container:cc-test-postgres', '-e', 'DATABASE_URL=postgresql://cookcredit_test:isolated-test-only@127.0.0.1:5432/cookcredit_test', '-e', 'COOKCREDIT_EPHEMERAL_VERIFICATION=1', 'cookcredit-hiring-verification', 'python', 'scripts/verify_ephemeral_load.py']
+timeout: 1200s
+options:
+  logging: CLOUD_LOGGING_ONLY
