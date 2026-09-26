@@ -60,7 +60,7 @@ export default function BusinessRolesScreen() {
             }}>Retry</button>
           </div>
         )}
-        {!biz?.loading && !biz?.error && !roles.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>No roles yet. Post your first role to start sourcing verified cooks.</p>}
+        {!biz?.loading && !biz?.error && !roles.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>No roles yet. Post a role, copy its application link, then review the applicants here.</p>}
       </div>
     </BusinessShell>
   )

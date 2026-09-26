@@ -18,7 +18,7 @@ const overline = { fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', c
 const panel = { border: '1px solid #E3E0D9', borderRadius: 2, background: '#FEFDFB', padding: 20 }
 const darkButton = { border: 0, borderRadius: 2, background: '#1F6F5C', color: '#fff', fontWeight: 500, cursor: 'pointer' }
 
-export default function BusinessIntegrationsScreen() {
+export default function BusinessIntegrationsScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const biz = useBusiness()
@@ -175,7 +175,7 @@ export default function BusinessIntegrationsScreen() {
     <p style={{ color: '#70706b', fontSize: 13, margin: '6px 0 0' }}>Add a knife skill assessment to your hiring process.</p>
   </div>
 
-  return <BusinessShell header={header} showNav={false}>
+  return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     {access?.earlyAccess && <p role="status" style={{ padding: '12px 20px', margin: 0, background: '#E8F1EC', color: GREEN, fontSize: 13 }}>Included with your workspace · No subscription charge.{access.earlyAccessMonthlyLimit ? ` Up to ${access.earlyAccessMonthlyLimit} API assessment requests per month in each environment.` : ''}</p>}
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '24px 28px 40px' }}>
       <div aria-label="Integration method" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #E3E0D9', marginBottom: 24, paddingBottom: 16 }}>

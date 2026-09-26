@@ -4,9 +4,10 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, CircleAlert, MapPin, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
-  applyToHiringRole, getHiringRole, getMyHiringApplication,
+  applyToHiringRole, getHiringRole, getMyHiringApplication, startHiringAttempt,
 } from '../utils/Api'
 import { buttonPress, fadeUp } from '../styles/motion'
+import HiringApplicationDetailScreen from './HiringApplicationDetailScreen'
 import { PREVIEW } from '../config'
 
 const SERIF = "'Cormorant Garamond', 'Playfair Display', Georgia, serif"
@@ -42,6 +43,8 @@ export default function HiringApplicationScreen() {
   const [searchParams] = useSearchParams()
   const { user, logout } = useAuth()
   const [role, setRole] = useState(null)
+  const [activeApplicationId, setActiveApplicationId] = useState(null)
+  const [entryError, setEntryError] = useState('')
   const [answers, setAnswers] = useState({})
   const [fullName, setFullName] = useState(user?.displayName || '')
   const [cv, setCv] = useState(null)
@@ -64,7 +67,7 @@ export default function HiringApplicationScreen() {
         if (user?.emailVerified) {
           const token = await user.getIdToken()
           const existing = await getMyHiringApplication({ token, roleId })
-          if (live && existing.application) { navigate(`/application/${existing.application.id}`, { replace: true }); return }
+          if (live && existing.application) { setActiveApplicationId(existing.application.id); setStatus('ready'); return }
         }
         if (live) setStatus('ready')
       } catch (cause) {
@@ -98,6 +101,7 @@ export default function HiringApplicationScreen() {
     if (cv && cv.size > 2 * 1024 * 1024) { setError('Choose a PDF no larger than 2 MB.'); return }
     if ((locationRequired && !city.trim()) || !requiredComplete || !consent) { setError('Complete the required fields and consent notice.'); return }
     setBusy(true); setError('')
+    let savedId
     try {
       const token = await user.getIdToken()
       const result = await applyToHiringRole({
@@ -106,11 +110,19 @@ export default function HiringApplicationScreen() {
         consentVersion: role.consentVersion,
         invitationToken: searchParams.get('invite') || undefined,
       })
-      navigate(`/application/${result.application.id}`, { replace: true })
-    } catch (cause) { setError(cause.message || 'The application could not be submitted.') }
+      savedId = result.application.id
+      const attempt = await startHiringAttempt({ token, applicationId: savedId })
+      window.location.assign(attempt.launchUrl)
+    } catch (cause) {
+      if (savedId) {
+        setEntryError('Your details are saved. The assessment could not open. Use Start assessment below to retry.')
+        setActiveApplicationId(savedId)
+      } else setError(cause.message || 'The application could not be submitted.')
+    }
     finally { setBusy(false) }
   }
 
+  if (activeApplicationId) return <HiringApplicationDetailScreen key={activeApplicationId} applicationId={activeApplicationId} entryError={entryError} />
   if (status === 'loading') return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', color: '#888' }}>Loading role…</main>
   if (status === 'error' || !role) return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 30, textAlign: 'center' }}><div><CircleAlert /><p role="alert">{error}</p><button type="button" onClick={() => { setError(''); setStatus('loading'); setReloadKey(key => key + 1) }} style={{ border: 0, background: GREEN, color: '#fff', padding: '12px 22px', cursor: 'pointer' }}>Retry</button><p style={{ fontSize: 13, color: '#70706b' }}>If the role is closed or your invitation has expired, ask the employer for a current link.</p></div></main>
   const brandColor = /^#[0-9A-F]{6}$/i.test(role.company?.brandColor || '') ? role.company.brandColor : GREEN
@@ -146,7 +158,7 @@ export default function HiringApplicationScreen() {
 
       {user && !user.emailVerified && <section style={{ padding: 22 }}><p>Verify your email before applying.</p><button onClick={() => navigate('/verify', { state: { from: routeLocation } })}>Verify email</button></section>}
       {user?.emailVerified && <section style={{ background: '#fff', border: '1px solid #dedbd4', padding: 20 }}>
-        <p style={overline}>Your application</p>
+        <p style={overline}>1. Your details · 2. Record assessment · 3. Submitted</p>
         <div style={{ display: 'grid', gap: 18 }}>
           <div><label htmlFor="application-name" style={{ display: 'block', fontSize: 14, marginBottom: 7 }}>Full name *</label>
             <input id="application-name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" maxLength={200} required style={field} /></div>
@@ -165,8 +177,8 @@ export default function HiringApplicationScreen() {
             <span>{role.consentText}</span>
           </label>
           {error && <p style={{ margin: 0, color: '#A44320', fontSize: 13 }}>{error}</p>}
-          <motion.button {...buttonPress} type="button" disabled={busy || (locationRequired && !city.trim()) || !requiredComplete || !consent} onClick={submit} style={{ border: 0, background: brandColor, color: '#fff', padding: 14, cursor: 'pointer', opacity: busy || (locationRequired && !city.trim()) || !requiredComplete || !consent ? 0.45 : 1 }}>
-            {busy ? 'Saving application…' : 'Save application and continue to assessment'}
+          <motion.button {...buttonPress} type="button" disabled={busy || !fullName.trim() || (role.cvRequired && !cv) || (locationRequired && !city.trim()) || !requiredComplete || !consent} onClick={submit} style={{ border: 0, background: brandColor, color: '#fff', padding: 14, cursor: 'pointer', opacity: busy || !fullName.trim() || (role.cvRequired && !cv) || (locationRequired && !city.trim()) || !requiredComplete || !consent ? 0.45 : 1 }}>
+            {busy ? 'Saving and opening assessment…' : 'Continue to assessment'}
           </motion.button>
         </div>
       </section>}

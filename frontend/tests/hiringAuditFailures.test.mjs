@@ -6,7 +6,7 @@ import { transformWithEsbuild } from 'vite'
 
 // Exercise the actual screen handlers with controlled API latency/failures.
 // Child visuals are opaque; these tests do not claim to be browser acceptance.
-async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' } }) {
+async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' }, launch = () => {}, onNavigate = () => {} }) {
   const state = [], effects = [], refs = []
   let index, queued = [], tree
   const react = {
@@ -26,7 +26,7 @@ async function screen(name, { biz, api, clipboard = async () => {}, user = { get
     },
   }
   const jsx = (type, props) => ({ type, props })
-  const navigate = () => {}, searchParams = new URLSearchParams()
+  const navigate = onNavigate, searchParams = new URLSearchParams()
   const modules = {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'fragment' },
     'react-router-dom': { useNavigate: () => navigate, useLocation: () => ({ pathname: '/apply/role-1' }), useParams: () => ({ id: 'role-1', roleId: 'role-1' }), useSearchParams: () => [searchParams] },
@@ -39,7 +39,7 @@ async function screen(name, { biz, api, clipboard = async () => {}, user = { get
   }
   const source = await readFile(new URL(`../src/screens/${name}.jsx`, import.meta.url), 'utf8')
   const { code } = await transformWithEsbuild(source, name + '.jsx', { loader: 'jsx', jsx: 'automatic', format: 'cjs' })
-  const context = { module: { exports: {} }, require: id => modules[id] || { default: id }, navigator: { clipboard: { writeText: clipboard } }, window: { location: { origin: 'https://hiring.cookcredit.com' } }, URLSearchParams, Set, Map }
+  const context = { module: { exports: {} }, require: id => modules[id] || { default: id }, navigator: { clipboard: { writeText: clipboard } }, window: { location: { origin: 'https://hiring.cookcredit.com', assign: launch } }, URLSearchParams, Set, Map }
   vm.runInNewContext(code, context)
   const Component = context.module.exports.default
   function render() { index = 0; queued = []; tree = Component(); queued.forEach(effect => effect()); return tree }
@@ -138,4 +138,60 @@ test('applicant connection failure offers a retry that returns to the same role'
   assert.match(s.text(), /Apply with CookCredit/)
   assert.doesNotMatch(s.text(), /Could not connect/)
   assert.equal(calls, 2)
+})
+
+const applicant = { emailVerified: true, getIdToken: async () => 'test-token' }
+const applicantApi = {
+  getHiringRole: async () => ({ role: { id: 'role-1', company: { name: 'Employer' }, questions: [], consentText: 'Sharing notice' } }),
+  getMyHiringApplication: async () => ({ application: null }),
+}
+async function completeDetails(s) {
+  await s.settle()
+  s.find(p => p.id === 'application-name').props.onChange({ target: { value: 'Applicant' } })
+  s.find(p => p.type === 'checkbox').props.onChange({ target: { checked: true } })
+  s.render()
+}
+test('one applicant action saves once and opens the returned assessment URL', async () => {
+  const calls = [], launches = []
+  const s = await screen('HiringApplicationScreen', { user: applicant, launch: url => launches.push(url), api: {
+    ...applicantApi,
+    applyToHiringRole: async () => { calls.push('save'); return { application: { id: 'saved-1' } } },
+    startHiringAttempt: async ({ applicationId }) => { calls.push(applicationId); return { launchUrl: 'https://hiring.cookcredit.com/landing/assessment/?hiringSession=opaque' } },
+  } })
+  await s.settle()
+  assert.equal(s.find(p => p.children === 'Continue to assessment').props.disabled, true)
+  await completeDetails(s)
+  await s.find(p => p.children === 'Continue to assessment').props.onClick()
+  assert.deepEqual(calls, ['save', 'saved-1'])
+  assert.deepEqual(launches, ['https://hiring.cookcredit.com/landing/assessment/?hiringSession=opaque'])
+})
+test('assessment entry failure retains the saved application for retry', async () => {
+  let saves = 0
+  const s = await screen('HiringApplicationScreen', { user: applicant, api: {
+    ...applicantApi, applyToHiringRole: async () => { saves++; return { application: { id: 'saved-2' } } },
+    startHiringAttempt: async () => { throw Error('offline') },
+  } })
+  await completeDetails(s)
+  await s.find(p => p.children === 'Continue to assessment').props.onClick(); s.render()
+  assert.equal(saves, 1)
+  const detail = s.find(p => p.applicationId === 'saved-2')
+  assert.match(detail.props.entryError, /Your details are saved/)
+  assert.match(detail.props.entryError, /retry/)
+})
+test('existing applications resume in place without creating another application or attempt', async () => {
+  const s = await screen('HiringApplicationScreen', { user: applicant, api: {
+    ...applicantApi, getMyHiringApplication: async () => ({ application: { id: 'existing' } }),
+    applyToHiringRole: () => assert.fail('must not apply again'), startHiringAttempt: () => assert.fail('must not start automatically'),
+  } })
+  await s.settle()
+  assert.ok(s.find(p => p.applicationId === 'existing'))
+})
+test('assessment return resolves the server-owned application with replacement navigation', async () => {
+  const destinations = []
+  const s = await screen('HiringAssessmentReturnScreen', { user: applicant, onNavigate: (...args) => destinations.push(args), api: {
+    getHiringAssessmentSession: async () => ({ session: { applicationId: 'submitted-1', status: 'processing' } }),
+  } })
+  await s.settle()
+  assert.equal(destinations[0][0], '/application/submitted-1')
+  assert.equal(destinations[0][1].replace, true)
 })

@@ -1,3 +1,4 @@
+import { workspaceDestination } from './utils/workspaceDestination'
 import AssessmentSharingScreen from './screens/AssessmentSharingScreen'
 import { useState, useEffect, lazy, Suspense, Component } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -17,7 +18,7 @@ const LoginScreen         = lazy(() => import('./screens/LoginScreen'))
 const AccountActionScreen = lazy(() => import('./screens/AccountActionScreen'))
 const HiringAccessRequestScreen = lazy(() => import('./screens/HiringAccessRequestScreen'))
 const OwnerAccessScreen = lazy(() => import('./screens/OwnerAccessScreen'))
-const BusinessProfileScreen = lazy(() => import('./screens/BusinessProfileScreen'))
+const BusinessSettingsScreen = lazy(() => import('./screens/BusinessSettingsScreen'))
 const ForgotScreen        = lazy(() => import('./screens/ForgotScreen'))
 const VerifyEmailScreen   = lazy(() => import('./screens/VerifyEmailScreen'))
 
@@ -25,17 +26,13 @@ const VerifyEmailScreen   = lazy(() => import('./screens/VerifyEmailScreen'))
 import BusinessRoute from './components/BusinessRoute'
 import { PREVIEW } from './config'
 const BusinessLandingScreen    = lazy(() => import('./screens/BusinessLandingScreen'))
-const BusinessDashboardScreen  = lazy(() => import('./screens/BusinessDashboardScreen'))
+const BusinessApplicantsScreen  = lazy(() => import('./screens/BusinessApplicantsScreen'))
 const BusinessCandidateScreen  = lazy(() => import('./screens/BusinessCandidateScreen'))
 const BusinessOnboardingScreen = lazy(() => import('./screens/BusinessOnboardingScreen'))
 const BusinessRolesScreen      = lazy(() => import('./screens/BusinessRolesScreen'))
 const BusinessRoleScreen       = lazy(() => import('./screens/BusinessRoleScreen'))
 const BusinessRoleNewScreen    = lazy(() => import('./screens/BusinessRoleNewScreen'))
-const BusinessShortlistsScreen = lazy(() => import('./screens/BusinessShortlistsScreen'))
-const BusinessTeamScreen       = lazy(() => import('./screens/BusinessTeamScreen'))
 const BusinessAuditScreen      = lazy(() => import('./screens/BusinessAuditScreen'))
-const BusinessBillingScreen    = lazy(() => import('./screens/BusinessBillingScreen'))
-const BusinessIntegrationsScreen = lazy(() => import('./screens/BusinessIntegrationsScreen'))
 const BusinessInviteAcceptScreen = lazy(() => import('./screens/BusinessInviteAcceptScreen'))
 const HiringApplicationScreen  = lazy(() => import('./screens/HiringApplicationScreen'))
 const HiringAssessmentReturnScreen = lazy(() => import('./screens/HiringAssessmentReturnScreen'))
@@ -71,6 +68,11 @@ function AuthRedirect({ children }) {
     return <ProtectedRoute><Navigate to={dest} replace /></ProtectedRoute>
   }
   return children
+}
+
+function WorkspaceRedirect() {
+  const { pathname, search } = useLocation()
+  return <Navigate to={workspaceDestination(pathname, search)} replace />
 }
 
 function AccountEntry() {
@@ -181,16 +183,16 @@ export default function App() {
             {/* ── Business workspace — gated to the 'business' role ───── */}
             <Route path="/business/onboarding" element={<BusinessRoute><BusinessOnboardingScreen /></BusinessRoute>} />
             <Route path="/business/dashboard" element={<Navigate to="/business/candidates" replace />} />
-            <Route path="/business/profile" element={<BusinessRoute><BusinessProfileScreen /></BusinessRoute>} />
-            <Route path="/business/candidates" element={<BusinessRoute><BusinessDashboardScreen /></BusinessRoute>} />
+            <Route path="/business/profile" element={<BusinessRoute><BusinessSettingsScreen /></BusinessRoute>} />
+            <Route path="/business/candidates" element={<BusinessRoute><BusinessApplicantsScreen /></BusinessRoute>} />
             <Route path="/business/candidate/:id" element={<BusinessRoute><BusinessCandidateScreen /></BusinessRoute>} />
             <Route path="/business/roles" element={<BusinessRoute><BusinessRolesScreen /></BusinessRoute>} />
             <Route path="/business/role/new" element={<BusinessRoute><BusinessRoleNewScreen /></BusinessRoute>} />
             <Route path="/business/role/:id" element={<BusinessRoute><BusinessRoleScreen /></BusinessRoute>} />
-            <Route path="/business/shortlists" element={<BusinessRoute><BusinessShortlistsScreen /></BusinessRoute>} />
-            <Route path="/business/team" element={<BusinessRoute><BusinessTeamScreen /></BusinessRoute>} />
-            <Route path="/business/billing" element={<BusinessRoute><BusinessBillingScreen /></BusinessRoute>} />
-            <Route path="/business/integrations" element={<BusinessRoute><BusinessIntegrationsScreen /></BusinessRoute>} />
+            <Route path="/business/shortlists" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />
+            <Route path="/business/team" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />
+            <Route path="/business/billing" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />
+            <Route path="/business/integrations" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />
 
             <Route path="/profile" element={<ProtectedRoute><AccountEntry /></ProtectedRoute>} />
             <Route path="/applications" element={<ProtectedRoute><ApplicantHomeScreen /></ProtectedRoute>} />

@@ -38,7 +38,8 @@ export default function ApplicantHomeScreen() {
       {rows.map(row => <article key={row.id} style={{ padding: 24, border: '1px solid var(--cc-border)' }}>
         <p style={{ fontSize: 13, color: 'var(--cc-muted)' }}>{row.company.name}</p>
         <h2 className="cc-profile-heading" style={{ margin: '8px 0' }}><Link to={`/application/${row.id}`} style={{ color: 'inherit' }}>{row.role.title}</Link></h2>
-        <p style={{ fontSize: 13, color: '#1F6F5C' }}>{row.status.replaceAll('_', ' ')} · Submitted {new Date(row.submittedAt).toLocaleDateString()}</p>
+        <p style={{ fontSize: 13, color: '#1F6F5C' }}>{row.status.replaceAll('_', ' ')} · Started {new Date(row.submittedAt).toLocaleDateString()}</p>
+        <Link to={`/application/${row.id}`} style={{ display: 'inline-block', marginTop: 16, padding: '11px 18px', background: '#1F6F5C', color: '#fff', textDecoration: 'none', fontSize: 13 }}>{['ready', 'withdrawn'].includes(row.status) ? 'View application' : 'Continue application'}</Link>
       </article>)}
     </div>
     {busy && <p role="status" style={{ padding: '20px 0' }}>Loading applications…</p>}

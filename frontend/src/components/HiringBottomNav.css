@@ -5,3 +5,8 @@
 .cc-business-workspace.cc-business-mobile {display:flex;flex-direction:column;min-height:100svh;}
 .cc-business-mobile>main {flex:1;min-width:0;}
 .cc-reel-actions button[aria-pressed=true] {color:#a6dfbe;filter:drop-shadow(0 0 6px #66bd9190);}
+
+.cc-workspace-sections {display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+.cc-workspace-sections a {padding:10px 15px;border:1px solid #dedbd4;color:#526057;text-decoration:none;font-size:13px;}
+.cc-workspace-sections a[aria-current=page] {background:#1f6f5c;border-color:#1f6f5c;color:#fff;}
+.cc-workspace-sections a:focus-visible {outline:2px solid #1f6f5c;outline-offset:3px;}

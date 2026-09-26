@@ -80,13 +80,13 @@ function CandidateReel({ candidate }) {
   </article>
 }
 
-export default function MobileCandidateFeed({ candidates, query, onQueryChange }) {
+export default function MobileCandidateFeed({ candidates, query, onQueryChange, embedded = false }) {
   const [filtersOpen, setFiltersOpen] = useState(false)
-  return <section className="cc-mobile-candidates" aria-label="Candidate recordings">
+  return <section style={embedded ? { height: '80svh', minHeight: 440 } : undefined} className="cc-mobile-candidates" aria-label="Candidate recordings">
     <header className="cc-feed-header"><a href="https://cookcredit.com/" className="cc-feed-brand">CookCredit</a><button type="button" aria-label="Candidate filters" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={21}/></button></header>
     {filtersOpen && <div className="cc-feed-filters"><label><Search size={18}/><input type="search" aria-label="Search candidates" placeholder="Name, skill or city" value={query} onChange={e => onQueryChange(e.target.value)} /></label><p>Recording view · does not filter out applicants</p><PlaybackViewControl /></div>}
     <p className="cc-feed-order">{PREVIEW ? 'Sample applicants · swipe to review' : 'Application order · swipe to review'}</p>
     <div className="cc-reel-list">{candidates.map(c => <CandidateReel key={c.id} candidate={c}/>)}{!candidates.length && <p className="cc-feed-empty">No candidates match your search.</p>}</div>
-    <HiringBottomNav />
+    {!embedded && <HiringBottomNav />}
   </section>
 }

@@ -34,14 +34,14 @@ function ShortlistCard({ cook, onClick }) {
         <p style={{ fontSize: 12, color: '#777', margin: 0 }}>{(cook.cuisines || []).join(' · ')}{cook.city ? ` · ${cook.city}` : ''}</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #E7E2D8' }}>
           <span className="cc-evidence-pill"><ShieldCheck size={12} />Evidence ready</span>
-          <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a' }}>{cook.verifiedScore}<small style={{ fontSize: 9, color: '#70706b', marginLeft: 3 }}>/100</small></span>
+          <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a' }}>{cook.verifiedScore ?? '—'}<small style={{ fontSize: 9, color: '#70706b', marginLeft: 3 }}>/100</small></span>
         </div>
       </div>
     </motion.button>
   )
 }
 
-export default function BusinessShortlistsScreen() {
+export default function BusinessShortlistsScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
   const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id)).filter(Boolean)
@@ -57,7 +57,7 @@ export default function BusinessShortlistsScreen() {
   )
 
   return (
-    <BusinessShell header={header} showNav={false}>
+    <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
       <div style={{ padding: '24px 28px 36px' }}>
         {cooks.length > 0 && (
           <motion.div variants={staggerContainer()} initial="hidden" animate="show"

@@ -14,7 +14,7 @@ const ROLES = [
   ['viewer', 'Viewer'], ['admin', 'Admin'],
 ]
 
-export default function BusinessTeamScreen() {
+export default function BusinessTeamScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
   const [team, setTeam] = useState({ members: [], invitations: [], canManage: false })
@@ -70,7 +70,7 @@ export default function BusinessTeamScreen() {
     <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Team</h1>
   </div>
 
-  return <BusinessShell header={header} showNav={false}>
+  return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     <div style={{ padding: '24px 28px 40px', maxWidth: 760, margin: '0 auto' }}>
       <p style={explain}>Choose who can review applicants and who can manage your workspace. Only admins can change billing and integration settings.</p>
       {status === 'loading' && <p style={muted}>Loading team…</p>}

@@ -43,7 +43,7 @@ function Details({ profile, org }) {
         <div style={{ display: 'grid', gap: 18 }}>
           <label style={label}>{t.bp_company_name}<input style={input} autoComplete="organization" required maxLength={200} disabled={!admin} value={company} onChange={e => setCompany(e.target.value)} /></label>
           <label style={label}>{t.bp_city}<input style={input} autoComplete="address-level2" required maxLength={120} disabled={!admin} value={city} onChange={e => setCity(e.target.value)} /></label>
-          <p style={{ fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{t.bp_company_hint} <Link style={{ color: '#1F6F5C' }} to="/business/integrations">{t.bn_integrations}</Link>.</p>
+          <p style={{ fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{t.bp_company_hint} <Link style={{ color: '#1F6F5C' }} to="/business/profile?section=integrations">{t.bn_integrations}</Link>.</p>
           {admin ? <button style={button} disabled={!!busy}>{busy === 'company' ? t.bp_saving : t.bp_save_company}</button> : <p style={{ fontSize: 13 }}>{t.bp_admin_only}</p>}
         </div>
       </form>
@@ -51,18 +51,18 @@ function Details({ profile, org }) {
         <h2 className="cc-profile-heading">{t.bp_subscription}</h2>
         <p style={{ fontSize: 15, textTransform: 'capitalize' }}>{org.integrationAccess?.earlyAccess ? t.bn_included : org.plan || '—'} · {t.bn_plan}</p>
         <p style={{ margin: '12px 0 20px', fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{org.integrationAccess?.earlyAccess ? t.bp_included_hint : t.bp_billing_hint}</p>
-        <Link className="cc-profile-link" to="/business/billing">{t.bn_billing}<ArrowRight size={16} /></Link>
+        <Link className="cc-profile-link" to="/business/profile?section=billing">{t.bn_billing}<ArrowRight size={16} /></Link>
       </section>
       <LocationFinder />
     </AccountDetails>
   </div>
 }
 
-export default function BusinessProfileScreen() {
+export default function BusinessProfileScreen({ embedded = false } = {}) {
   const { t } = useLang()
   const { profile } = useAuth()
   const { org, loading, error, refresh } = useBusiness()
-  return <BusinessShell header={<div style={{ padding: '28px 28px 24px' }}><p style={{ fontSize: 11, letterSpacing: 2, color: '#1F6F5C', textTransform: 'uppercase' }}>{t.bp_account}</p><h1 style={{ fontFamily: 'var(--cc-display)', fontWeight: 400, fontSize: 38, marginTop: 6 }}>{t.bp_profile}</h1><p style={{ marginTop: 8, color: 'var(--cc-muted)', fontSize: 14 }}>{t.bp_intro}</p></div>}>
+  return <BusinessShell embedded={embedded} header={embedded ? null : <div style={{ padding: '28px 28px 24px' }}><p style={{ fontSize: 11, letterSpacing: 2, color: '#1F6F5C', textTransform: 'uppercase' }}>{t.bp_account}</p><h1 style={{ fontFamily: 'var(--cc-display)', fontWeight: 400, fontSize: 38, marginTop: 6 }}>{t.bp_profile}</h1><p style={{ marginTop: 8, color: 'var(--cc-muted)', fontSize: 14 }}>{t.bp_intro}</p></div>}>
     {loading ? <p role="status" style={{ padding: 28 }}>{t.bp_loading}</p> : error || !org || !profile ? <div style={{ padding: 28 }}><p role="alert">{t.bp_load_error}</p><button onClick={refresh}>{t.bp_retry}</button></div> : <Details key={org.id} profile={profile} org={org} />}
   </BusinessShell>
 }

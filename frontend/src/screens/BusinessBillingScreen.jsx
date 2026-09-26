@@ -11,7 +11,7 @@ import { fadeIn, staggerContainer } from '../styles/motion'
 const SERIF = "var(--cc-display)"
 const GREEN = '#1F6F5C'
 
-export default function BusinessBillingScreen() {
+export default function BusinessBillingScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const biz = useBusiness()
@@ -89,23 +89,23 @@ export default function BusinessBillingScreen() {
     <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{biz?.loading || !biz?.org ? 'Your workspace access and billing details.' : earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
   </div>
 
-  if (biz?.loading || !biz?.org) return <BusinessShell header={header} showNav={false}>
+  if (biz?.loading || !biz?.org) return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     <section style={{ padding: '32px 28px' }}>
       {biz?.loading ? <p role="status">Loading workspace access…</p> : <><p role="alert">Workspace access could not be loaded.</p><button onClick={biz?.refresh}>Retry</button></>}
     </section>
   </BusinessShell>
 
-  if (earlyAccess) return <BusinessShell header={header} showNav={false}>
+  if (earlyAccess) return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     <section style={{ padding: '32px 28px', maxWidth: 720, margin: '0 auto' }}>
       <h2 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500 }}>Free early access</h2>
       <p style={{ lineHeight: 1.8, color: '#555' }}>Use your branded assessment link, embedded widget, API and webhooks while subscription payments are being prepared.</p>
       <p style={{ lineHeight: 1.8, color: '#555' }}>{biz.org.integrationAccess.earlyAccessMonthlyLimit || 100} API assessment requests per month in each environment. Your workspace retains its existing role and seat limits.</p>
       <p style={{ lineHeight: 1.8, color: '#555' }}>No card is required and you will not be charged automatically. Subscribing later will require your choice.</p>
-      <button onClick={() => navigate('/business/integrations')} style={{ marginTop: 12, padding: '13px 22px', border: 0, background: GREEN, color: '#fff', cursor: 'pointer' }}>Open integrations</button>
+      <button onClick={() => navigate('/business/profile?section=integrations')} style={{ marginTop: 12, padding: '13px 22px', border: 0, background: GREEN, color: '#fff', cursor: 'pointer' }}>Open integrations</button>
     </section>
   </BusinessShell>
 
-  return <BusinessShell header={header} showNav={false}>
+  return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     <div style={{ padding: '24px 28px 40px', maxWidth: 1080, margin: '0 auto' }}>
       <AnimatePresence>{(msg || error) && <motion.p className="cc-business-notice" variants={fadeIn} initial="hidden" animate="show" exit={{ opacity: 0 }} style={{ fontSize: 13, color: error ? '#A44320' : GREEN, border: `1px solid ${error ? '#A44320' : GREEN}`, background: error ? '#FBF1EC' : '#E8F1EC', padding: '10px 12px', margin: '0 0 16px' }}>{error || msg}</motion.p>}</AnimatePresence>
       {billing.status && <p style={{ fontSize: 12, color: '#777', margin: '0 0 14px' }}>Subscription: <b>{billing.status.replaceAll('_', ' ')}</b>{billing.cancelAtPeriodEnd && billing.periodEnd ? ` · access scheduled to end ${new Date(billing.periodEnd).toLocaleDateString()}` : ''}</p>}

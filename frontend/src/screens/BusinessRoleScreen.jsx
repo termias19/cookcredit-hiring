@@ -138,12 +138,13 @@ export default function BusinessRoleScreen() {
     finally { setChangingStatus(false) }
   }
   const withdrawn = cards.filter(card => card.stage === 'withdrawn')
+  const visibleStages = STAGES.filter(stage => cards.some(card => card.stage === stage))
 
   return (
     <BusinessShell header={header} showNav={false}>
       {/* requirements scorecard */}
       <motion.div initial="hidden" animate="show" variants={fadeUp} style={{ padding: '22px 28px 8px' }}>
-        <p style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase', margin: '0 0 8px' }}>Requirements</p>
+        <details><summary style={{ color: GREEN, cursor: 'pointer', fontSize: 13, marginBottom: 12 }}>Role requirements</summary>
         <motion.div variants={staggerContainer(0.04)} initial="hidden" animate="show" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(role?.certsRequired || []).map(idr => (
             <motion.span key={idr} variants={scaleIn} style={chip(true)}>{labelOf(idr)} · required</motion.span>
@@ -153,6 +154,7 @@ export default function BusinessRoleScreen() {
           {(role?.required || []).map(idr => <motion.span key={idr} variants={scaleIn} style={chip(true)}>{labelOf(idr)}</motion.span>)}
           {(role?.preferred || []).map(idr => <motion.span key={idr} variants={scaleIn} style={chip(false)}>{labelOf(idr)} · nice-to-have</motion.span>)}
         </motion.div>
+        </details>
         <p role="status" style={{ fontSize: 13, color: GREEN, marginTop: 14 }}>
           {role.status === 'open' ? 'Open for applications' : 'Closed to new applications and assessment submissions. Existing applications remain available for review.'}
         </p>
@@ -179,9 +181,6 @@ export default function BusinessRoleScreen() {
           funnel at once instead of scrolling one long stacked list */}
       <div style={{ padding: '16px 28px 36px' }}>
         <p style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase', margin: '4px 0 8px' }}>Pipeline · {cards.length}</p>
-        <ol aria-label="Hiring stages" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', listStyle: 'none', padding: '0 0 14px', margin: 0, fontSize: 12, color: '#70706b' }}>
-          {STAGES.map((stage, index) => <li key={stage} style={{ textTransform: 'capitalize' }}><span style={{ color: GREEN, marginRight: 6 }}>{index + 1}.</span>{stageLabel(stage)}</li>)}
-        </ol>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
           <select aria-label="Filter application status" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))} style={filterField}>
             <option value="">All statuses</option><option value="assessment_required">Assessment required</option><option value="assessment_processing">Processing</option><option value="ready">Ready for review</option><option value="withdrawn">Withdrawn</option>
@@ -195,8 +194,8 @@ export default function BusinessRoleScreen() {
         {data.status === 'loading' && <p role="status">Loading applications…</p>}
         {loadError && <div><p role="alert" style={{ color: TERRA }}>{loadError}</p>{data.status === 'error' && <button onClick={() => setReloadKey(key => key + 1)}>Retry</button>}</div>}
         <div className="cc-pipeline" tabIndex={0} role="region" aria-label="Hiring pipeline">
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, minmax(190px, 1fr))`, gap: 12, alignItems: 'start', minWidth: 1180 }}>
-          {STAGES.map(stage => {
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 12, alignItems: 'start', width: '100%' }}>
+          {visibleStages.map(stage => {
             const inStage = cards.filter(c => c.stage === stage)
             return (
               <motion.div key={stage} layout initial="hidden" animate="show" variants={fadeUp}>

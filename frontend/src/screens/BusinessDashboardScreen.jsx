@@ -23,11 +23,11 @@ import { fadeUp, staggerContainer, tapScale } from '../styles/motion'
 const SERIF = "var(--cc-display)"
 const GREEN = '#1F6F5C', GOLD = '#9A781E'
 
-function Header({ q, setQ }) {
+function Header({ q, setQ, embedded }) {
   return (
     <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
       <span style={{ fontSize: 10, letterSpacing: 2.3, color: '#70706b', textTransform: 'uppercase', fontWeight: 500 }}>Knife skill assessment</span>
-      <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: '5px 0 16px' }}>Candidates</h1>
+      {!embedded && <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: '5px 0 16px' }}>Candidates</h1>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '1px solid #E3E0D9', background: '#FFF', padding: '11px 13px', maxWidth: 500, borderRadius: 2 }}>
         <Search size={17} color="#70706b" strokeWidth={1.7} />
         <input type="search" aria-label="Search candidates" value={q} onChange={e => setQ(e.target.value)}
@@ -87,7 +87,7 @@ function CandidateCard({ rank, cook, onClick, onStar, starred, rankingEnabled })
   )
 }
 
-export default function BusinessDashboardScreen() {
+export default function BusinessDashboardScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
   const [q, setQ] = useState('')
@@ -106,11 +106,11 @@ export default function BusinessDashboardScreen() {
   const rosterEmpty = !loading && (biz?.candidates || []).length === 0
 
   if (!isDesktop && !loading && !rosterEmpty) {
-    return <MobileCandidateFeed candidates={rows} query={q} onQueryChange={setQ} />
+    return <MobileCandidateFeed embedded={embedded} candidates={rows} query={q} onQueryChange={setQ} />
   }
 
   return (
-    <BusinessShell header={<Header q={q} setQ={setQ} />}>
+    <BusinessShell embedded={embedded} header={<Header q={q} setQ={setQ} embedded={embedded} />}>
       <div style={{ padding: '22px 28px 36px' }}>
         {loading ? (
           <p style={{ textAlign: 'center', color: '#74756f', fontSize: 14, padding: '40px 0' }}>Loading candidates…</p>

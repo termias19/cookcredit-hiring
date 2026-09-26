@@ -17,7 +17,7 @@ export default function AttemptStatus({ application, onStart, starting }) {
       {withdrawn ? 'Application withdrawn' : ready ? 'Assessment received' : processing ? 'Video analysis in progress' : 'Show your knife work'}
     </h2>
     <p style={{ color: '#666', fontSize: 13, lineHeight: 1.55, margin: '0 0 14px' }}>
-      {withdrawn ? 'Future employer access to your recording has been revoked.' : 'Record your knife work in the CookCredit assessment. Your application keeps your attempt history and the evidence you agree to share.'}
+      {withdrawn ? 'Future employer access to your recording has been revoked.' : ready ? 'Your employer can now review your submitted recording and measurements. No further action is required; another attempt is optional.' : processing ? 'Your submission is being processed. You do not need to submit it again.' : 'Record your knife work, review it, then submit it to the employer. Your completed attempt history stays visible.'}
     </p>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
       {Array.from({ length: application.attemptLimit }, (_, index) => {
@@ -29,7 +29,7 @@ export default function AttemptStatus({ application, onStart, starting }) {
     </div>
     {evidence && <div style={{ background: '#F1F6F3', borderLeft: `3px solid ${GREEN}`, padding: '11px 12px', marginBottom: 14 }}>
       <strong style={{ fontFamily: SERIF, fontSize: 22 }}>{evidence.score ?? 'Review required'}</strong>
-      <span style={{ fontSize: 11, color: '#777' }}>{evidence.score != null ? ' / 100 verified result' : ''}</span>
+      <span style={{ fontSize: 11, color: '#777' }}>{evidence.score != null ? ' / 100 recorded result' : ''}</span>
       <p style={{ margin: '5px 0 0', color: '#555', fontSize: 12, lineHeight: 1.5 }}>{evidence.calculation?.resultReason || 'The evidence report is available to you and the employer.'}</p>
     </div>}
     {evidence?.deviceEstimates && <dl style={{ display: 'flex', flexWrap: 'wrap', gap: 22, margin: '16px 0', fontSize: 13 }}>
