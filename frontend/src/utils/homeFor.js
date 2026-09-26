@@ -57,10 +57,10 @@ export function clearPendingDestination(arrivedAt) {
   } catch { /* unavailable storage */ }
 }
 
-export function authDestination(profile, requested) {
+export function authDestination(profile, requested, uid = profile?.id) {
   let saved
   try { saved = JSON.parse(localStorage.getItem('cc_account_destination') || 'null') } catch { /* optional */ }
-  const destination = safeAuthDestination(requested) || (saved?.uid === profile?.id ? safeAuthDestination(saved?.destination) : null) || pendingDest()
+  const destination = safeAuthDestination(requested) || (uid && saved?.uid === uid ? safeAuthDestination(saved?.destination) : null) || pendingDest()
   if (profile && destination?.startsWith('/business/') && !destination.startsWith('/business/invite/') && profile.employerAccessAllowed !== true) return '/applications'
   if (profile && destination === '/owner/access' && profile.isAccessOwner !== true) return '/applications'
   return destination || homeFor(profile)

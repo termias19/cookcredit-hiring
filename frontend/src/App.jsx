@@ -66,7 +66,7 @@ function AuthRedirect({ children }) {
   if (authActionPending || PREVIEW) return children
   if (loading) return null
   if (user) {
-    const dest = authDestination(profile, location.state?.from)
+    const dest = authDestination(profile, location.state?.from, user.uid)
     if (!user.emailVerified) return <Navigate to="/verify" state={{ from: dest }} replace />
     return <ProtectedRoute><Navigate to={dest} replace /></ProtectedRoute>
   }

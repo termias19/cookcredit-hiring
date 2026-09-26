@@ -68,6 +68,8 @@ test('existing applicant login preserves the invitation in a new verification ta
   rememberAccountDestination('candidate', authDestination(null))
   sessionStorage = storage() // Email link opens a fresh tab on the same browser.
   clearPendingDestination('/account/action')
+  assert.equal(authDestination(null, undefined, 'candidate'), invitation)
+  assert.equal(authDestination(null, undefined, 'another-account'), '/applications')
   assert.equal(authDestination({ id: 'candidate' }), invitation)
   assert.equal(authDestination({ id: 'another-account' }), '/applications')
   clearPendingDestination()

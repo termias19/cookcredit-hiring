@@ -44,7 +44,7 @@ export default function LoginScreen() {
     try {
       if (location.state?.from) rememberDestination(location.state.from)
       const result = await login(email, pass)
-      const dest = authDestination(result.profile, location.state?.from)
+      const dest = authDestination(result.profile, location.state?.from, result.uid)
       rememberAccountDestination(result.uid, dest)
       if (result?.needsVerification) { navigate('/verify', { state: { from: dest }, replace: true }); return }
       navigate(dest, { replace: true })
