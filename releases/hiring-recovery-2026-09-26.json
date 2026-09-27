@@ -1,0 +1,13 @@
+{
+  "version": "sites/cookcredit-hiring/versions/655f3bb2bcfff753",
+  "frontendCommit": "c3844d42a38a48529390654ed24278e4b8ae9de7",
+  "rollbackVersion": "sites/cookcredit-hiring/versions/cde0753ae8e98a48",
+  "preservedAssessmentAssets": 33,
+  "changedAssessmentAssets": [],
+  "hostingConfigurationUnchanged": true,
+  "release": "sites/cookcredit-hiring/releases/1790468967861000",
+  "backendRevision": "cookcredit-hiring-00004-mxr",
+  "ci": "https://github.com/termias19/cookcredit-hiring/actions/runs/36282466841",
+  "frontendTests": 82,
+  "productionAcceptance": "Pending fresh applicant inbox, recording, submission, employer playback, saved CV and live integration acceptance."
+}
