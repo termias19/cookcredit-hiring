@@ -118,7 +118,10 @@ def test_schedule_requires_address_and_future_time(mail_client):
     row = draft(mail_client)
     path = '/mail/owner/campaigns/'+row['id']
     future = (now()+timedelta(hours=1)).isoformat()
-    assert mail_client.put(path, headers=headers('employer'), json={**row, 'action': 'schedule', 'postalAddress': '', 'nextRunAt': future}).status_code == 400
+    assert mail_client.put(path, headers=headers('employer'), json={**row, 'action': 'schedule', 'subject': 'Invalid edit', 'postalAddress': '', 'nextRunAt': future}).status_code == 400
+    with database.db_session() as session:
+        unchanged = session.get(Campaign, uuid.UUID(row['id']))
+        assert unchanged.subject == row['subject'] and unchanged.postal_address == row['postalAddress']
     assert mail_client.put(path, headers=headers('employer'), json={**row, 'action': 'schedule', 'nextRunAt': 'invalid'}).status_code == 400
     assert mail_client.put(path, headers=headers('employer'), json={**row, 'action': 'schedule', 'nextRunAt': future}).json['campaign']['status'] == 'scheduled'
 

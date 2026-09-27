@@ -78,40 +78,44 @@ def save_campaign(campaign_id=None):
     if not isinstance(data, dict):
         return jsonify(error='Enter campaign details.'), 400
     with db_session() as session:
+        def reject(message, status=400):
+            session.rollback()
+            return jsonify(error=message), status
+
         row = session.query(Campaign).filter_by(id=campaign_id).with_for_update().first() if campaign_id else Campaign()
         if not row:
-            return jsonify(error='Campaign not found.'), 404
+            return reject('Campaign not found.', 404)
         if campaign_id and data.get('revision') != row.revision:
-            return jsonify(error='This campaign changed. Refresh before saving.'), 409
+            return reject('This campaign changed. Refresh before saving.', 409)
         action = data.get('action', 'save')
         if action not in ('save', 'schedule', 'pause', 'trash', 'restore'):
-            return jsonify(error='Choose a valid action.'), 400
+            return reject('Choose a valid action.', 400)
         if not campaign_id and action != 'save':
-            return jsonify(error='Save a draft first.'), 400
+            return reject('Save a draft first.', 400)
         if action in ('save', 'schedule'):
             if row.status == 'trashed':
-                return jsonify(error='Restore this campaign first.'), 409
+                return reject('Restore this campaign first.', 409)
             for key, field, cap in [('subject', 'subject', 150), ('body', 'body', 10000), ('postalAddress', 'postal_address', 500)]:
                 value = data.get(key, getattr(row, field) or '')
                 if not isinstance(value, str) or len(value.strip()) > cap or (key == 'subject' and ('\n' in value or '\r' in value)):
-                    return jsonify(error='Check the subject, message and address lengths.'), 400
+                    return reject('Check the subject, message and address lengths.', 400)
                 setattr(row, field, value.strip())
             if not row.subject or not row.body:
-                return jsonify(error='Subject and message are required.'), 400
+                return reject('Subject and message are required.', 400)
             interval = data.get('intervalDays', row.interval_days or 0)
             if type(interval) is not int or interval not in (0, 7, 30):
-                return jsonify(error='Choose once, weekly or every 30 days.'), 400
+                return reject('Choose once, weekly or every 30 days.', 400)
             row.interval_days = interval
             row.status = 'draft'
         if action == 'schedule':
             if not row.postal_address:
-                return jsonify(error='Add your business mailing address before scheduling offers.'), 400
+                return reject('Add your business mailing address before scheduling offers.', 400)
             try:
                 when = datetime.fromisoformat(data['nextRunAt'].replace('Z', '+00:00'))
                 if when.tzinfo is None or when < now():
                     raise ValueError()
             except (KeyError, ValueError, TypeError, AttributeError):
-                return jsonify(error='Choose a future date and time.'), 400
+                return reject('Choose a future date and time.', 400)
             row.status = 'scheduled'
             row.next_run_at = when
         elif action in ('pause', 'trash', 'restore'):
