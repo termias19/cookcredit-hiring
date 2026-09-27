@@ -89,19 +89,28 @@ def construct_webhook_event(payload: bytes, sig_header: str):
 
 # ─── Business subscriptions ──────────────────────────────────────────────────
 
+def _billing_client():
+    key = os.environ.get('STRIPE_SECRET_KEY', '').strip()
+    if not key:
+        raise RuntimeError('Connect Stripe before using billing.')
+    if os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging':
+        if not key.startswith(('sk_test_', 'rk_test_')):
+            raise RuntimeError('Staging requires a Stripe test key.')
+    elif os.environ.get('K_SERVICE') and not key.startswith(('sk_live_', 'rk_live_')):
+        raise RuntimeError('Production requires a Stripe live key.')
+    return stripe.StripeClient(key, http_client=stripe.RequestsClient(timeout=5), max_network_retries=0)
+
+
 def retrieve_billing_subscription(subscription_id: str):
     # Bounded I/O while holding the workspace billing lock. Stripe retries the
     # event when retrieval fails; never apply an old event snapshot as fallback.
-    client = stripe.StripeClient(os.environ.get('STRIPE_SECRET_KEY', ''),
-        http_client=stripe.RequestsClient(timeout=5), max_network_retries=0)
-    return client.subscriptions.retrieve(subscription_id)
+    return _billing_client().subscriptions.retrieve(subscription_id)
 
 def create_billing_customer(*, email: str, name: str, org_id: str, idempotency_key: str) -> str:
-    customer = stripe.Customer.create(
-        email=email, name=name,
-        metadata={'cookcredit_org_id': org_id},
-        idempotency_key=idempotency_key,
-    )
+    customer = _billing_client().customers.create({
+        'email': email, 'name': name,
+        'metadata': {'cookcredit_org_id': org_id, 'cookcredit_product': 'hiring'},
+    }, {'idempotency_key': idempotency_key})
     return customer.id
 
 
@@ -114,25 +123,22 @@ def create_subscription_checkout(*, customer_id: str, org_id: str, request_id: s
     if not price_id:
         raise RuntimeError(f'{plan.title()} billing is not configured')
     origin = _frontend_origin()
-    checkout = stripe.checkout.Session.create(
-        mode='subscription', customer=customer_id,
-        line_items=[{'price': price_id, 'quantity': 1}],
-        success_url=f'{origin}/business/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}',
-        cancel_url=f'{origin}/business/billing?checkout=cancelled',
-        client_reference_id=org_id,
-        metadata={'cookcredit_org_id': org_id, 'plan': plan},
-        subscription_data={'metadata': {'cookcredit_org_id': org_id, 'plan': plan}},
-        allow_promotion_codes=True,
-        idempotency_key=f'org:{org_id}:{plan}:{price_id}-checkout:{request_id}',
-    )
+    metadata = {'cookcredit_org_id': org_id, 'plan': plan, 'cookcredit_product': 'hiring'}
+    checkout = _billing_client().checkout.sessions.create({
+        'mode': 'subscription', 'customer': customer_id,
+        'line_items': [{'price': price_id, 'quantity': 1}],
+        'success_url': f'{origin}/business/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}',
+        'cancel_url': f'{origin}/business/billing?checkout=cancelled',
+        'client_reference_id': org_id, 'metadata': metadata,
+        'subscription_data': {'metadata': metadata}, 'allow_promotion_codes': True,
+    }, {'idempotency_key': f'org:{org_id}:{plan}:{price_id}-checkout:{request_id}'})
     return {'id': checkout.id, 'url': checkout.url}
 
 
 def create_billing_portal(*, customer_id: str) -> str:
-    portal = stripe.billing_portal.Session.create(
-        customer=customer_id,
-        return_url=f'{_frontend_origin()}/business/billing',
-    )
+    portal = _billing_client().billing_portal.sessions.create({
+        'customer': customer_id, 'return_url': f'{_frontend_origin()}/business/billing',
+    })
     return portal.url
 
 
