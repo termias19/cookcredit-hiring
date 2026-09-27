@@ -90,6 +90,15 @@ def test_campaign_retry_deduplication_and_priority_reserve(mail_client):
     assert customer_mail.expand_due_campaigns() == 0
 
 
+def test_campaign_daily_budget_preserves_mailbox_headroom(mail_client):
+    opt_in(mail_client); row = draft(mail_client); due(row)
+    with database.db_session() as session:
+        for i in range(100):
+            session.add(AccountEmail(dedupe_key='daily-'+str(i), kind='campaign',
+                                     recipient='cook@example.test', status='sent'))
+    assert customer_mail.expand_due_campaigns() == 0
+
+
 @pytest.mark.parametrize('action', ['pause', 'trash', 'save'])
 def test_owner_change_suppresses_unsent_old_revision(mail_client, monkeypatch, action):
     opt_in(mail_client); row = draft(mail_client); due(row)

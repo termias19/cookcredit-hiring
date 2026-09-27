@@ -30,6 +30,7 @@ export default function OwnerCampaigns() {
   return <details className="cc-access-request" onToggle={e => { if (e.currentTarget.open && !data && !busy) load() }}>
     <summary>Email campaigns</summary>
     <p>Prepare offers for accounts that explicitly subscribe. Account and payment messages send separately. No campaign is sent until you schedule it.</p>
+    <p>Offers are queued gradually, up to 100 per 24 hours, and pause when account-mail activity is high.</p>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {data && <>
       <p>{data.audience} opted-in accounts. Delivery totals: {Object.entries(data.deliveryCounts).map(([status, count]) => `${count} ${status}`).join(', ') || 'None yet'}.</p>

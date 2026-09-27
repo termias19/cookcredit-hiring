@@ -41,6 +41,14 @@ def expand_due_campaigns():
         backlog = session.query(AccountEmail.id).filter(AccountEmail.status.in_(('pending', 'sending'))).limit(20).count()
         if backlog >= 20:
             return 0
+        # The shared Workspace mailbox also sends account mail. A quiet queue
+        # alone does not imply daily provider capacity is available.
+        recent = session.query(AccountEmail.id).filter(AccountEmail.created_at >= now()-timedelta(days=1))
+        if recent.limit(250).count() >= 250:
+            return 0
+        offer_budget = 100 - recent.filter(AccountEmail.kind == 'campaign').limit(100).count()
+        if offer_budget <= 0:
+            return 0
         row = (session.query(Campaign).filter(Campaign.status == 'scheduled',
                Campaign.next_run_at <= now()).order_by(Campaign.next_run_at)
                .with_for_update(skip_locked=True).first())
@@ -53,7 +61,7 @@ def expand_due_campaigns():
                                                      EmailPreference.updated_at <= row.run_at)
         if row.cursor:
             query = query.filter(EmailPreference.user_id > row.cursor)
-        subscribers = query.order_by(EmailPreference.user_id).limit(min(10, 20-backlog)).all()
+        subscribers = query.order_by(EmailPreference.user_id).limit(min(10, 20-backlog, offer_budget)).all()
         for sub in subscribers:
             key = hashlib.sha256(f'campaign:{row.id}:{row.run_at.isoformat()}:{sub.user_id}'.encode()).hexdigest()
             session.execute(insert(AccountEmail).values(id=uuid.uuid4(), dedupe_key=key,
