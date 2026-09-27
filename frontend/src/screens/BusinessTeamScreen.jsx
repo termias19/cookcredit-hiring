@@ -17,7 +17,7 @@ const ROLES = [
 export default function BusinessTeamScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
-  const [team, setTeam] = useState({ members: [], invitations: [], canManage: false })
+  const [team, setTeam] = useState({ members: [], invitations: [], canManage: false, invitationAccess: null })
   const [status, setStatus] = useState('loading')
   const [email, setEmail] = useState('')
   const [seatRole, setSeatRole] = useState('recruiter')
@@ -25,7 +25,7 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState(null)
   const [copyStatus, setCopyStatus] = useState('')
-  const invitationsAvailable = ['team', 'integration', 'enterprise'].includes(biz?.org?.plan)
+  const invitationsAvailable = team.invitationAccess?.enabled ?? ['team', 'integration', 'enterprise'].includes(biz?.org?.plan)
   const getToken = biz?.getToken
 
   const load = useCallback(async () => {
@@ -34,7 +34,7 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
       const token = await getToken?.()
       if (!token) throw new Error('Sign in again to load your team.')
       const result = await getBusinessTeam({ token })
-      setTeam({ members: result.members || [], invitations: result.invitations || [], canManage: Boolean(result.canManage) })
+      setTeam({ members: result.members || [], invitations: result.invitations || [], canManage: Boolean(result.canManage), invitationAccess: result.invitationAccess || null })
       setStatus('ready')
     } catch (err) {
       setError(err.message || 'Team could not be loaded')
@@ -107,12 +107,12 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
           {ROLES.map(([value, name]) => <button key={value} onClick={() => setSeatRole(value)} style={{ ...choice, ...(seatRole === value ? choiceOn : {}) }}>{name}</button>)}
         </div>
         <button onClick={invite} disabled={busy || !email.trim()} style={{ ...primary, opacity: busy || !email.trim() ? 0.5 : 1 }}><UserPlus size={15} />{busy ? 'Saving…' : 'Create invitation'}</button>
-        <p style={muted}>Invitations expire after seven days and only the invited verified email can accept.</p>
+        <p style={muted}>{team.invitationAccess?.seatLimit ? `${team.invitationAccess.seatLimit} seats include members and pending invitations. ` : ''}Invitations expire after seven days. The invited email must be verified and approved by CookCredit before joining.</p>
       </div>}
 
       {created && <div style={{ ...panel, borderColor: '#A8D5C8', background: '#F5FBF8' }}>
         <strong>Invitation recorded</strong>
-        <p style={{ ...muted, margin: '6px 0 10px' }}>{created.emailDelivered ? 'Invitation email accepted for sending. Inbox receipt is not confirmed. You can also copy the link.' : 'The invitation was saved, but its email was not sent. Copy the link below and share it with the invited teammate.'}</p>
+        <p style={{ ...muted, margin: '6px 0 10px' }}>{created.emailQueued ? 'Invitation email queued for delivery. You can also copy the link.' : created.emailDelivered ? 'Invitation email accepted for sending. Inbox receipt is not confirmed. You can also copy the link.' : 'The invitation was saved, but its email was not sent. Copy the link below and share it with the invited teammate.'}</p>
         <button onClick={copyInvitation} style={secondary}><Copy size={14} />Copy invitation link</button>
         {copyStatus && <p role="status" style={muted}>{copyStatus}</p>}
         <input aria-label="Invitation link" readOnly value={created.inviteUrl} onFocus={event => event.target.select()} style={{ ...input, marginTop: 10 }} />

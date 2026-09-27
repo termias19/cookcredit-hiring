@@ -15,6 +15,8 @@
    the provider component alongside its useBusiness() hook (same pattern as LangContext). */
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useAuth } from './AuthContext'
+import { useLocation } from 'react-router-dom'
+import { workspaceReads } from '../utils/workspaceReads'
 import {
   getBusinessOrg, getBusinessRoles, createBusinessRole,
   getBusinessShortlist, toggleBusinessShortlist, moveBusinessStage,
@@ -26,6 +28,8 @@ export const useBusiness = () => useContext(Ctx)
 
 export function BusinessProvider({ children }) {
   const { user } = useAuth()
+  const location = useLocation()
+  const { roles: needRoles, candidates: needCandidates, shortlist: needShortlist } = workspaceReads(location.pathname, location.search)
   const [org, setOrg] = useState(null)
   const [roles, setRoles] = useState([])
   const [shortlist, setShortlist] = useState([])     // cook ids starred for the org
@@ -50,28 +54,29 @@ export function BusinessProvider({ children }) {
     setLoading(true); setError(null)
     ;(async () => {
       const token = await user.getIdToken().catch(() => null)
+      if (!live) return
       if (!token) { if (live) { setLoading(false); setError('auth') } return }
       const [orgR, rolesR, slR, candR] = await Promise.allSettled([
         getBusinessOrg({ token }),
-        getBusinessRoles({ token }),
-        getBusinessShortlist({ token }),
-        getBusinessCandidates({ token }),
+        needRoles ? getBusinessRoles({ token }) : Promise.resolve(null),
+        needShortlist ? getBusinessShortlist({ token }) : Promise.resolve(null),
+        needCandidates ? getBusinessCandidates({ token }) : Promise.resolve(null),
       ])
       if (!live) return
       if (orgR.status === 'fulfilled') setOrg(orgR.value?.org || null)
-      if (rolesR.status === 'fulfilled') setRoles(Array.isArray(rolesR.value?.roles) ? rolesR.value.roles : [])
-      if (slR.status === 'fulfilled') setShortlist(Array.isArray(slR.value?.cookIds) ? slR.value.cookIds : [])
-      if (candR.status === 'fulfilled') {
+      if (needRoles && rolesR.status === 'fulfilled') setRoles(Array.isArray(rolesR.value?.roles) ? rolesR.value.roles : [])
+      if (needShortlist && slR.status === 'fulfilled') setShortlist(Array.isArray(slR.value?.cookIds) ? slR.value.cookIds : [])
+      if (needCandidates && candR.status === 'fulfilled') {
         setCandidates(Array.isArray(candR.value?.candidates) ? candR.value.candidates : [])
         setScreeningPolicy(candR.value?.screeningPolicy || null)
       }
       // The load-bearing reads BOTH failing means the workspace couldn't load at
       // all — surface it so consumers don't render the failure as "empty".
-      if (rolesR.status === 'rejected' && candR.status === 'rejected') setError('load')
+      if (orgR.status === 'rejected' || (needRoles && rolesR.status === 'rejected') || (needCandidates && candR.status === 'rejected')) setError('load')
       setLoading(false)
     })()
     return () => { live = false }
-  }, [user, reloadKey])
+  }, [user, reloadKey, needRoles, needCandidates, needShortlist])
 
   /** Re-run the workspace load (used by the error-state retry buttons). */
   const refresh = useCallback(() => {

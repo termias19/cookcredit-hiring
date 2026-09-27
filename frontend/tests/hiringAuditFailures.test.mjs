@@ -6,7 +6,7 @@ import { transformWithEsbuild } from 'vite'
 
 // Exercise the actual screen handlers with controlled API latency/failures.
 // Child visuals are opaque; these tests do not claim to be browser acceptance.
-async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' }, launch = () => {}, onNavigate = () => {} }) {
+async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' }, launch = () => {}, onNavigate = () => {}, refreshProfile = async () => {} }) {
   const state = [], effects = [], refs = []
   let index, queued = [], tree
   const react = {
@@ -32,7 +32,7 @@ async function screen(name, { biz, api, clipboard = async () => {}, user = { get
     'react-router-dom': { useNavigate: () => navigate, useLocation: () => ({ pathname: '/apply/role-1' }), useParams: () => ({ id: 'role-1', roleId: 'role-1' }), useSearchParams: () => [searchParams] },
     'framer-motion': { motion: new Proxy({}, { get: (_, key) => key }), AnimatePresence: 'presence' },
     '../context/BusinessContext': { useBusiness: () => biz },
-    '../context/AuthContext': { useAuth: () => ({ user }) },
+    '../context/AuthContext': { useAuth: () => ({ user, refreshProfile }) },
     '../utils/Api': api,
     '../data/culinaryTaxonomy': { labelOf: id => id },
     '../styles/motion': { staggerContainer: () => ({}) },
@@ -236,4 +236,24 @@ test('invitation mail acceptance is not claimed as inbox delivery; failed copy r
   s.render()
   assert.match(s.text(), /Could not copy automatically/)
   assert.equal(s.find(p => p['aria-label'] === 'Invitation link').props.value, 'https://hiring.cookcredit.com/business/invite/test-only')
+})
+
+
+test('server included-team entitlement enables invitations without inventing a paid plan', async () => {
+  const s = await screen('BusinessTeamScreen', { biz: { ...biz, org: {plan:'trial'} }, api: {
+    getBusinessTeam: async () => ({members:[], invitations:[], canManage:true, invitationAccess:{enabled:true,seatLimit:5}}),
+  } })
+  await s.settle()
+  assert.match(s.text(), /5 seats include members and pending invitations/)
+  assert.ok(s.find(p => p['aria-label'] === 'Teammate email'))
+})
+
+test('opening a team invitation never accepts it until the user acts', async () => {
+  let accepts=0, redirects=0
+  const s = await screen('BusinessInviteAcceptScreen', { api: {acceptBusinessTeamInvitation: async () => {accepts++}}, onNavigate:()=>{redirects++} })
+  await s.settle()
+  assert.equal(accepts,0)
+  await s.find(p => p.children === 'Accept invitation').props.onClick()
+  assert.equal(accepts,1)
+  assert.equal(redirects,1)
 })

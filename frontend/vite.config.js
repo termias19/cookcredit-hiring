@@ -20,7 +20,7 @@ export default defineConfig({
       manifest: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,png,svg,ico}'],
-        globIgnores: ['**/firebase-messaging-sw.js'],
+        globIgnores: ['**/firebase-messaging-sw.js', '**/vendor-cv-parser-*', '**/readCvPdf-*', '**/pdf.worker*'],
         navigateFallback: '/index.html',
         // /landing is a standalone marketing page, NOT a route of this SPA. It is copied into dist
         // after the build (scripts/copy-landing.mjs), so it never enters the precache manifest —
@@ -74,6 +74,7 @@ export default defineConfig({
         manualChunks: {
           'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
           'vendor-motion':  ['framer-motion'],
+          'vendor-cv-parser': ['pdfjs-dist'],
           'vendor-icons':   ['lucide-react'],
           // Only the boot-path firebase modules: firestore/storage are gone from
           // the app entirely and messaging is dynamic-imported on demand, so
