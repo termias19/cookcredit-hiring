@@ -140,9 +140,13 @@ def create_subscription_checkout(*, customer_id: str, org_id: str, request_id: s
 
 
 def create_billing_portal(*, customer_id: str) -> str:
-    portal = _billing_client().billing_portal.sessions.create({
+    values = {
         'customer': customer_id, 'return_url': f'{_frontend_origin()}/business/billing',
-    })
+    }
+    configuration = os.environ.get('STRIPE_HIRING_PORTAL_CONFIGURATION', '').strip()
+    if configuration:
+        values['configuration'] = configuration
+    portal = _billing_client().billing_portal.sessions.create(values)
     return portal.url
 
 

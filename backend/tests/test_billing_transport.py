@@ -19,6 +19,7 @@ def test_deployed_billing_rejects_wrong_mode_before_network(monkeypatch, environ
 def test_hiring_requests_have_bounded_io_metadata_and_stable_checkout_idempotency(monkeypatch):
     monkeypatch.setenv('COOKCREDIT_ENVIRONMENT', 'staging')
     monkeypatch.setenv('STRIPE_SECRET_KEY', 'rk_test_fixture')
+    monkeypatch.setenv('STRIPE_HIRING_PORTAL_CONFIGURATION', 'bpc_hiring')
     monkeypatch.setattr(billing, 'FRONTEND_URL', 'https://hiring.example.test')
     client = Mock()
     client.customers.create.return_value = SimpleNamespace(id='cus_hiring')
@@ -42,3 +43,14 @@ def test_hiring_requests_have_bounded_io_metadata_and_stable_checkout_idempotenc
     assert params['subscription_data']['metadata']['cookcredit_org_id'] == 'org'
     assert options['idempotency_key'] == 'org:org:team:price_hiring-checkout:request'
     assert 'orderKind' not in params['metadata']
+    assert client.billing_portal.sessions.create.call_args.args[0]['configuration'] == 'bpc_hiring'
+
+
+def test_hiring_billing_does_not_enable_cook_payout_accounts(monkeypatch):
+    from flask import Flask
+    from routes.stripe import stripe_bp
+    monkeypatch.setenv('BUSINESS_BILLING_ENABLED', '1')
+    monkeypatch.delenv('COOK_CONNECT_ENABLED', raising=False)
+    app = Flask(__name__)
+    app.register_blueprint(stripe_bp, url_prefix='/api/stripe')
+    assert app.test_client().post('/api/stripe/connect/onboard').status_code == 503

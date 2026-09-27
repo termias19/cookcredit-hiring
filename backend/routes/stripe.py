@@ -34,6 +34,8 @@ ENTITLED_SUBSCRIPTION_STATUSES = {'active', 'trialing', 'past_due'}
 
 @stripe_bp.before_request
 def disabled_billing():
+    if request.path.startswith('/api/stripe/connect/') and os.getenv('COOK_CONNECT_ENABLED') != '1':
+        return jsonify(error='Cook payment accounts are not enabled'), 503
     # Stop new purchases without interrupting signed event reconciliation.
     if (os.environ.get('BUSINESS_BILLING_ENABLED') == '0'
             and request.endpoint not in ('stripe.webhook', 'stripe.dispatch_events')
