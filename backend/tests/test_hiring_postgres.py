@@ -1679,6 +1679,8 @@ def test_application_review_cv_privacy_revision_and_withdrawal(db, client, monke
     saved=client.post(url+'/review',json=draft,headers=headers('employer'))
     assert saved.status_code==200 and saved.json['employerUpdate'] is None
     assert client.get('/business/shortlist', headers=headers('employer')).json['cookIds'] == ['cook']
+    board = client.get(f'/business/role/{db.role}', headers=headers('employer')).json['pipeline']
+    assert board == [{'cookId': 'cook', 'stage': 'shortlisted', 'hasVideo': False}]
     revision=saved.json['review']['revision']
     assert saved.json['review']['reviewerName']=='employer'
     applicant=client.get(url,headers=headers('cook'))

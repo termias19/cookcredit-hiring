@@ -878,8 +878,14 @@ def role_detail(rid):
             "skillFloor": role_dict.get("skillFloor"),
         }
         cards_out = []
-        for c in session.query(PipelineCard).filter_by(role_posting_id=r.id).all():
+        cards = session.query(PipelineCard).filter_by(role_posting_id=r.id).all()
+        consenting = {a.applicant_id for a in _active_applications_for_org(session, r.org_id, [c.cook_id for c in cards])
+                      if a.role_posting_id == r.id} if cards else set()
+        for c in cards:
             if not _shared_candidate(session, r.org_id, c.cook_id):
+                if c.cook_id in consenting:
+                    # Workflow status is not evidence access or an assessment result.
+                    cards_out.append({'cookId': c.cook_id, 'stage': c.stage, 'hasVideo': False})
                 continue
             cook = _cook_facts(session, c.cook_id)
             m = match_role(cook, {**role_dict, "mustHave": req.get("mustHave")})
