@@ -8,7 +8,7 @@
 .cc-access-card {background:#fefdfb;border:1px solid #e3e0d9;border-radius:2px;padding:26px;margin:20px 0}
 .cc-access-form {display:grid;gap:20px}
 .cc-access-form label {display:grid;gap:7px;font-size:14px}
-.cc-access-form input:not([type=checkbox]),.cc-access-form textarea,.cc-access-toolbar select {border:1px solid #cbcfc7;border-radius:2px;background:white;color:#252923;padding:12px;width:100%;font:inherit}
+.cc-access-form input:not([type=checkbox]),.cc-access-form textarea,.cc-access-form select,.cc-access-toolbar select {border:1px solid #cbcfc7;border-radius:2px;background:white;color:#252923;padding:12px;width:100%;font:inherit}
 .cc-access-form textarea {resize:vertical}
 .cc-access-form label.cc-access-check {display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.55}
 .cc-access-check input {appearance:auto!important;width:17px;height:17px;flex-shrink:0;margin-top:3px;accent-color:#1f6f5c}

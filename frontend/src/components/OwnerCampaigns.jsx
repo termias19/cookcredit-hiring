@@ -27,7 +27,7 @@ export default function OwnerCampaigns() {
       setNotice(action === 'schedule' ? 'Scheduled for opted-in accounts. You can pause or trash it here.' : 'Campaign saved. Paused or trashed campaigns stop unsent messages; messages already in flight may still arrive.')
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
-  return <details className="cc-access-request" onToggle={e => { if (e.currentTarget.open && !data && !busy) load() }}>
+  return <details className="cc-access-card" onToggle={e => { if (e.currentTarget.open && !data && !busy) load() }}>
     <summary>Email campaigns</summary>
     <p>Prepare offers for accounts that explicitly subscribe. Account and payment messages send separately. No campaign is sent until you schedule it.</p>
     <p>Offers are queued gradually, up to 100 per 24 hours, and pause when account-mail activity is high.</p>
@@ -37,7 +37,7 @@ export default function OwnerCampaigns() {
       <button disabled={busy} onClick={() => { setForm({ ...empty }); setWhen('') }}>New draft</button>{' '}
       <button disabled={busy} onClick={() => load()}>Refresh</button>
       {templates.map((template, index) => <button key={index} disabled={busy} onClick={() => { setForm({ ...empty, ...template }); setWhen('') }}>Use {index ? 'applicant' : 'employer'} template</button>)}
-      {form && <form onSubmit={e => { e.preventDefault(); act(form, 'save') }} style={{ display: 'grid', gap: 16, margin: '20px 0' }}>
+      {form && <form className="cc-access-form" onSubmit={e => { e.preventDefault(); act(form, 'save') }} style={{ margin: '20px 0' }}>
         <label>Subject<input required maxLength={150} value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} /></label>
         <label>Message<textarea required rows={7} maxLength={10000} value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} /></label>
         <label>Business mailing address<textarea maxLength={500} value={form.postalAddress} onChange={e => setForm({ ...form, postalAddress: e.target.value })} /></label>
