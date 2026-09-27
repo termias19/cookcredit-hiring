@@ -126,6 +126,7 @@ def require_auth(f):
                 ('auth.sync_user', 'POST'), ('auth.get_me', 'GET'),
                 ('auth.update_me', 'PATCH'), ('auth.request_verification_email', 'POST'),
                 ('auth.complete_verification', 'POST'),
+                ('customer_mail.preferences', 'GET'), ('customer_mail.preferences', 'PUT'),
                 ('hiring.apply', 'POST'), ('hiring.my_application', 'GET'),
                 ('hiring.get_application', 'GET'), ('hiring.my_applications', 'GET'),
                 ('hiring.start_attempt', 'POST'), ('hiring.complete_attempt', 'POST'),

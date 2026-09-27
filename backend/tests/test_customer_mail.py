@@ -18,6 +18,7 @@ pytestmark = pytest.mark.skipif(not os.getenv('HIRING_TEST_DATABASE_URL'), reaso
 def mail_client(client, monkeypatch):
     client.application.register_blueprint(customer_mail_bp, url_prefix='/mail')
     monkeypatch.setattr(hiring_access, 'enabled', lambda: True)
+    monkeypatch.setenv('STAGING_ALLOWED_EMAILS', 'employer@example.test')
     monkeypatch.setattr(hiring_access, 'is_owner', lambda email, verified=True: verified and email == 'employer@example.test')
     monkeypatch.setenv('FRONTEND_URL', 'https://hiring.example.test')
     monkeypatch.setenv('PUBLIC_API_URL', 'https://api.example.test')
