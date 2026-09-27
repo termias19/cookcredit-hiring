@@ -32,7 +32,7 @@ export default function BusinessInviteAcceptScreen() {
       <div style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>CookCredit workspace</div>
       <h1 style={{ fontFamily: 'var(--cc-display)', fontWeight: 400, fontSize: 30, letterSpacing: '-0.04em', margin: '12px 0' }}>Join your team</h1>
       <p role={failed ? 'alert' : 'status'} style={{ color: failed ? '#9B341F' : '#666', lineHeight: 1.6 }}>{status}</p>
-      <button disabled={busy} onClick={accept} style={{ border: 0, background: '#1a1a1a', color: '#fff', padding: '11px 15px', marginTop: 10 }}>{busy ? 'Joining…' : failed ? 'Retry invitation' : 'Accept invitation'}</button>
+      <button disabled={busy} onClick={accept} style={{ border: 0, background: '#1a1a1a', color: '#fff', padding: '11px 15px', marginTop: 10 }}>{busy ? 'Joining...' : failed ? 'Retry invitation' : 'Accept invitation'}</button>
     </section>
   </main>
 }
