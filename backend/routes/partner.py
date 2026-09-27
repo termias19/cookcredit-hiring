@@ -708,6 +708,10 @@ def internal_dispatch_webhooks():
     if type(limit) is not int or not 1 <= limit <= 50:
         return jsonify(error='limit must be an integer between 1 and 50'), 400
     result = dispatch_partner_webhooks(limit=limit)
+    if os.getenv('STRIPE_ASYNC_ENABLED') == '1':
+        # Reuse the existing recovery scheduler instead of another idle job.
+        from routes.stripe import dispatch_billing_events
+        result['billing'] = dispatch_billing_events()
     from services.operations import report_queue_health
     report_queue_health('webhook')
     return jsonify(result), 503 if result['failed'] else 200

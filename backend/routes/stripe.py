@@ -197,6 +197,10 @@ def business_billing_status():
 @require_verified_email
 @limiter.limit('10 per hour', key_func=lambda: g.user_id)
 def business_checkout():
+    if os.getenv('BUSINESS_BILLING_OWNER_ONLY') == '1':
+        from services.hiring_access import is_owner
+        if not is_owner(g.email):
+            return jsonify(error='Subscriptions are not available for this workspace yet.'), 403
     body = request.get_json(silent=True) or {}
     request_id = _uuid(body.get('requestId'))
     plan = str(body.get('plan') or 'team').strip()

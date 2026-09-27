@@ -166,3 +166,11 @@ def test_multiple_workers_apply_one_event_once(db, client, monkeypatch):
             release.set()
         assert first.result(timeout=5)['processed'] == 1
     run.assert_called_once()
+
+
+def test_controlled_billing_rollout_blocks_non_owner_checkout(db, client, monkeypatch):
+    monkeypatch.setenv('BUSINESS_BILLING_OWNER_ONLY', '1')
+    provider = Mock()
+    monkeypatch.setattr(billing, 'create_subscription_checkout', provider)
+    assert client.post('/stripe/business/checkout', headers=headers('employer'), json={}).status_code == 403
+    provider.assert_not_called()

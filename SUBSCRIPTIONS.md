@@ -44,8 +44,14 @@ state. It does not create a second subscription or event store. Set
 `STRIPE_ASYNC_ENABLED=1` only after configuring a dedicated billing task queue,
 `BILLING_TASKS_TARGET` ending in `/api/stripe/internal/dispatch-events`, the existing
 OIDC caller/audience, a valid environment-specific Stripe key, and a separate
-Hiring webhook signing secret. Keep a one-minute authenticated recovery scheduler
-for that endpoint. Start with queue concurrency 1 and dispatch rate 1/s.
+Hiring webhook signing secret. The existing authenticated webhook recovery
+scheduler also drains pending billing events when asynchronous billing is enabled;
+no additional scheduler is needed. Start with queue concurrency 1 and dispatch rate 1/s.
+
+For a controlled live rollout, `BUSINESS_BILLING_OWNER_ONLY=1` restricts checkout
+to the verified CookCredit owner. Keep it enabled until the owner has completed
+the real checkout and entitlement acceptance. It does not replace the global
+`BUSINESS_BILLING_ENABLED` switch.
 
 Signed receipt commits a unique event ID and minimal object references, then
 wakes a bounded worker. The worker reads current subscription state, so reordered
