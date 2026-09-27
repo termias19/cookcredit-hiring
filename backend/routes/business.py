@@ -35,7 +35,6 @@ AUTHORIZATION MODEL (the security contract — keep these invariants when adding
 """
 import logging
 import hashlib
-import html
 import os
 import re
 import secrets
@@ -53,7 +52,7 @@ from services.matching import match_role, FEATURE_WEIGHTS
 from services.assessment_media import playback_url, PLAYBACK_TTL_SECONDS
 from services.assessment_outcomes import evaluate_assessment
 from services.live_motion_evidence import hiring_motion_criteria
-from services.integration_access import open_role_limit
+from services.integration_access import open_role_limit, team_access
 from services.hiring_presentation import assessment_instructions
 from services import company_branding, hiring_reviews
 from models import HiringApplication, HiringApplicationEvent, AssessmentShare, AssessmentAccessLog, SkillAttempt, ATTEMPT_TERMINAL
@@ -76,30 +75,6 @@ SEAT_ROLES = set(SEAT_PERMISSIONS)
 
 def _utcnow():
     return datetime.now(timezone.utc)
-
-
-def _send_workspace_invite(*, recipient, org_name, seat_role, invite_url):
-    """Best-effort delivery. The invitation is persisted even when email is unavailable."""
-    key = os.environ.get('SENDGRID_API_KEY', '').strip()
-    if not key:
-        return False
-    try:
-        import sendgrid
-        from sendgrid.helpers.mail import Mail
-        safe_org, safe_url = html.escape(org_name), html.escape(invite_url, quote=True)
-        message = Mail(
-            from_email=os.environ.get('SENDGRID_FROM_EMAIL', 'noreply@cookcredit.com'),
-            to_emails=recipient,
-            subject=f'Join {org_name} on CookCredit',
-            html_content=(f'<p>{safe_org} invited you to a {html.escape(seat_role.replace("_", " "))} seat on CookCredit.</p>'
-                          f'<p><a href="{safe_url}">Accept workspace invitation</a></p>'
-                          '<p>This email-bound link expires in seven days.</p>'),
-        )
-        response = sendgrid.SendGridAPIClient(key).send(message)
-        return 200 <= int(response.status_code) < 300
-    except Exception:
-        log.exception('Workspace invitation email failed')
-        return False
 
 
 def _uuid(s):
@@ -456,6 +431,7 @@ def get_team():
                 'createdAt': item.created_at.isoformat() if item.created_at else None,
             } for item in invitations],
             canManage=_can(session, g.user_id, 'billing'),
+            invitationAccess=team_access(org),
         ), 200
 
 
@@ -479,8 +455,11 @@ def invite_team_member():
         org = _org_for(session, g.user_id)
         if not org:
             return jsonify(error='Workspace not found'), 404
-        if org.plan not in ('team', 'integration', 'enterprise'):
-            return jsonify(error='Team seats require a paid subscription'), 402
+        # Serialize reservation counts with all invitation creations in this org.
+        org = session.query(Org).filter_by(id=org.id).with_for_update().one()
+        access = team_access(org)
+        if not access['enabled']:
+            return jsonify(error='Team invitations are not enabled for this workspace'), 403
         existing_user = session.query(User).filter(User.email.ilike(email)).one_or_none()
         if existing_user and session.query(OrgMembership).filter_by(
                 org_id=org.id, user_id=existing_user.id).first():
@@ -494,22 +473,30 @@ def invite_team_member():
         if pending:
             pending.status = 'expired'
             session.flush()
+        if access['seatLimit'] is not None:
+            members = session.query(OrgMembership).filter_by(org_id=org.id).count()
+            reserved = session.query(OrgInvitation).filter(
+                OrgInvitation.org_id == org.id, OrgInvitation.status == 'pending',
+                OrgInvitation.expires_at > now).count()
+            if members + reserved >= access['seatLimit']:
+                return jsonify(error='All five team seats are occupied or reserved. Revoke an unused invitation to free a seat.'), 409
         invitation = OrgInvitation(
             org_id=org.id, invited_email=email, seat_role=seat_role,
             token_hash=token_hash, status='pending', invited_by=g.user_id,
             expires_at=now + timedelta(days=7))
         session.add(invitation)
         session.flush()
-        invitation_id, expires_at, org_name = str(invitation.id), invitation.expires_at, org.name
+        from services.workspace_invitation_mail import enqueue_invitation
+        enqueue_invitation(session, invitation, token)
+        invitation_id, expires_at = str(invitation.id), invitation.expires_at
     origin = os.environ.get('FRONTEND_URL', 'http://localhost:5173').split(',', 1)[0].rstrip('/')
-    invite_url = f'{origin}/business/invite/{token}'
-    emailed = _send_workspace_invite(
-        recipient=email, org_name=org_name, seat_role=seat_role, invite_url=invite_url)
     return jsonify(invitation={
         'id': invitation_id, 'email': email, 'seatRole': seat_role,
         'status': 'pending', 'expiresAt': expires_at.isoformat(),
-        'inviteUrl': invite_url, 'emailDelivered': emailed,
+        'inviteUrl': f'{origin}/business/invite/{token}', 'emailQueued': True,
+        'emailDelivered': False,
     }), 201
+
 
 
 @business_bp.route('/team/invitations/<invitation_id>/revoke', methods=['POST'])
@@ -540,23 +527,37 @@ def accept_team_invitation():
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     now = _utcnow()
     with db_session() as session:
-        item = (session.query(OrgInvitation).filter_by(token_hash=token_hash)
-                .with_for_update().one_or_none())
+        candidate = session.query(OrgInvitation).filter_by(token_hash=token_hash).one_or_none()
+        if not candidate:
+            return jsonify(error='This invitation is invalid or no longer active'), 409
+        org = session.query(Org).filter_by(id=candidate.org_id).with_for_update().one()
+        item = (session.query(OrgInvitation).filter_by(id=candidate.id)
+                .populate_existing().with_for_update().one_or_none())
         if not item or item.status not in ('pending', 'accepted'):
             return jsonify(error='This invitation is invalid or no longer active'), 409
-        if item.expires_at <= now:
+        if item.status == 'pending' and item.expires_at <= now:
             item.status = 'expired'
             return jsonify(error='This invitation has expired'), 409
         if item.invited_email != str(g.email or '').casefold():
             return jsonify(error='Sign in with the email address that received this invitation'), 403
+        # A user can accept at most one workspace even across concurrent org invites.
+        user = session.query(User).filter_by(id=g.user_id).with_for_update().one_or_none()
+        if not user:
+            return jsonify(error='User not found'), 404
         existing = _membership(session, g.user_id)
         if existing and existing.org_id != item.org_id:
             return jsonify(error='This account already belongs to another workspace'), 409
+        if item.status == 'accepted':
+            if existing and existing.org_id == item.org_id and item.accepted_by == g.user_id:
+                return jsonify(ok=True, org=org.to_dict(), seatRole=existing.seat_role), 200
+            return jsonify(error='This invitation has already been used'), 409
         if not existing:
+            access = team_access(org)
+            if not access['enabled']:
+                return jsonify(error='Team invitations are not enabled for this workspace'), 403
+            if access['seatLimit'] is not None and session.query(OrgMembership).filter_by(org_id=org.id).count() >= access['seatLimit']:
+                return jsonify(error='This workspace has no available team seats'), 409
             session.add(OrgMembership(org_id=item.org_id, user_id=g.user_id, seat_role=item.seat_role))
-        user = session.get(User, g.user_id)
-        if not user:
-            return jsonify(error='User not found'), 404
         if 'business' not in (user.roles or []):
             user.roles = list(user.roles or []) + ['business']
         item.status = 'accepted'; item.accepted_by = g.user_id; item.accepted_at = now

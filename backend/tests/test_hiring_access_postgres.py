@@ -34,7 +34,7 @@ def db(monkeypatch):
     engine = create_engine(url, connect_args={'options': f'-csearch_path={schema},public'})
     try:
         with engine.begin() as conn:
-            for name in ('023_account_emails.sql', '026_hiring_access.sql'):
+            for name in ('023_account_emails.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql'):
                 sql = (Path(__file__).parents[1] / 'migrations' / name).read_text()
                 conn.exec_driver_sql(sql)
                 conn.exec_driver_sql(sql)

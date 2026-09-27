@@ -40,6 +40,9 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
 
 def account_email_content(kind, link):
     content = {
+        'workspace_invite': ('Your CookCredit team invitation', 'You are invited to a CookCredit workspace',
+                    'A workspace administrator invited you to join their team. Sign in with this email address to review and accept the invitation. CookCredit employer approval is required before you can join. The invitation expires after seven days.',
+                    'Review invitation', 'If you did not expect this invitation, you can ignore it. Opening the link does not accept the invitation.'),
         'verify': ('Welcome to CookCredit — verify your email', 'Confirm your email address',
                    'Thank you for creating a CookCredit account. Confirm this email address to finish setting up your account.',
                    'Verify email', 'If you did not create a CookCredit account, you can ignore this message.'),
@@ -103,6 +106,9 @@ from services.mail_transport import send_google_smtp as _send_google_smtp
 
 
 def deliver_account_email(item):
+    if item.kind == 'workspace_invite':
+        from services.workspace_invitation_mail import deliver_invitation
+        return deliver_invitation(item)
     if item.kind in ('access_requested', 'access_approved'):
         return deliver_access_email(item)
     delivery_provider = os.environ.get('AUTH_EMAIL_PROVIDER', 'firebase')
@@ -193,7 +199,7 @@ def dispatch_account_emails(limit=50):
         session.query(AccountEmail).filter(AccountEmail.status == 'sending',
             AccountEmail.attempts >= 8, AccountEmail.lease_until < now).update(
                 {'status': 'failed', 'last_error': 'delivery_lease_expired', 'lease_token': None,
-                 'lease_until': None}, synchronize_session=False)
+                 'lease_until': None, 'invitation_token_ciphertext': None}, synchronize_session=False)
         rows = (session.query(AccountEmail).filter(
             AccountEmail.attempts < 8, AccountEmail.available_at <= now,
             or_(AccountEmail.status == 'pending', and_(AccountEmail.status == 'sending', AccountEmail.lease_until < now)))
@@ -217,5 +223,7 @@ def dispatch_account_emails(limit=50):
                 current.last_error = 'delivery_failed'
             else:
                 current.status = result; current.completed_at = utcnow(); current.last_error = None
+            if current.status in ('sent', 'skipped', 'failed'):
+                current.invitation_token_ciphertext = None
             counts[result] += 1
     return counts

@@ -23,3 +23,5 @@ class AccountEmail(Base):
     last_error = Column(Text)
     access_request_id = Column(UUID(as_uuid=True))
     access_revision = Column(Integer)
+    invitation_id = Column(UUID(as_uuid=True))
+    invitation_token_ciphertext = Column(Text)

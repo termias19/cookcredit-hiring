@@ -30,3 +30,11 @@ def open_role_limit(org):
     if (getattr(org, 'plan', None) or 'trial') != 'trial':
         return None
     return 5 if org is not None and early_access_enabled() else 1
+
+
+def team_access(org):
+    """Included access is bounded; existing paid workspace rights are retained."""
+    plan = getattr(org, 'plan', None) or 'trial'
+    paid = org is not None and plan in ('team', 'integration', 'enterprise')
+    included = org is not None and early_access_enabled()
+    return {'enabled': paid or included, 'seatLimit': None if paid else 5 if included else 0}
