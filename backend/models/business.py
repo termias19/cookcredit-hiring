@@ -25,6 +25,8 @@ class Org(Base):
     location = Column(JSONB)                       # {lat, lng}
     cuisine_focus = Column(ARRAY(Text), default=list)
     plan = Column(Text, default="trial")           # trial | team | integration | enterprise
+    included_access = Column(Boolean, nullable=False, default=False)
+    subscription_limits = Column(JSONB)
     stripe_customer_id = Column(Text, unique=True)
     stripe_subscription_id = Column(Text, unique=True)
     subscription_status = Column(Text)

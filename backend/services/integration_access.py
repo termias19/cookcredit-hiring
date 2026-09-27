@@ -16,7 +16,7 @@ def early_access_limit():
 
 def integration_access(org):
     plan = getattr(org, 'plan', None) or 'trial'
-    early = org is not None and early_access_enabled()
+    early = org is not None and (early_access_enabled() or bool(getattr(org, 'included_access', False)))
     return {
         'api': org is not None and (early or plan in ('integration', 'enterprise')),
         'widget': org is not None and (early or plan in ('team', 'integration', 'enterprise')),
@@ -27,14 +27,16 @@ def integration_access(org):
 
 def open_role_limit(org):
     """Workspace role allowance; approval and seat authorization remain separate gates."""
+    limits = getattr(org, 'subscription_limits', None) or {}
     if (getattr(org, 'plan', None) or 'trial') != 'trial':
-        return None
-    return 5 if org is not None and early_access_enabled() else 1
+        return limits.get('openRoles')
+    return 5 if org is not None and (early_access_enabled() or bool(getattr(org, 'included_access', False))) else 1
 
 
 def team_access(org):
     """Included access is bounded; existing paid workspace rights are retained."""
     plan = getattr(org, 'plan', None) or 'trial'
     paid = org is not None and plan in ('team', 'integration', 'enterprise')
-    included = org is not None and early_access_enabled()
-    return {'enabled': paid or included, 'seatLimit': None if paid else 5 if included else 0}
+    included = org is not None and (early_access_enabled() or bool(getattr(org, 'included_access', False)))
+    limits = getattr(org, 'subscription_limits', None) or {}
+    return {'enabled': paid or included, 'seatLimit': limits.get('seats') if paid else 5 if included else 0}

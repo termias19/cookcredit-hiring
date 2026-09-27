@@ -17,7 +17,8 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
   const biz = useBusiness()
   const { user } = useAuth()
   const earlyAccess = biz?.org?.integrationAccess?.earlyAccess === true
-  const [billing, setBilling] = useState({ plan: biz?.org?.plan || 'trial', teamPrice: '$99' })
+  const [billing, setBilling] = useState({ plan: biz?.org?.plan || 'trial', prices: [], billingEnabled: false })
+  const [interval, setInterval] = useState('month')
   const [pending, setPending] = useState('')
   const [msg, setMsg] = useState(params.get('checkout') === 'success' ? 'Checkout complete. Confirming your subscription…' : '')
   const [error, setError] = useState('')
@@ -31,7 +32,7 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
   }, [user])
 
   useEffect(() => {
-    if (biz?.loading || !biz?.org || earlyAccess) return undefined
+    if (biz?.loading || !biz?.org) return undefined
     let live = true
     let timer
     ;(async () => {
@@ -60,7 +61,9 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
       const token = await user.getIdToken()
       const requestId = globalThis.crypto?.randomUUID?.()
       if (!requestId) throw new Error('This browser cannot start a secure checkout request.')
-      const result = await createBusinessCheckout({ token, requestId, plan })
+      const selected = billing.prices?.find(row => row.plan === plan && row.interval === interval)
+      if (!selected) throw new Error('Refresh the available plans before checkout.')
+      const result = await createBusinessCheckout({ token, requestId, plan, interval, priceId: selected.id })
       window.location.assign(result.checkoutUrl)
     } catch (cause) { setError(cause.message || 'Checkout is temporarily unavailable.'); setPending('') }
   }
@@ -74,12 +77,14 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
     } catch (cause) { setError(cause.message || 'The billing portal is temporarily unavailable.'); setPending('') }
   }
 
-  const plans = [
-    { id: 'trial', name: 'Trial', price: 'Free', cadence: '14 days', features: ['1 admin seat', '1 open role', 'Branded application link', 'Explainable assessment evidence'] },
-    { id: 'team', name: 'Team', price: billing.teamPrice || '$99', cadence: '/ month', featured: true, features: ['5 seats', 'Unlimited open roles', 'Branded link and embedded widget', 'Shortlists, evidence history, and audit export'] },
-    { id: 'integration', name: 'Integration', price: billing.integrationPrice || '$299', cadence: '/ month', features: ['1,000 assessment requests / month', 'Universal API and signed webhooks', 'External job and candidate IDs', 'Branded link and embedded widget'] },
-    { id: 'enterprise', name: 'Enterprise', price: 'Custom', cadence: '', features: ['Higher assessment volume', 'Discuss your access requirements', 'Implementation support', 'Contract billing'] },
-  ]
+  const plans = (billing.prices || []).filter(row => row.interval === interval).map(row => ({
+    id: row.plan, name: row.plan === 'team' ? 'Team' : 'Integration',
+    price: new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency }).format(row.amount / 100),
+    cadence: `/ ${row.interval}`, features: [`${row.limits.seats} seats`, `${row.limits.openRoles} open roles`,
+      'Branded application link and embedded widget',
+      ...(row.plan === 'integration' ? [`${row.limits.monthlyRequests.toLocaleString()} API assessment requests / calendar month`, 'API and signed webhooks'] : ['Applicant evidence and team review'])],
+  }))
+
 
   const header = <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
     <button onClick={() => navigate('/business/roles')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 10 }}>
@@ -95,9 +100,9 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
     </section>
   </BusinessShell>
 
-  if (earlyAccess) return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
+  if (earlyAccess && !billing.billingEnabled) return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
     <section style={{ padding: '32px 28px', maxWidth: 720, margin: '0 auto' }}>
-      <h2 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500 }}>Free early access</h2>
+      <h2 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500 }}>Included access</h2>
       <p style={{ lineHeight: 1.8, color: '#555' }}>Use your branded assessment link, embedded widget, API and webhooks while subscription payments are being prepared.</p>
       <p style={{ lineHeight: 1.8, color: '#555' }}>{biz.org.integrationAccess.earlyAccessMonthlyLimit || 100} API assessment requests per month in each environment. Your workspace retains its existing role and seat limits.</p>
       <p style={{ lineHeight: 1.8, color: '#555' }}>No card is required and you will not be charged automatically. Subscribing later will require your choice.</p>
@@ -110,11 +115,13 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
       <AnimatePresence>{(msg || error) && <motion.p className="cc-business-notice" variants={fadeIn} initial="hidden" animate="show" exit={{ opacity: 0 }} style={{ fontSize: 13, color: error ? '#A44320' : GREEN, border: `1px solid ${error ? '#A44320' : GREEN}`, background: error ? '#FBF1EC' : '#E8F1EC', padding: '10px 12px', margin: '0 0 16px' }}>{error || msg}</motion.p>}</AnimatePresence>
       {billing.status && <p style={{ fontSize: 12, color: '#777', margin: '0 0 14px' }}>Subscription: <b>{billing.status.replaceAll('_', ' ')}</b>{billing.cancelAtPeriodEnd && billing.periodEnd ? ` · access scheduled to end ${new Date(billing.periodEnd).toLocaleDateString()}` : ''}</p>}
       {billing.integrationUsage && <div style={{ border: '1px solid #dfd5c7', background: '#fffaf2', padding: '12px 14px', marginBottom: 14, fontSize: 12, color: '#655d54' }}><b>{billing.integrationUsage.used.toLocaleString()}</b> of <b>{billing.integrationUsage.limit.toLocaleString()}</b> assessment requests used since {new Date(`${billing.integrationUsage.periodStart}T00:00:00`).toLocaleDateString()}.</div>}
+      <label>Billing period <select value={interval} onChange={event => setInterval(event.target.value)} disabled={!!pending}><option value="month">Monthly</option><option value="year">Annual, paid yearly</option></select></label>
+      {!plans.length && <p>No paid plans are currently available.</p>}
       <motion.div className="cc-plan-grid" variants={staggerContainer()} initial="hidden" animate="show">
         {plans.map(plan => {
           const current = plan.id === billing.plan
           const paidSelfServe = ['team', 'integration'].includes(plan.id)
-          const checkoutReady = plan.id === 'team' ? billing.checkoutConfigured : billing.integrationCheckoutConfigured
+          const checkoutReady = billing.billingEnabled && billing.checkoutConfigured
           const action = paidSelfServe && current && billing.hasCustomer ? openPortal : paidSelfServe && checkoutReady ? () => startCheckout(plan.id) : plan.id === 'enterprise' && !current ? () => { window.location.href = 'mailto:connectwithus@cookcredit.com?subject=CookCredit%20Enterprise' } : null
           const label = paidSelfServe && current && billing.hasCustomer ? 'Manage billing' : current ? 'Current plan' : paidSelfServe ? (checkoutReady ? `Choose ${plan.name}` : 'Subscriptions not open yet') : plan.id === 'enterprise' ? 'Contact sales' : 'Included fallback'
           return <motion.div className="cc-business-card" key={plan.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} style={{ minWidth: 0, border: `1px solid ${current ? GREEN : '#E3E0D9'}`, background: '#FEFDFB', padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>

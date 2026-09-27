@@ -155,3 +155,59 @@ def events(request_id):
             HiringAccessEvent.created_at.desc()).limit(100).all()
         return jsonify(events=[dict(action=row.action, actorId=row.actor_id,
                                     createdAt=row.created_at.isoformat()) for row in rows])
+
+
+@access_bp.get('/owner/pricing')
+@require_auth
+@require_verified_email
+@owner_only
+def owner_pricing():
+    import os
+    from models.billing_catalog import HiringPrice
+    from services.billing_catalog import DEFAULTS
+    with db_session() as session:
+        rows = session.query(HiringPrice).order_by(HiringPrice.created_at.desc(), HiringPrice.id).limit(100).all()
+        return jsonify(prices=[row.to_dict() for row in rows], recommendations=DEFAULTS,
+                       stripeConfigured=bool(os.getenv('STRIPE_SECRET_KEY')),
+                       billingEnabled=os.getenv('BUSINESS_BILLING_ENABLED') == '1')
+
+
+@access_bp.post('/owner/pricing')
+@require_auth
+@require_verified_email
+@owner_only
+@limiter.limit('30 per hour', key_func=lambda: g.user_id)
+def save_owner_price():
+    from models.billing_catalog import HiringPrice
+    from services.billing_catalog import validate_price, current_price
+    try:
+        fields = validate_price(request.get_json(silent=True))
+        with db_session() as session:
+            current = current_price(session, fields['plan'], fields['interval'])
+            if (current.id if current else None) != fields['previous_id']:
+                return jsonify(error='The current price changed. Refresh before saving.'), 409
+            row = HiringPrice(**fields, created_by=g.user_id)
+            session.add(row); session.flush()
+            return jsonify(price=row.to_dict()), 201
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@access_bp.post('/owner/pricing/<price_id>/publish')
+@require_auth
+@require_verified_email
+@owner_only
+@limiter.limit('10 per hour', key_func=lambda: g.user_id)
+def publish_owner_price(price_id):
+    from services.billing_catalog import publish_price
+    try:
+        price_id = uuid.UUID(price_id)
+        return jsonify(price=publish_price(price_id)), 200
+    except LookupError as exc:
+        return jsonify(error=str(exc)), 404
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 409
+    except RuntimeError as exc:
+        return jsonify(error=str(exc)), 503
+    except Exception:
+        return jsonify(error='Stripe is unavailable. The saved draft is safe; retry publishing it.'), 503

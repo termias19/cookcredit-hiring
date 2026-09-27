@@ -22,6 +22,15 @@ def plan_limit(plan: str) -> int:
         return int(default)
 
 
+def workspace_limit(org):
+    limits = getattr(org, 'subscription_limits', None) or {}
+    if limits.get('monthlyRequests'):
+        return limits['monthlyRequests']
+    if getattr(org, 'included_access', False) and (org.plan or 'trial') == 'trial':
+        return early_access_limit()
+    return plan_limit(org.plan or 'trial')
+
+
 def consume_request(session, *, org, environment='live') -> dict:
     """Increment once inside the caller's transaction; the caller must idempotency-check first."""
     period = _period_start()
@@ -32,7 +41,7 @@ def consume_request(session, *, org, environment='live') -> dict:
         row = OrgAssessmentUsage(org_id=org.id, period_start=period,
                                  environment=environment, request_count=0)
         session.add(row); session.flush()
-    limit = plan_limit(org.plan or 'trial')
+    limit = workspace_limit(org)
     if row.request_count >= limit:
         raise ValueError('Monthly assessment request allowance reached')
     row.request_count += 1
@@ -45,6 +54,6 @@ def current_usage(session, *, org, environment='live') -> dict:
     row = session.query(OrgAssessmentUsage).filter_by(
         org_id=org.id, period_start=period, environment=environment).one_or_none()
     used = row.request_count if row else 0
-    limit = plan_limit(org.plan or 'trial')
+    limit = workspace_limit(org)
     return {'periodStart': period.isoformat(), 'environment': environment, 'used': used,
             'limit': limit, 'remaining': max(0, limit - used)}

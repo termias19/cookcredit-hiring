@@ -106,10 +106,10 @@ def create_billing_customer(*, email: str, name: str, org_id: str, idempotency_k
 
 
 def create_subscription_checkout(*, customer_id: str, org_id: str, request_id: str,
-                                 plan: str = 'team') -> dict:
+                                 plan: str = 'team', price_id: str = None) -> dict:
     if plan not in ('team', 'integration'):
         raise ValueError('Unsupported subscription plan')
-    price_id = os.getenv('STRIPE_INTEGRATION_PRICE_ID' if plan == 'integration'
+    price_id = price_id or os.getenv('STRIPE_INTEGRATION_PRICE_ID' if plan == 'integration'
                          else 'STRIPE_TEAM_PRICE_ID', '').strip()
     if not price_id:
         raise RuntimeError(f'{plan.title()} billing is not configured')
@@ -123,7 +123,7 @@ def create_subscription_checkout(*, customer_id: str, org_id: str, request_id: s
         metadata={'cookcredit_org_id': org_id, 'plan': plan},
         subscription_data={'metadata': {'cookcredit_org_id': org_id, 'plan': plan}},
         allow_promotion_codes=True,
-        idempotency_key=f'org:{org_id}:{plan}-checkout:{request_id}',
+        idempotency_key=f'org:{org_id}:{plan}:{price_id}-checkout:{request_id}',
     )
     return {'id': checkout.id, 'url': checkout.url}
 
@@ -141,3 +141,30 @@ def create_billing_portal(*, customer_id: str) -> str:
 #   1. authorize_booking()  → PaymentIntent with capture_method='manual'
 #   2. capture_booking()    → PaymentIntent.capture(actual_amount)
 #   3. cancel_booking_payment() → PaymentIntent.cancel()
+
+
+def create_hiring_price(values):
+    key = os.environ.get('STRIPE_SECRET_KEY', '')
+    if not key:
+        raise RuntimeError('Connect Stripe before publishing paid prices.')
+    staging = os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging'
+    if staging and not key.startswith(('sk_test_', 'rk_test_')):
+        raise RuntimeError('Staging requires a Stripe test key.')
+    if os.environ.get('K_SERVICE') and not staging and not key.startswith(('sk_live_', 'rk_live_')):
+        raise RuntimeError('Production requires a Stripe live key.')
+    client = stripe.StripeClient(key, http_client=stripe.RequestsClient(timeout=5), max_network_retries=0)
+    product_id = 'cookcredit_hiring_' + values['plan']
+    try:
+        client.products.retrieve(product_id)
+    except stripe.InvalidRequestError as exc:
+        if exc.code != 'resource_missing': raise
+        client.products.create({'id': product_id, 'name': 'CookCredit '+values['plan'].title(),
+                                'metadata': {'cookcredit_product': 'hiring'}},
+                               options={'idempotency_key': product_id+'-v1'})
+    price = client.prices.create({'product': product_id, 'currency': values['currency'],
+        'unit_amount': values['amount'], 'recurring': {'interval': values['interval']},
+        'metadata': {'cookcredit_price_version': values['id'], 'cookcredit_plan': values['plan']}},
+        options={'idempotency_key': 'hiring-price:'+values['id']})
+    if bool(price.livemode) == staging:
+        raise RuntimeError('Stripe price mode does not match this deployment.')
+    return price.id

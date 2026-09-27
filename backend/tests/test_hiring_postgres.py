@@ -80,7 +80,7 @@ def db(monkeypatch):
             isolation_migration = (Path(__file__).parents[1] / 'migrations/022_partner_request_isolation.sql').read_text()
             conn.exec_driver_sql(isolation_migration)
             conn.exec_driver_sql(isolation_migration)
-            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql'):
+            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql', '029_hiring_pricing.sql'):
                 sql = (Path(__file__).parents[1] / 'migrations' / name).read_text()
                 conn.exec_driver_sql(sql)
                 conn.exec_driver_sql(sql)
@@ -332,11 +332,17 @@ def test_business_checkout_is_admin_only_and_never_grants_plan(db, client, monke
                         lambda **kwargs: 'cus_workspace')
     monkeypatch.setattr(stripe_routes, 'create_subscription_checkout',
                         lambda **kwargs: {'id': 'cs_team', 'url': 'https://checkout.stripe.test/team'})
+    from models.billing_catalog import HiringPrice
+    with database.db_session() as session:
+        row = HiringPrice(plan='team', interval='month', currency='usd', amount=9900, limits={'seats': 5, 'openRoles': 5, 'monthlyRequests': 100}, state='published', active=True, stripe_price_id='price_team', created_by='owner')
+        session.add(row); session.flush(); price_id = str(row.id)
     request_id = str(uuid.uuid4())
     assert client.post('/stripe/business/checkout', headers=headers('viewer'),
-                       json={'requestId': request_id}).status_code == 403
+                       json={'requestId': request_id, 'priceId': price_id}).status_code == 403
+    assert client.post('/stripe/business/checkout', headers=headers('employer'),
+                       json={'requestId': request_id, 'priceId': str(uuid.uuid4())}).status_code == 409
     response = client.post('/stripe/business/checkout', headers=headers('employer'),
-                           json={'requestId': request_id})
+                           json={'requestId': request_id, 'priceId': price_id})
     assert response.status_code == 201
     assert response.json['checkoutUrl'] == 'https://checkout.stripe.test/team'
     with database.db_session() as session:
@@ -1712,3 +1718,52 @@ def test_application_review_cv_privacy_revision_and_withdrawal(db, client, monke
     assert client.get(listing,headers=headers('employer')).json['applications']==[]
     assert client.get(url+'/cv',headers=headers('employer')).status_code==404
     assert client.post(url+'/review',json=draft,headers=headers('employer')).status_code==404
+
+
+def test_price_versions_preserve_subscription_limits_and_reject_stale_drafts(db):
+    from models.billing_catalog import HiringPrice
+    from services.billing_catalog import publish_price, price_for_subscription
+    with database.db_session() as session:
+        old = HiringPrice(plan='integration', interval='month', currency='usd', amount=29900,
+                          limits={'seats': 15, 'openRoles': 25, 'monthlyRequests': 1000},
+                          state='published', active=True, stripe_price_id='price_original', created_by='owner')
+        session.add(old); session.flush(); old_id = old.id
+        drafts = [HiringPrice(plan='integration', interval='month', currency='usd', amount=34900,
+                              limits={'seats': 20, 'openRoles': 30, 'monthlyRequests': 1500},
+                              previous_id=old_id, created_by='owner') for _ in range(2)]
+        session.add_all(drafts); session.flush(); first, stale = [row.id for row in drafts]
+    assert publish_price(first, create=lambda _: 'price_revised')['active'] is True
+    assert publish_price(first, create=lambda _: pytest.fail('must reuse published price'))['active'] is True
+    with pytest.raises(ValueError, match='current price changed'):
+        publish_price(stale, create=lambda _: 'price_stale')
+    with pytest.raises(ValueError, match='new draft'):
+        publish_price(old_id, create=lambda _: pytest.fail('must not republish history'))
+    with database.db_session() as session:
+        org = session.get(Org, db.org)
+        stripe_routes._sync_subscription(org, {'id': 'sub_original', 'customer': 'cus_original',
+            'status': 'active', 'items': {'data': [{'price': {'id': 'price_original'}}]}})
+        assert org.plan == 'integration'
+        assert org.subscription_limits == {'seats': 15, 'openRoles': 25, 'monthlyRequests': 1000}
+        assert price_for_subscription(session, 'price_original').active is False
+        assert session.query(HiringPrice).filter_by(active=True).count() == 1
+
+
+def test_owner_pricing_requires_verified_owner_and_valid_limits(db, client, monkeypatch):
+    from routes.hiring_access import access_bp
+    client.application.register_blueprint(access_bp, url_prefix='/access')
+    monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
+    from services.billing_catalog import DEFAULTS
+    monkeypatch.setattr(auth, '_verify_token', lambda token: {
+        'uid': token, 'email': 'eassefa@cookcredit.com' if token in ('owner', 'unverified') else token+'@example.test',
+        'email_verified': token != 'unverified'})
+    for uid in ('viewer', 'employer', 'unverified'):
+        assert client.get('/access/owner/pricing', headers=headers(uid)).status_code == 403
+        assert client.post('/access/owner/pricing', headers=headers(uid), json=DEFAULTS[0]).status_code == 403
+    response = client.post('/access/owner/pricing', headers=headers('owner'), json=DEFAULTS[0])
+    assert response.status_code == 201
+    assert response.json['price']['state'] == 'draft'
+    assert response.json['price']['active'] is False
+    assert client.post('/access/owner/pricing', headers=headers('owner'), json=DEFAULTS[0] | {'amount': True}).status_code == 400
+    listing = client.get('/access/owner/pricing', headers=headers('owner'))
+    assert len(listing.json['prices']) == 1
+    assert 'stripe_price_id' not in listing.json['prices'][0]

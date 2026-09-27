@@ -132,6 +132,15 @@ def _sync_subscription(org, subscription, *, deleted=False):
         os.getenv('STRIPE_INTEGRATION_PRICE_ID', '').strip(): 'integration',
     }
     plan_by_price.pop('', None)
+    from sqlalchemy import inspect
+    state = inspect(org, raiseerr=False)
+    session = state.session if state is not None else None
+    saved_price = None
+    if session is not None:
+        from services.billing_catalog import price_for_subscription
+        saved_price = price_for_subscription(session, price)
+        if saved_price: plan_by_price[price] = saved_price.plan
+
     org.stripe_customer_id = str(subscription.get('customer') or org.stripe_customer_id or '') or None
     org.stripe_subscription_id = str(subscription.get('id') or org.stripe_subscription_id or '') or None
     org.subscription_status = status
@@ -143,6 +152,7 @@ def _sync_subscription(org, subscription, *, deleted=False):
     entitled_plan = plan_by_price.get(price) if status in ENTITLED_SUBSCRIPTION_STATUSES else None
     if org.plan != 'enterprise':
         org.plan = entitled_plan or 'trial'
+        org.subscription_limits = dict(saved_price.limits) if saved_price and entitled_plan else None
 
 
 # ─── Business subscription billing ───────────────────────────────────────────
@@ -156,13 +166,16 @@ def business_billing_status():
         org = _org_for(session, g.user_id)
         if not org:
             return jsonify(error='Workspace not found'), 404
+        from services.billing_catalog import catalog
+        prices = catalog(session)
         return jsonify(
+            prices=prices, billingEnabled=os.getenv('BUSINESS_BILLING_ENABLED') == '1',
             plan=org.plan or 'trial', status=org.subscription_status,
             cancelAtPeriodEnd=bool(org.subscription_cancel_at_period_end),
             periodEnd=org.subscription_period_end.isoformat() if org.subscription_period_end else None,
             hasCustomer=bool(org.stripe_customer_id),
-            checkoutConfigured=bool(os.getenv('STRIPE_TEAM_PRICE_ID', '').strip()),
-            integrationCheckoutConfigured=bool(os.getenv('STRIPE_INTEGRATION_PRICE_ID', '').strip()),
+            checkoutConfigured=bool(prices and os.getenv('STRIPE_SECRET_KEY', '').strip()),
+            integrationCheckoutConfigured=bool(any(p['plan'] == 'integration' for p in prices) and os.getenv('STRIPE_SECRET_KEY', '').strip()),
             teamPrice=os.getenv('STRIPE_TEAM_PRICE_DISPLAY', '$99'),
             integrationPrice=os.getenv('STRIPE_INTEGRATION_PRICE_DISPLAY', '$299'),
             integrationUsage=(current_usage(session, org=org)
@@ -178,6 +191,8 @@ def business_checkout():
     body = request.get_json(silent=True) or {}
     request_id = _uuid(body.get('requestId'))
     plan = str(body.get('plan') or 'team').strip()
+    interval = body.get('interval', 'month')
+    if interval not in ('month','year'): return jsonify(error='Choose monthly or annual billing'), 400
     if not request_id:
         return jsonify(error='A valid checkout request id is required'), 400
     if plan not in ('team', 'integration'):
@@ -192,6 +207,13 @@ def business_checkout():
             return jsonify(error='Enterprise billing is managed by contract'), 409
         if org.plan in ('team', 'integration') and org.stripe_subscription_id:
             return jsonify(error='Use the billing portal to change an active subscription'), 409
+        from services.billing_catalog import current_price
+        selected = current_price(session, plan, interval)
+        if not selected:
+            return jsonify(error='This subscription price is not available.'), 409
+        if body.get('priceId') != str(selected.id):
+            return jsonify(error='Pricing changed. Refresh the plans before checkout.'), 409
+        selected_price_id = selected.stripe_price_id
         org_id, org_name, customer_id = str(org.id), org.name, org.stripe_customer_id
     try:
         if not customer_id:
@@ -205,7 +227,7 @@ def business_checkout():
                     org.billing_updated_at = _utcnow()
                 customer_id = org.stripe_customer_id
         checkout = create_subscription_checkout(
-            customer_id=customer_id, org_id=org_id, request_id=str(request_id), plan=plan)
+            customer_id=customer_id, org_id=org_id, request_id=str(request_id), plan=plan, price_id=selected_price_id)
         return jsonify(checkoutUrl=checkout['url'], sessionId=checkout['id']), 201
     except RuntimeError as exc:
         return jsonify(error=str(exc)), 503

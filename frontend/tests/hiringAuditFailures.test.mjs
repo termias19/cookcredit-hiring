@@ -121,8 +121,8 @@ test('billing waits for workspace access before offering plans or calling billin
   assert.match(s.text(), /Workspace access could not be loaded/)
   workspace.org = { integrationAccess: { earlyAccess: true } }
   s.render(); await s.settle()
-  assert.equal(calls, 0)
-  assert.match(s.text(), /Free early access/)
+  assert.equal(calls, 1)
+  assert.match(s.text(), /Included access/)
   assert.doesNotMatch(s.text(), /\$99|14 days|Contact sales/)
 })
 
@@ -312,4 +312,43 @@ test('existing role form saves only changed fields and never creates another rol
   assert.equal(writes.length,1)
   assert.equal(JSON.stringify(writes[0].role),JSON.stringify({title:'Senior cook'}))
   assert.deepEqual(destinations,['/business/role/role-1'])
+})
+
+
+test('billing displays catalog amounts and limits without invented prices', async () => {
+  const s = await screen('BusinessBillingScreen', { biz: { loading: false, org: {} }, api: { getBusinessBilling: async () => ({
+    plan: 'trial', billingEnabled: true, checkoutConfigured: true,
+    prices: [{ id: 'version', plan: 'team', interval: 'month', currency: 'usd', amount: 12345,
+      limits: { seats: 7, openRoles: 9, monthlyRequests: 100 } }],
+  }) } })
+  await s.settle()
+  assert.match(s.text(), /123.45/)
+  assert.match(s.text(), /7 seats/)
+  assert.match(s.text(), /9 open roles/)
+  assert.doesNotMatch(s.text(), /Unlimited|\$99|\$299/)
+  s.find(p => p.value === 'month' && p.onChange).props.onChange({ target: { value: 'year' } })
+  s.render()
+  assert.match(s.text(), /No paid plans are currently available/)
+})
+
+
+test('owner pricing loads on demand and saves exact cents without publishing', async () => {
+  const calls = []
+  const recommendation = { plan: 'team', interval: 'month', currency: 'usd', amount: 9900, limits: { seats: 5, openRoles: 5, monthlyRequests: 100 } }
+  const call = async (path, options) => {
+    calls.push({ path, options })
+    return { prices: [], recommendations: [recommendation], stripeConfigured: false, billingEnabled: false }
+  }
+  const s = await screen('../components/OwnerPricing', { props: { call } })
+  assert.equal(calls.length, 0)
+  await s.find(p => p.onToggle).props.onToggle({ currentTarget: { open: true } }); s.render()
+  assert.equal(calls.length, 1)
+  s.find(p => p.onClick && JSON.stringify(p.children)?.includes('Set ')).props.onClick(); s.render()
+  s.find(p => p.inputMode === 'decimal').props.onChange({ target: { value: '123.45' } }); s.render()
+  await s.find(p => p.onSubmit).props.onSubmit({ preventDefault() {} }); s.render()
+  const saved = calls.find(c => c.options?.method === 'POST')
+  assert.equal(saved.options.body.amount, 12345)
+  assert.equal(saved.options.body.previousId, null)
+  assert.equal(calls.some(c => c.path.endsWith('/publish')), false)
+  assert.match(s.text(), /Draft saved/)
 })

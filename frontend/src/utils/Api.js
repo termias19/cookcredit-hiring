@@ -286,9 +286,9 @@ export async function setBusinessPlan({ token, plan }) {
 export async function getBusinessBilling({ token }) {
   return http('/api/stripe/business/status', { token, throwOnError: true })
 }
-export async function createBusinessCheckout({ token, requestId, plan = 'team' }) {
+export async function createBusinessCheckout({ token, requestId, plan = 'team', interval = 'month', priceId }) {
   return http('/api/stripe/business/checkout', {
-    method: 'POST', token, body: { requestId, plan }, throwOnError: true,
+    method: 'POST', token, body: { requestId, plan, interval, priceId }, throwOnError: true,
   })
 }
 export async function createBusinessBillingPortal({ token }) {

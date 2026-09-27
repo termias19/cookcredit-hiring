@@ -708,3 +708,5 @@ from models.ethio import (  # noqa: E402,F401
 )
 from models.account_email import AccountEmail  # noqa: E402,F401
 from models.hiring_access import HiringAccessRequest, HiringAccessEvent, HiringAccessInbox  # noqa: E402,F401
+
+from models.billing_catalog import HiringPrice  # noqa: E402,F401
