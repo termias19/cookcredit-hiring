@@ -672,24 +672,19 @@ def list_roles():
     return jsonify({"roles": out}), 200
 
 
-@business_bp.route("/roles", methods=["POST"])
-@require_auth
-@limiter.limit("60 per hour", key_func=lambda: g.user_id)
-def create_role():
-    data = request.get_json(silent=True) or {}
+def _role_fields(data):
+    if not isinstance(data, dict) or not isinstance(data.get("title"), str):
+        raise ValueError("Title required")
     title = (data.get("title") or "").strip()[:200]
     if not title:
-        return jsonify({"error": "Title required"}), 400
+        raise ValueError("Title required")
     location_label = re.sub(r'\s+', ' ', str(data.get('locationLabel') or '').strip())[:160] or None
     raw_questions = data.get('applicationQuestions') or []
     questions = _questions(raw_questions)
     if not isinstance(raw_questions, list) or len(questions) != len(raw_questions):
-        return jsonify(error='One or more application questions are invalid'), 400
-    try:
-        instructions = assessment_instructions(data.get('assessmentInstructions'))
-        criteria = hiring_motion_criteria(data.get('assessmentCriteria'), skill_floor=data.get('skillFloor'))
-    except ValueError as exc:
-        return jsonify(error=str(exc)), 400
+        raise ValueError('One or more application questions are invalid')
+    instructions = assessment_instructions(data.get('assessmentInstructions'))
+    criteria = hiring_motion_criteria(data.get('assessmentCriteria'), skill_floor=data.get('skillFloor'))
     requirements = {
         'assessmentCriteria': criteria,
         'assessmentInstructions': instructions,
@@ -718,7 +713,20 @@ def create_role():
         "description": str(data.get('description') or '').strip()[:2000] or None,
     }
     if requirements['payMin'] is not None and requirements['payMax'] is not None and requirements['payMin'] > requirements['payMax']:
-        return jsonify(error='Pay minimum cannot exceed pay maximum'), 400
+        raise ValueError('Pay minimum cannot exceed pay maximum')
+    return title, requirements
+
+
+@business_bp.route("/roles", methods=["POST"])
+@require_auth
+@limiter.limit("60 per hour", key_func=lambda: g.user_id)
+def create_role():
+    data = request.get_json(silent=True) or {}
+    try:
+        title, requirements = _role_fields(data)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    location_label = requirements['locationLabel']
     status = data.get("status") if data.get("status") in ("draft", "open", "closed") else "open"
     if status == 'open' and not location_label:
         return jsonify(error='Work location required for an open role'), 400
@@ -762,8 +770,8 @@ def _role_owned(session, rid, user_id):
 @limiter.limit('30 per hour', key_func=lambda: g.user_id)
 def change_role_status(rid):
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or set(data) != {'status'} or data['status'] not in ('open', 'closed'):
-        return jsonify(error='Choose open or closed'), 400
+    if not isinstance(data, dict) or set(data) != {'status'} or data['status'] not in ('open', 'closed', 'trashed'):
+        return jsonify(error='Choose open, closed, or trashed'), 400
     with db_session() as session:
         if not _can(session, g.user_id, 'roles'):
             return jsonify(error='This seat cannot manage roles'), 403
@@ -776,6 +784,8 @@ def change_role_status(rid):
         org = session.query(Org).filter_by(id=role.org_id).with_for_update().one()
         role = session.query(RolePosting).filter_by(id=role.id).populate_existing().with_for_update().one()
         target = data['status']
+        if role.status == 'trashed' and target == 'open':
+            return jsonify(error='Restore this role before reopening it'), 409
         if target == 'open' and role.status != 'open':
             if not (role.requirements or {}).get('locationLabel'):
                 return jsonify(error='Work location required for an open role'), 400
@@ -785,6 +795,45 @@ def change_role_status(rid):
                 return jsonify(error='Your open-role limit has been reached. Close another role first.',
                                code='open_role_limit_reached', openRoleLimit=limit), 409
         role.status = target
+        session.flush()
+        result = role.to_dict()
+    return jsonify(role=result), 200
+
+
+@business_bp.route('/role/<rid>', methods=['PATCH'])
+@require_auth
+@require_verified_email
+@limiter.limit('30 per hour', key_func=lambda: g.user_id)
+def edit_role(rid):
+    data = request.get_json(silent=True)
+    allowed = {'title', 'assessmentCriteria', 'assessmentInstructions', 'required', 'preferred',
+               'skillFloor', 'certsRequired', 'cuisines', 'loc', 'radiusM', 'locationLabel',
+               'workMode', 'applicationQuestions', 'attemptLimit', 'role', 'station',
+               'employmentType', 'shifts', 'payMin', 'payMax', 'tips', 'experience',
+               'mustHave', 'physical', 'softSkills', 'description'}
+    if not isinstance(data, dict) or not data or set(data) - allowed:
+        return jsonify(error='Only role details can be edited here'), 400
+    with db_session() as session:
+        if not _can(session, g.user_id, 'roles'):
+            return jsonify(error='This seat cannot manage roles'), 403
+        role = _role_owned(session, rid, g.user_id)
+        if not role:
+            return jsonify(error='Not found'), 404
+        if role.integration_managed:
+            return jsonify(error='Manage this role through its integration'), 409
+        session.query(Org).filter_by(id=role.org_id).with_for_update().one()
+        role = session.query(RolePosting).filter_by(id=role.id).populate_existing().with_for_update().one()
+        if role.status == 'trashed':
+            return jsonify(error='Restore this role before editing it'), 409
+        try:
+            title, requirements = _role_fields({**(role.requirements or {}), 'title': role.title, **data})
+        except (ValueError, TypeError, AttributeError) as exc:
+            return jsonify(error=str(exc)), 400
+        if role.status == 'open' and not requirements['locationLabel']:
+            return jsonify(error='Work location required for an open role'), 400
+        role.title = title
+        role.requirements = {**(role.requirements or {}), **requirements}
+        # Existing application criteria and attempt contracts are immutable snapshots.
         session.flush()
         result = role.to_dict()
     return jsonify(role=result), 200

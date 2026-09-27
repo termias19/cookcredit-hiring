@@ -6,10 +6,11 @@
  * capped at 5 must-haves. Pay is mandatory (pay-transparency law); physical reqs are ADA essential-
  * function framed. The ONE free-text box never enters the match. See ELITE_B2B_DESIGN.md.
  */
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { getBusinessRole, updateBusinessRole } from '../utils/Api'
 import BusinessShell from '../components/BusinessShell'
 import PlaybackViewControl from '../components/PlaybackViewControl'
 import MetricRange from '../components/MetricRange'
@@ -47,31 +48,59 @@ function Pick({ items, value, onPick, multi }) {
 }
 
 export default function BusinessRoleNewScreen() {
+  const { id } = useParams()
+  const biz = useBusiness()
+  const getToken = biz?.getToken
+  const [loaded, setLoaded] = useState(null)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    if (!id) return
+    let live = true
+    async function load() {
+      try {
+        const result = await getBusinessRole({ token: await getToken(), id })
+        if (!result?.role) throw new Error('Role could not be loaded.')
+        if (live) { setLoaded(result.role); setError('') }
+      } catch (e) { if (live) setError(e.message || 'Role could not be loaded.') }
+    }
+    load()
+    return () => { live = false }
+  }, [id, getToken, retry])
+  if (id && loaded?.id !== id) return <BusinessShell showNav={false}><div style={{ padding: 28 }}>
+    <p role={error ? 'alert' : 'status'}>{error || 'Loading role...'}</p>
+    {error && <button onClick={() => setRetry(value => value + 1)}>Retry</button>}
+  </div></BusinessShell>
+  if (id && (loaded.integrationManaged || loaded.status === 'trashed')) return <BusinessShell showNav={false}><p style={{ padding: 28 }}>Restore this role or manage it through its integration before editing.</p></BusinessShell>
+  return <RoleForm key={id || 'new'} initialRole={id ? loaded : null} />
+}
+
+function RoleForm({ initialRole }) {
   const navigate = useNavigate()
   const biz = useBusiness()
-  const [roleId, setRoleId] = useState('')
-  const [title, setTitle] = useState('')
-  const [employment, setEmployment] = useState('Full-time')
-  const [shifts, setShifts] = useState([])
-  const [payMin, setPayMin] = useState('')
-  const [payMax, setPayMax] = useState('')
-  const [tips, setTips] = useState(false)
-  const [experience, setExperience] = useState('Under 1 year')
-  const [station, setStation] = useState('')
-  const [skillState, setSkillState] = useState({})
-  const [foodHandler, setFoodHandler] = useState(false)
-  const [physical, setPhysical] = useState([])
-  const [soft, setSoft] = useState([])
+  const [roleId, setRoleId] = useState(initialRole?.role || '')
+  const [title, setTitle] = useState(initialRole?.title || '')
+  const [employment, setEmployment] = useState(initialRole?.employmentType || 'Full-time')
+  const [shifts, setShifts] = useState(initialRole?.shifts || [])
+  const [payMin, setPayMin] = useState(initialRole?.payMin ?? '')
+  const [payMax, setPayMax] = useState(initialRole?.payMax ?? '')
+  const [tips, setTips] = useState(initialRole?.tips || false)
+  const [experience, setExperience] = useState(initialRole?.experience || 'Under 1 year')
+  const [station, setStation] = useState(initialRole?.station || '')
+  const [skillState, setSkillState] = useState(Object.fromEntries([...(initialRole?.preferred || []).map(id => [id, 'preferred']), ...(initialRole?.required || []).map(id => [id, 'must'])]))
+  const [foodHandler, setFoodHandler] = useState(initialRole?.certsRequired?.includes(FOOD_HANDLER_ID) || false)
+  const [physical, setPhysical] = useState(initialRole?.physical || [])
+  const [soft, setSoft] = useState(initialRole?.softSkills || [])
   const [minAge, setMinAge] = useState('')
-  const [thresholds, setThresholds] = useState({ minimumRhythm: 70, maximumRhythm: 100, minimumConsistency: 70, maximumConsistency: 100, minimumForm: 70, maximumForm: 100 })
-  const [description, setDescription] = useState('')
-  const [assessmentInstructions, setAssessmentInstructions] = useState('')
-  const [locationLabel, setLocationLabel] = useState('')
-  const [attemptLimit, setAttemptLimit] = useState(3)
-  const [questions, setQuestions] = useState([])
+  const [thresholds, setThresholds] = useState(initialRole?.assessmentCriteria || { minimumRhythm: 70, maximumRhythm: 100, minimumConsistency: 70, maximumConsistency: 100, minimumForm: 70, maximumForm: 100 })
+  const [description, setDescription] = useState(initialRole?.description || '')
+  const [assessmentInstructions, setAssessmentInstructions] = useState(initialRole?.assessmentInstructions || '')
+  const [locationLabel, setLocationLabel] = useState(initialRole?.locationLabel || '')
+  const [attemptLimit, setAttemptLimit] = useState(initialRole?.attemptLimit || 3)
+  const [questions, setQuestions] = useState(initialRole?.applicationQuestions || [])
   const [showMore, setShowMore] = useState(false)
 
-  const tpl = roleId ? templateFor(roleId) : null
+  const tpl = roleId || initialRole ? templateFor(roleId) : null
   const mustCount = useMemo(
     () => Object.values(skillState).filter(s => s === 'must').length + (foodHandler ? 1 : 0),
     [skillState, foodHandler])
@@ -102,28 +131,27 @@ export default function BusinessRoleNewScreen() {
   const questionsValid = questions.every(question => question.label.trim() &&
     (!['select', 'multiselect'].includes(question.type) || question.options.filter(Boolean).length >= 2))
   const payError = payRangeError(payMin, payMax)
-  const canPublish = !payError && roleId && title.trim() && locationLabel.trim() && payMin && payMax && questionsValid && mustCount <= MAX_MUST_HAVES &&
-    (Object.values(skillState).some(s => s === 'must') || foodHandler)
+  const canPublish = !payError && title.trim() && questionsValid &&
+    (initialRole ? (initialRole.status !== 'open' || locationLabel.trim()) :
+      roleId && locationLabel.trim() && payMin && payMax && mustCount <= MAX_MUST_HAVES &&
+      (Object.values(skillState).some(s => s === 'must') || foodHandler))
 
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState('')
 
-  async function publish() {
-    if (publishing || !canPublish) return
+  function rolePayload() {
     const must = Object.keys(skillState).filter(k => skillState[k] === 'must')
     const pref = Object.keys(skillState).filter(k => skillState[k] === 'preferred')
-    setPublishing(true); setPublishError('')
-    try {
-      const r = await biz.addRole({
-        title: title.trim(), status: 'open',
+    return {
+        title: title.trim(),
         role: roleId, station: station || null,
         employmentType: employment, shifts, payMin: Number(payMin), payMax: Number(payMax), tips,
-        experience, minAge: minAge || null, mustHave: must, required: must, preferred: pref,
-        certsRequired: foodHandler ? [FOOD_HANDLER_ID] : [],
+        experience, mustHave: must, required: must, preferred: pref,
+        certsRequired: [...(initialRole?.certsRequired || []).filter(id => id !== FOOD_HANDLER_ID), ...(foodHandler ? [FOOD_HANDLER_ID] : [])],
         assessmentCriteria: { profileVersion: 'knife-motion-v1', ...thresholds },
-        physical, softSkills: soft, verifiedAxis: tpl?.verifiedAxis || null,
-        loc: biz?.org?.loc || null, radiusM: 50000,
-        locationLabel: locationLabel.trim(), workMode: 'onsite', attemptLimit,
+        physical, softSkills: soft,
+        loc: initialRole?.loc || biz?.org?.loc || null, radiusM: initialRole?.radiusM ?? 50000,
+        locationLabel: locationLabel.trim(), workMode: initialRole?.workMode || 'onsite', attemptLimit,
         applicationQuestions: questions.map(question => ({
           ...question, label: question.label.trim(),
           options: ['select', 'multiselect'].includes(question.type)
@@ -131,11 +159,26 @@ export default function BusinessRoleNewScreen() {
         })),
         assessmentInstructions: assessmentInstructions.trim() || null,
         description: description.trim() || null,    // unscored — never enters match
-      })
+      }
+  }
+  const [originalPayload] = useState(rolePayload)
+
+  async function publish() {
+    if (publishing || !canPublish) return
+    setPublishing(true); setPublishError('')
+    try {
+      const values = rolePayload()
+      const payload = initialRole ? Object.fromEntries(Object.entries(values).filter(([key, value]) =>
+        JSON.stringify(value) !== JSON.stringify(originalPayload[key]))) : values
+      if (initialRole && !Object.keys(payload).length) { navigate(`/business/role/${initialRole.id}`); return }
+      const r = initialRole
+        ? (await updateBusinessRole({ token: await biz.getToken(), id: initialRole.id, role: payload })).role
+        : await biz.addRole({ ...payload, status: 'open' })
+      if (initialRole) biz.refresh()
       if (r?.id) { navigate(`/business/role/${r.id}`); return }
-      setPublishing(false); setPublishError(rolePublicationError())
+      setPublishing(false); setPublishError(initialRole ? 'Could not save the role. Your entries are still here. Please retry.' : rolePublicationError())
     } catch (error) {
-      setPublishing(false); setPublishError(rolePublicationError(error))
+      setPublishing(false); setPublishError(initialRole ? 'Could not save the role. Your entries are still here. Check your connection and role access, then retry.' : rolePublicationError(error))
     }
   }
 
@@ -145,13 +188,14 @@ export default function BusinessRoleNewScreen() {
         <ArrowLeft size={14} color="#999" strokeWidth={1.5} />
         <span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>Roles</span>
       </button>
-      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Post a role</h1>
+      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>{initialRole ? 'Edit role' : 'Post a role'}</h1>
     </div>
   )
 
   return (
     <BusinessShell header={header} showNav={false}>
       <motion.div initial="hidden" animate="show" variants={fadeUp} style={{ padding: '10px 28px 40px', maxWidth: 680, margin: '0 auto' }}>
+        {initialRole && <p style={{ fontSize: 13, color: '#74756f' }}>Saved role details are updated. Existing applications keep their original assessment criteria, and recordings are preserved.</p>}
         <label style={{ ...lbl, marginTop: 14 }}>Which role?</label>
         <Pick items={ROLES} value={roleId} onPick={pickRole} />
 
@@ -322,7 +366,7 @@ export default function BusinessRoleNewScreen() {
                 background: GREEN, color: '#fff', borderRadius: 2, fontSize: 14, fontWeight: 500, letterSpacing: 0.2,
                 opacity: (canPublish && !publishing) ? 1 : 0.45, cursor: (canPublish && !publishing) ? 'pointer' : 'not-allowed',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <Check size={16} strokeWidth={2} /> {publishing ? 'Publishing…' : 'Publish role'}
+                <Check size={16} strokeWidth={2} /> {publishing ? 'Saving…' : initialRole ? 'Save changes' : 'Publish role'}
               </motion.button>
               {publishError && <p role="alert" style={{ fontSize: 12, color: '#C4561F', margin: '10px 0 0', textAlign: 'center' }}>{publishError}</p>}
             </motion.div>

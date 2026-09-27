@@ -188,6 +188,7 @@ export default function App() {
             <Route path="/business/candidate/:id" element={<BusinessRoute><BusinessCandidateScreen /></BusinessRoute>} />
             <Route path="/business/roles" element={<BusinessRoute><BusinessRolesScreen /></BusinessRoute>} />
             <Route path="/business/role/new" element={<BusinessRoute><BusinessRoleNewScreen /></BusinessRoute>} />
+            <Route path="/business/role/:id/edit" element={<BusinessRoute><BusinessRoleNewScreen /></BusinessRoute>} />
             <Route path="/business/role/:id" element={<BusinessRoute><BusinessRoleScreen /></BusinessRoute>} />
             <Route path="/business/shortlists" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />
             <Route path="/business/team" element={<BusinessRoute><WorkspaceRedirect /></BusinessRoute>} />

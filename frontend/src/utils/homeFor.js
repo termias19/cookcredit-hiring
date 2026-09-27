@@ -11,6 +11,7 @@ export function homeFor(profile) {
 }
 
 const DESTINATIONS = [
+  /^\/business\/role\/[A-Za-z0-9_-]+\/edit$/,
   /^\/owner\/access$/,
   /^\/(profile|applications|assessment)$/,
   /^\/application\/[A-Za-z0-9_-]+$/,

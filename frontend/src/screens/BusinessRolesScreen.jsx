@@ -2,6 +2,7 @@
  * Roles dashboard (B2B) — every open/draft posting for the org, the entry to each Role workspace.
  * Two actions only: open a role, or post a role. Pipeline counts come from the BusinessContext store.
  */
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Plus, ChevronRight } from 'lucide-react'
@@ -11,10 +12,12 @@ import { fadeUp, staggerContainer, tapScale, buttonPress } from '../styles/motio
 
 const SERIF = "var(--cc-display)"
 const GREEN = '#1F6F5C'
+const tabStyle = active => ({ padding: '9px 14px', border: '1px solid #1F6F5C', background: active ? GREEN : 'transparent', color: active ? '#fff' : GREEN, borderRadius: 2, cursor: 'pointer', fontFamily: 'inherit' })
 
 export default function BusinessRolesScreen() {
   const navigate = useNavigate()
   const biz = useBusiness()
+  const [showTrash, setShowTrash] = useState(false)
 
   const header = (
     <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
@@ -29,11 +32,12 @@ export default function BusinessRolesScreen() {
     </div>
   )
 
-  const roles = biz?.roles || []
+  const roles = (biz?.roles || []).filter(role => (role.status === 'trashed') === showTrash)
 
   return (
     <BusinessShell header={header} showNav={false}>
       <div style={{ padding: '24px 28px 36px' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}><button style={tabStyle(!showTrash)} aria-pressed={!showTrash} onClick={() => setShowTrash(false)}>Current roles</button><button style={tabStyle(showTrash)} aria-pressed={showTrash} onClick={() => setShowTrash(true)}>Trash</button></div>
         {roles.length > 0 && (
           <motion.div variants={staggerContainer()} initial="hidden" animate="show"
             style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 14 }}>
@@ -60,7 +64,7 @@ export default function BusinessRolesScreen() {
             }}>Retry</button>
           </div>
         )}
-        {!biz?.loading && !biz?.error && !roles.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>No roles yet. Post a role, copy its application link, then review the applicants here.</p>}
+        {!biz?.loading && !biz?.error && !roles.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>{showTrash ? 'Trash is empty.' : 'No roles yet. Post a role, copy its application link, then review the applicants here.'}</p>}
       </div>
     </BusinessShell>
   )

@@ -113,7 +113,7 @@ class RolePosting(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id = Column(PG_UUID(as_uuid=True), ForeignKey("orgs.id", ondelete="CASCADE"))
     title = Column(Text, nullable=False)
-    status = Column(Text, default="open")          # draft | open | closed
+    status = Column(Text, default="open")          # draft | open | closed | trashed
     requirements = Column(JSONB, default=dict)     # {required[], preferred[], skillFloor, certsRequired[], cuisines[], loc, radiusM}
     external_job_id = Column(Text)
     integration_managed = Column(Boolean, nullable=False, default=False)
@@ -132,6 +132,7 @@ class RolePosting(Base):
                 "applicationQuestions": r.get("applicationQuestions", []),
                 "attemptLimit": r.get("attemptLimit", 3),
                 "assessmentCriteria": r.get("assessmentCriteria"),
+                "assessmentInstructions": r.get("assessmentInstructions"),
                 "role": r.get("role"), "station": r.get("station"),
                 "employmentType": r.get("employmentType"), "shifts": r.get("shifts", []),
                 "payMin": r.get("payMin"), "payMax": r.get("payMax"), "tips": bool(r.get("tips")),

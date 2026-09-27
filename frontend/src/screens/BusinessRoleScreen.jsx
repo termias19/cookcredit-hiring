@@ -17,6 +17,7 @@ import { fadeUp, scaleIn, staggerContainer, tapScale, buttonPress } from '../sty
 
 const SERIF = "var(--cc-display)"
 const GREEN = '#1F6F5C', GOLD = '#9A781E', TERRA = '#C4561F'
+const roleAction = { border: '1px solid #1F6F5C', color: GREEN, background: 'transparent', padding: '10px 16px', marginRight: 12, borderRadius: 2, cursor: 'pointer', fontFamily: 'inherit' }
 const STAGES = ['invited', 'assessing', 'verified', 'shortlisted', 'contacted', 'hired', 'not_selected']
 // Keep the persisted stage key; a workflow position does not certify the evidence.
 const stageLabel = stage => stage === 'verified' ? 'Ready for review' : stage.replaceAll('_', ' ')
@@ -29,6 +30,7 @@ export default function BusinessRoleScreen() {
   const [invited, setInvited] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [changingStatus, setChangingStatus] = useState(false)
+  const [confirmTrash, setConfirmTrash] = useState(false)
   const [statusError, setStatusError] = useState('')
   const [data, setData] = useState({ role: null, pipeline: [], applications: [], status: 'loading' })
   const [filters, setFilters] = useState({ status: '', city: '', outcome: '' })
@@ -126,13 +128,14 @@ export default function BusinessRoleScreen() {
       }
     })
     : data.pipeline.map(card => ({ ...card, cook: biz?.candidateById?.(card.cookId) || null }))
-  async function changeStatus() {
+  async function changeStatus(target) {
     if (changingStatus) return
     setChangingStatus(true); setStatusError('')
     try {
       const token = await getToken()
-      const result = await changeBusinessRoleStatus({ token, id, status: role.status === 'open' ? 'closed' : 'open' })
+      const result = await changeBusinessRoleStatus({ token, id, status: target })
       setData(current => ({ ...current, role: result.role }))
+      setConfirmTrash(false)
       biz?.refresh?.()
     } catch (error) { setStatusError(error.message || 'Could not update this role. Please retry.') }
     finally { setChangingStatus(false) }
@@ -156,12 +159,20 @@ export default function BusinessRoleScreen() {
         </motion.div>
         </details>
         <p role="status" style={{ fontSize: 13, color: GREEN, marginTop: 14 }}>
-          {role.status === 'open' ? 'Open for applications' : 'Closed to new applications and assessment submissions. Existing applications remain available for review.'}
+          {role.status === 'trashed' ? 'In trash. The application link is closed; applications and recordings are preserved.' : role.status === 'open' ? 'Open for applications' : 'Closed to new applications and assessment submissions. Existing applications remain available for review.'}
         </p>
-        {!role.integrationManaged && <button type="button" disabled={changingStatus} onClick={changeStatus}
+        {!role.integrationManaged && <button type="button" disabled={changingStatus} onClick={() => changeStatus(role.status === 'trashed' || role.status === 'open' ? 'closed' : 'open')}
           style={{ border: '1px solid #1F6F5C', color: GREEN, background: 'transparent', padding: '10px 16px', cursor: changingStatus ? 'wait' : 'pointer', marginRight: 12 }}>
-          {changingStatus ? 'Saving…' : role.status === 'open' ? 'Close role' : 'Reopen role'}
+          {changingStatus ? 'Saving…' : role.status === 'trashed' ? 'Restore role (closed)' : role.status === 'open' ? 'Close role' : 'Reopen role'}
         </button>}
+        {!role.integrationManaged && role.status !== 'trashed' && <>
+          <button type="button" onClick={() => navigate(`/business/role/${id}/edit`)} style={roleAction}>Edit role</button>
+          <button type="button" disabled={changingStatus} onClick={() => setConfirmTrash(true)} style={roleAction}>Move to trash</button>
+          {confirmTrash && <div role="group" aria-label="Confirm move to trash"><p>This closes the application link. Existing applications and recordings stay available. You can restore the role from Trash.</p>
+            <button style={roleAction} disabled={changingStatus} onClick={() => changeStatus('trashed')}>Confirm move to trash</button>
+            <button style={roleAction} disabled={changingStatus} onClick={() => setConfirmTrash(false)}>Cancel</button>
+          </div>}
+        </>}
         {statusError && <p role="alert" style={{ color: TERRA }}>{statusError}</p>}
         <motion.button {...buttonPress} onClick={async () => {
             const link = `${window.location.origin}/apply/${role.id}`

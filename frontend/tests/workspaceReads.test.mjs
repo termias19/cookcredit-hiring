@@ -7,7 +7,7 @@ test('settings do not request candidate, shortlist or unrelated role data', () =
   assert.deepEqual(workspaceReads('/business/profile', '?section=integrations'), {roles:true,candidates:false,shortlist:false})
 })
 test('role lists avoid roster reads while review and saved views retain them', () => {
-  assert.deepEqual(workspaceReads('/business/roles'), {roles:true,candidates:false,shortlist:false})
+  for (const path of ['/business/roles', '/business/role/new', '/business/role/123/edit']) assert.deepEqual(workspaceReads(path), {roles:true,candidates:false,shortlist:false})
   for (const path of ['/business/role/123', '/business/candidates', '/business/candidate/123', '/business/shortlists']) assert.deepEqual(workspaceReads(path), {roles:true,candidates:true,shortlist:true})
 })
 

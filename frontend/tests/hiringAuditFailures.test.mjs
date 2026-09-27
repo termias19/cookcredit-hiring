@@ -6,7 +6,7 @@ import { transformWithEsbuild } from 'vite'
 
 // Exercise the actual screen handlers with controlled API latency/failures.
 // Child visuals are opaque; these tests do not claim to be browser acceptance.
-async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' }, launch = () => {}, onNavigate = () => {}, refreshProfile = async () => {} }) {
+async function screen(name, { biz, api, clipboard = async () => {}, user = { getIdToken: async () => 'test-token' }, launch = () => {}, onNavigate = () => {}, refreshProfile = async () => {}, exportName, props, extraModules = {} }) {
   const state = [], effects = [], refs = []
   let index, queued = [], tree
   const react = {
@@ -36,13 +36,15 @@ async function screen(name, { biz, api, clipboard = async () => {}, user = { get
     '../utils/Api': api,
     '../data/culinaryTaxonomy': { labelOf: id => id },
     '../styles/motion': { staggerContainer: () => ({}) },
+    ...extraModules,
   }
-  const source = await readFile(new URL(`../src/screens/${name}.jsx`, import.meta.url), 'utf8')
+  let source = await readFile(new URL(`../src/screens/${name}.jsx`, import.meta.url), 'utf8')
+  if (exportName) source += `\nexport { ${exportName} }`
   const { code } = await transformWithEsbuild(source, name + '.jsx', { loader: 'jsx', jsx: 'automatic', format: 'cjs' })
   const context = { module: { exports: {} }, require: id => modules[id] || { default: id }, navigator: { clipboard: { writeText: clipboard } }, window: { location: { origin: 'https://hiring.cookcredit.com', assign: launch } }, URLSearchParams, Set, Map }
   vm.runInNewContext(code, context)
-  const Component = context.module.exports.default
-  function render() { index = 0; queued = []; tree = Component(); queued.forEach(effect => effect()); return tree }
+  const Component = context.module.exports[exportName || 'default']
+  function render() { index = 0; queued = []; tree = Component(props); queued.forEach(effect => effect()); return tree }
   function nodes(node) {
     if (node == null || node === false) return []
     if (Array.isArray(node)) return node.flatMap(nodes)
@@ -256,4 +258,58 @@ test('opening a team invitation never accepts it until the user acts', async () 
   await s.find(p => p.children === 'Accept invitation').props.onClick()
   assert.equal(accepts,1)
   assert.equal(redirects,1)
+})
+
+
+test('role trash is confirmed, restores closed, and edit uses the existing role form route', async () => {
+  const changes = [], destinations = []
+  const s = await screen('BusinessRoleScreen', { biz, onNavigate: path => destinations.push(path), api: {
+    ...readyApi, changeBusinessRoleStatus: async ({status}) => { changes.push(status); return {role:{...role,status}} },
+  } })
+  await s.settle()
+  s.find(p => p.children === 'Edit role').props.onClick()
+  assert.deepEqual(destinations, ['/business/role/role-1/edit'])
+  s.find(p => p.children === 'Move to trash').props.onClick(); s.render()
+  assert.deepEqual(changes, [])
+  s.find(p => p.children === 'Cancel').props.onClick(); s.render()
+  assert.equal(s.find(p => p.children === 'Confirm move to trash'), undefined)
+  s.find(p => p.children === 'Move to trash').props.onClick(); s.render()
+  await s.find(p => p.children === 'Confirm move to trash').props.onClick(); s.render()
+  assert.deepEqual(changes, ['trashed'])
+  assert.equal(s.find(p => p.children === 'Edit role'), undefined)
+  await s.find(p => p.children === 'Restore role (closed)').props.onClick(); s.render()
+  assert.deepEqual(changes, ['trashed', 'closed'])
+  assert.match(s.text(), /Reopen role/)
+})
+
+test('role list separates trash without removing records from the workspace', async () => {
+  const s = await screen('BusinessRolesScreen', { biz: {...biz, roles:[role,{id:'trash-1',title:'Old role',status:'trashed'}]}, api:{} })
+  assert.match(s.text(), /Cook/)
+  assert.doesNotMatch(s.text(), /Old role/)
+  s.find(p => p.children === 'Trash').props.onClick(); s.render()
+  assert.match(s.text(), /Old role/)
+  s.find(p => p.children === 'Current roles').props.onClick(); s.render()
+  assert.doesNotMatch(s.text(), /Old role/)
+})
+
+
+test('existing role form saves only changed fields and never creates another role', async () => {
+  const writes = [], destinations = []
+  const original = {...role, locationLabel:'Test city', assessmentCriteria:{profileVersion:'knife-motion-v1',minimumRhythm:75}, assessmentInstructions:'Original instructions'}
+  const s = await screen('BusinessRoleNewScreen', {
+    exportName:'RoleForm', props:{initialRole:original},
+    biz:{...biz,refresh:()=>{},addRole:()=>assert.fail('editing must not create a role')},
+    onNavigate:path=>destinations.push(path),
+    api:{updateBusinessRole:async request=>{writes.push(request);return {role:{...original,...request.role}}}},
+    extraModules:{
+      '../utils/payRangeError':{payRangeError:()=>null},
+      '../utils/rolePublicationError':{rolePublicationError:error=>error?.message},
+      '../data/roleRequirements':{ROLES:[],SHIFTS:[],EMPLOYMENT:[],EXPERIENCE:[],PHYSICAL:[],COOK_STATIONS:[],MAX_MUST_HAVES:5,FOOD_HANDLER_ID:'food',templateFor:()=>({skills:[]})},
+    },
+  })
+  s.find(p=>p.value==='Cook').props.onChange({target:{value:'Senior cook'}});s.render()
+  await s.find(p=>Array.isArray(p.children)&&p.children.includes('Save changes')).props.onClick()
+  assert.equal(writes.length,1)
+  assert.equal(JSON.stringify(writes[0].role),JSON.stringify({title:'Senior cook'}))
+  assert.deepEqual(destinations,['/business/role/role-1'])
 })

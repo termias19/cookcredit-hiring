@@ -92,3 +92,9 @@ test('culinary evidence retains its meaning instead of inherited domestic-servic
   assert.ok(scanText('Prep cook with knife skills and julienne.').some(item => item.canonical_id === 'knife_skills'))
   assert.ok(!NODES.some(node => /household|pet care|nanny|caregiv|background check/i.test(node.label)))
 })
+
+
+test('role editor survives authentication without allowing arbitrary nested redirects', () => {
+  assert.equal(safeAuthDestination('/business/role/role-1/edit'), '/business/role/role-1/edit')
+  assert.equal(safeAuthDestination('/business/role/role-1/edit/elsewhere'), null)
+})
