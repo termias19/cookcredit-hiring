@@ -92,10 +92,15 @@ def sync_user():
                 roles=["eater"],
                 # Persist employer onboarding intent without granting a business seat.
                 active_role='business' if data.get('activeRole') == 'business' else 'eater',
-            ).on_conflict_do_nothing(index_elements=[User.id]).returning(User.id)).scalar_one_or_none() is not None
+            ).on_conflict_do_nothing().returning(User.id)).scalar_one_or_none() is not None
             if created:
                 session.add(EaterProfile(user_id=g.user_id))
             user = session.get(User, g.user_id, populate_existing=True)
+            # Either unique index can arbitrate concurrent inserts. Never load
+            # or merge another identity's account just because its email matches.
+            if user is None:
+                return jsonify(error='This email is already associated with another account. Contact support.',
+                               code='account_conflict'), 409
 
         # Automatic recovery after a missing /me response must not overwrite a
         # real signup's name or onboarding choice from another browser tab.

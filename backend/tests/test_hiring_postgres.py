@@ -171,6 +171,23 @@ def test_free_early_integration_preserves_admin_scope_and_enforces_quota(client,
     assert client.get('/partner/v1/assessment-requests', headers=key_headers).status_code == 402
 
 
+def test_bootstrap_email_conflict_never_merges_another_identity(db, client, monkeypatch):
+    from routes.auth import auth_bp
+    monkeypatch.setenv('AUTH_APP_CHECK_REQUIRED', '0')
+    client.application.register_blueprint(auth_bp, url_prefix='/auth')
+    with database.db_session() as session:
+        session.add(User(id='original-identity', email='new-identity@example.test',
+                         name='Original', roles=['eater']))
+    response = client.post('/auth/sync', headers=headers('new-identity'),
+                           json={'name': 'Replacement', 'createOnly': True})
+    assert response.status_code == 409
+    assert response.json['code'] == 'account_conflict'
+    with database.db_session() as session:
+        assert session.get(User, 'new-identity') is None
+        assert session.get(User, 'original-identity').name == 'Original'
+        assert session.query(EaterProfile).filter_by(user_id='new-identity').count() == 0
+
+
 def test_simultaneous_account_bootstrap_creates_one_profile_without_losing_signup(db, client, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
