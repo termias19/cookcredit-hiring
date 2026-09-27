@@ -80,14 +80,25 @@ def get_session():
 def db_session():
     """Context manager for database sessions. Auto-commits on success, rolls back on error."""
     session = get_session()
+    webhook_dispatch_due = None
     try:
         yield session
         session.commit()
+        webhook_dispatch_due = session.info.pop('webhook_dispatch_due', None)
     except Exception:
         session.rollback()
         raise
     finally:
         session.close()
+    # Never hold a connection while contacting the task service. A failed wakeup
+    # cannot roll back committed work; the scheduler recovers pending deliveries.
+    if webhook_dispatch_due is not None:
+        try:
+            from services.webhook_dispatch import enqueue_dispatch
+            enqueue_dispatch(webhook_dispatch_due)
+        except Exception:
+            from services.operations import emit_event
+            emit_event('webhook_enqueue_failed', severity='ERROR')
 
 
 def check_connection():

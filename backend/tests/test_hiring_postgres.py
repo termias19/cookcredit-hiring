@@ -1019,8 +1019,13 @@ def test_webhook_batch_sends_concurrently_with_a_batch_sized_lease(db, client, m
     def send(*args, **kwargs):
         barrier.wait(timeout=10)
         with database.db_session() as session:
-            rows = session.query(PartnerWebhookDelivery).all()
-            assert all((row.locked_until - partner_integrations._utcnow()).total_seconds() > 120 for row in rows)
+            import json
+            event_id = uuid.UUID(json.loads(kwargs['data'])['id'])
+            row = session.query(PartnerWebhookDelivery).filter_by(event_id=event_id).one()
+            # Other sends may already have committed independently. This send
+            # must retain its own lease until its HTTP request completes.
+            assert row.status == 'delivering'
+            assert (row.locked_until - partner_integrations._utcnow()).total_seconds() > 120
         assert kwargs['stream'] is True
         return SimpleNamespace(status_code=204)
     assert partner_integrations.dispatch_partner_webhooks(send=send) == {

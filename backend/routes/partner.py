@@ -703,7 +703,11 @@ def partner_application(application_id):
 def internal_dispatch_webhooks():
     if not internal_request_authorized(request):
         return jsonify(error='Forbidden'), 403
-    result = dispatch_partner_webhooks(limit=50)
+    body = request.get_json(silent=True) or {}
+    limit = body.get('limit', 50) if isinstance(body, dict) else None
+    if type(limit) is not int or not 1 <= limit <= 50:
+        return jsonify(error='limit must be an integer between 1 and 50'), 400
+    result = dispatch_partner_webhooks(limit=limit)
     from services.operations import report_queue_health
     report_queue_health('webhook')
     return jsonify(result), 503 if result['failed'] else 200

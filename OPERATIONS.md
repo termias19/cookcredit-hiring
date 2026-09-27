@@ -56,3 +56,34 @@ Record current backend revision and Hosting versions before promotion. Shift tra
 ## Intentional product boundaries
 
 Employer access requires owner approval. Approved trial workspaces can open five roles. Payments, automatic hiring decisions and automatic mailbox imports remain disabled. Applicants follow a role invitation without employer approval. Preview/sample banners must remain on deliberate development fixtures; production builds set VITE_PREVIEW=0 and VITE_DEPLOYMENT_ENVIRONMENT=production.
+# Immediate webhook dispatch
+
+Partner webhook deliveries remain durable in PostgreSQL. Optional Cloud Tasks
+wakeups reduce the scheduler delay without replacing the delivery table or its
+leases. Completed HTTP deliveries are saved independently of slow receivers.
+
+Configure `WEBHOOK_TASKS_QUEUE` as a dedicated queue resource and
+`WEBHOOK_TASKS_TARGET` as the Hiring API origin followed by
+`/api/partner/internal/dispatch-webhooks`. The origin must exactly match
+`TASKS_OIDC_AUDIENCE`; `TASKS_OIDC_SA` must identify the authorized task caller.
+Reuse the existing Cloud Tasks dependency and internal OIDC verification. Do not
+reuse the scoring queue: payment/integration traffic must not delay scoring.
+
+Roll out to staging first. Start with queue concurrency 2 and dispatch rate 2/s;
+each task processes at most 10 rows using 5 delivery threads. Keep the recovery
+scheduler and the current service instance limits. Increase these limits only
+after measuring database connections, request latency and receiver throttling.
+These are initial bounds, not a certified throughput claim.
+
+Enqueue happens after commit and connection release, with a two-second API
+timeout and no automatic provider retry. Failed enqueue is logged as
+`webhook_enqueue_failed`; the scheduler recovers the committed rows. Transaction
+rollback sends no task. Failed deliveries schedule a new wakeup with backoff and
+jitter. Full batches request another bounded task. Duplicate tasks are safe under
+the existing database leases; receivers must still deduplicate event IDs.
+
+Verify task OIDC authentication, a cold start, a burst larger than 10 events,
+receiver 503/timeout, duplicate delivery, and enqueue outage before production
+enablement. Record first-attempt latency separately from receiver success latency.
+Leaving both new environment variables unset restores scheduler-only operation;
+already queued tasks remain safe. No schema migration is required for this path.

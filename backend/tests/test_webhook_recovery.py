@@ -85,3 +85,60 @@ def test_active_lease_and_disabled_hook_do_not_send(delivery):
         session.get(PartnerWebhook, delivery[1]).active = False
     assert hooks.dispatch_partner_webhooks(send=sender)['claimed'] == 0
     sender.assert_not_called()
+
+
+def test_fast_delivery_commits_while_another_receiver_is_still_waiting(delivery):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic, sleep
+    release_slow = Event()
+    fast_sent = Event()
+    with database.db_session() as session:
+        hooks.emit_partner_event(session, org_id=session.get(PartnerWebhook, delivery[1]).org_id,
+                                 event_type='assessment.completed', data={'fast': True})
+
+    def send(_url, **kwargs):
+        if json.loads(kwargs['data'])['data'].get('fast'):
+            fast_sent.set()
+        else:
+            assert release_slow.wait(10)
+        return SimpleNamespace(status_code=204)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        worker = executor.submit(hooks.dispatch_partner_webhooks, send=send)
+        try:
+            assert fast_sent.wait(5)
+            deadline = monotonic() + 3
+            committed = False
+            while monotonic() < deadline:
+                with database.db_session() as session:
+                    committed = session.query(PartnerWebhookDelivery).filter_by(status='delivered').count() == 1
+                if committed:
+                    break
+                sleep(.02)
+            assert committed, 'Fast delivery waited for a slow receiver before committing'
+        finally:
+            release_slow.set()
+        assert worker.result(timeout=5)['delivered'] == 2
+
+
+def test_full_batch_wakes_next_batch_without_waiting_for_scheduler(delivery, monkeypatch):
+    from services import webhook_dispatch
+    enqueue = Mock()
+    monkeypatch.setattr(webhook_dispatch, 'enqueue_dispatch', enqueue)
+    assert hooks.dispatch_partner_webhooks(send=lambda *a, **k: SimpleNamespace(status_code=204), limit=1)['delivered'] == 1
+    enqueue.assert_called_once()
+
+
+def test_retry_wakeup_sees_committed_retry_and_preserves_event(delivery, monkeypatch):
+    from services import webhook_dispatch
+    def enqueue(due):
+        with database.db_session() as session:
+            row = session.get(PartnerWebhookDelivery, delivery[0])
+            assert row.status == 'pending' and row.attempts == 1
+            assert row.next_attempt_at == due
+            assert row.payload['id'] == delivery[2]
+    wake = Mock(side_effect=enqueue)
+    monkeypatch.setattr(webhook_dispatch, 'enqueue_dispatch', wake)
+    assert hooks.dispatch_partner_webhooks(send=lambda *a, **k: SimpleNamespace(status_code=503))['retrying'] == 1
+    wake.assert_called_once()

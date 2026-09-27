@@ -10,7 +10,7 @@ import secrets
 import socket
 import ssl
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlsplit
@@ -214,6 +214,8 @@ def emit_partner_event(session, *, org_id, event_type: str, data: dict) -> str |
         session.add(PartnerWebhookDelivery(
             webhook_id=hook.id, event_id=event_id, event_type=event_type,
             payload=envelope, status='pending', next_attempt_at=_utcnow()))
+    from services.webhook_dispatch import request_dispatch
+    request_dispatch(session, _utcnow())
     return str(event_id)
 
 
@@ -301,30 +303,40 @@ def dispatch_partner_webhooks(*, send=None, limit=50) -> dict:
         return item, error
 
     with ThreadPoolExecutor(max_workers=5) as pool:
-        results = list(pool.map(deliver, claimed))
-    for (delivery_id, token, hook_id, _, _, _, attempts), error in results:
+        futures = [pool.submit(deliver, item) for item in claimed]
+        for future in as_completed(futures):
+            (delivery_id, token, hook_id, _, _, _, attempts), error = future.result()
 
+            with db_session() as session:
+                row = (session.query(PartnerWebhookDelivery)
+                       .filter_by(id=delivery_id, lock_token=token).with_for_update().one_or_none())
+                hook = session.get(PartnerWebhook, hook_id)
+                if not row:
+                    continue
+                row.lock_token = None; row.locked_until = None
+                if error is None:
+                    row.status = 'delivered'; row.delivered_at = _utcnow(); row.last_error = None
+                    if hook: hook.failure_count = 0
+                    stats['delivered'] += 1
+                elif attempts >= MAX_DELIVERY_ATTEMPTS:
+                    row.status = 'failed'; row.last_error = error
+                    if hook:
+                        hook.failure_count += 1
+                        if hook.failure_count >= 20:
+                            hook.active = False; hook.disabled_at = _utcnow()
+                    stats['failed'] += 1
+                else:
+                    row.status = 'pending'; row.last_error = error
+                    delay = min(3600, 30 * (2 ** (attempts - 1)))
+                    row.next_attempt_at = _utcnow() + timedelta(seconds=delay + secrets.randbelow(max(1, delay // 5)))
+                    from services.webhook_dispatch import request_dispatch
+                    request_dispatch(session, row.next_attempt_at)
+                    if hook: hook.failure_count += 1
+                    stats['retrying'] += 1
+    if len(claimed) == limit:
+        # Drain a burst in bounded tasks instead of leaving the next batch for
+        # the scheduler. One final empty task is harmless; row leases dedupe work.
+        from services.webhook_dispatch import request_dispatch
         with db_session() as session:
-            row = (session.query(PartnerWebhookDelivery)
-                   .filter_by(id=delivery_id, lock_token=token).with_for_update().one_or_none())
-            hook = session.get(PartnerWebhook, hook_id)
-            if not row:
-                continue
-            row.lock_token = None; row.locked_until = None
-            if error is None:
-                row.status = 'delivered'; row.delivered_at = _utcnow(); row.last_error = None
-                if hook: hook.failure_count = 0
-                stats['delivered'] += 1
-            elif attempts >= MAX_DELIVERY_ATTEMPTS:
-                row.status = 'failed'; row.last_error = error
-                if hook:
-                    hook.failure_count += 1
-                    if hook.failure_count >= 20:
-                        hook.active = False; hook.disabled_at = _utcnow()
-                stats['failed'] += 1
-            else:
-                row.status = 'pending'; row.last_error = error
-                row.next_attempt_at = _utcnow() + timedelta(seconds=min(3600, 30 * (2 ** (attempts - 1))))
-                if hook: hook.failure_count += 1
-                stats['retrying'] += 1
+            request_dispatch(session, _utcnow())
     return stats
