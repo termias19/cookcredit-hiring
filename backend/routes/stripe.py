@@ -519,6 +519,8 @@ def dispatch_billing_events(*, limit=5):
             request_dispatch(session, _utcnow(), kind='billing')
     with db_session() as session:
         failed = session.query(StripeEvent).filter(StripeEvent.processed_at.is_(None), StripeEvent.attempts >= 24).count()
+    from services.operations import report_queue_health
+    report_queue_health('billing')
     emit_event('billing_queue_health', severity='ERROR' if failed or stats['retrying'] else 'INFO',
                failed=failed, processed=stats['processed'], retrying=stats['retrying'])
     return stats

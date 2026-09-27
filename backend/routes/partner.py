@@ -232,8 +232,12 @@ def replay_webhook_delivery(delivery_id):
         row, hook = pair
         if not hook.active:
             return jsonify(error='Enable this webhook before replaying a delivery'), 409
+        if row.status == 'delivering' and row.locked_until and row.locked_until > _utcnow():
+            return jsonify(error='This delivery is in progress. Wait for it to finish before replaying.'), 409
         row.status = 'pending'; row.attempts = 0; row.next_attempt_at = _utcnow()
         row.lock_token = None; row.locked_until = None; row.delivered_at = None; row.last_error = None
+        from services.webhook_dispatch import request_dispatch
+        request_dispatch(session, row.next_attempt_at)
         return jsonify(delivery=_delivery_view(row, hook)), 200
 
 
