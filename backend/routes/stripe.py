@@ -10,14 +10,14 @@ The old house-meal escrow/tip system has been completely removed.
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, g
 from sqlalchemy.dialects.postgresql import insert
 from services.stripe_service import (
     create_connect_account, create_onboarding_link, get_account_status,
     get_cook_balance, construct_webhook_event, create_login_link,
     create_billing_customer, create_subscription_checkout, create_billing_portal,
-    retrieve_billing_subscription,
+    retrieve_billing_subscription, retrieve_billing_checkout,
 )
 from middleware.auth import require_auth, require_verified_email
 from extensions import limiter
@@ -34,9 +34,10 @@ ENTITLED_SUBSCRIPTION_STATUSES = {'active', 'trialing', 'past_due'}
 
 @stripe_bp.before_request
 def disabled_billing():
-    # An explicitly disabled deployment must never start a provider operation.
-    # The read-only subscription page can still explain availability.
-    if os.environ.get('BUSINESS_BILLING_ENABLED') == '0' and request.method not in ('GET', 'OPTIONS'):
+    # Stop new purchases without interrupting signed event reconciliation.
+    if (os.environ.get('BUSINESS_BILLING_ENABLED') == '0'
+            and request.endpoint not in ('stripe.webhook', 'stripe.dispatch_events')
+            and request.method not in ('GET', 'OPTIONS')):
         return jsonify(error='Payments are not enabled in this environment', code='billing_unavailable'), 503
 
 
@@ -64,6 +65,8 @@ def _metadata(obj):
 
 
 def _org_for_billing_object(session, obj):
+    if _metadata(obj).get('cookcredit_product') not in (None, 'hiring'):
+        return None
     oid = _uuid(_metadata(obj).get('cookcredit_org_id') or obj.get('client_reference_id'))
     if oid:
         org = session.query(Org).filter_by(id=oid).with_for_update().one_or_none()
@@ -112,11 +115,15 @@ def _reconcile_subscription(org, reference):
                     subscription = incoming
         if os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging' and subscription.get('livemode') is not False:
             raise BillingReconciliationUnavailable()
+        if (os.environ.get('K_SERVICE') and os.environ.get('COOKCREDIT_ENVIRONMENT') != 'staging'
+                and subscription.get('livemode') is not True):
+            raise BillingReconciliationUnavailable()
     except Exception:
         raise BillingReconciliationUnavailable() from None
     customer_id = _subscription_id(subscription.get('customer'))
     metadata_org = _metadata(subscription).get('cookcredit_org_id')
-    if (not customer_id or (org.stripe_customer_id and org.stripe_customer_id != customer_id)
+    if (_metadata(subscription).get('cookcredit_product') not in (None, 'hiring')
+            or not customer_id or (org.stripe_customer_id and org.stripe_customer_id != customer_id)
             or (metadata_org and str(metadata_org) != str(org.id))
             or (subscription.get('id') != current_id and str(metadata_org) != str(org.id))):
         return
@@ -141,6 +148,8 @@ def _sync_subscription(org, subscription, *, deleted=False):
         saved_price = price_for_subscription(session, price)
         if saved_price: plan_by_price[price] = saved_price.plan
 
+    if subscription.get('id') != org.stripe_subscription_id and price not in plan_by_price:
+        return  # An unrelated product must not claim or downgrade a Hiring workspace.
     org.stripe_customer_id = str(subscription.get('customer') or org.stripe_customer_id or '') or None
     org.stripe_subscription_id = str(subscription.get('id') or org.stripe_subscription_id or '') or None
     org.subscription_status = status
@@ -203,6 +212,7 @@ def business_checkout():
         org = _org_for(session, g.user_id)
         if not org:
             return jsonify(error='Workspace not found'), 404
+        org = session.query(Org).filter_by(id=org.id).with_for_update().populate_existing().one()
         if org.plan == 'enterprise':
             return jsonify(error='Enterprise billing is managed by contract'), 409
         if org.plan in ('team', 'integration') and org.stripe_subscription_id:
@@ -214,11 +224,35 @@ def business_checkout():
         if body.get('priceId') != str(selected.id):
             return jsonify(error='Pricing changed. Refresh the plans before checkout.'), 409
         selected_price_id = selected.stripe_price_id
-        org_id, org_name, customer_id = str(org.id), org.name, org.stripe_customer_id
+        reservation = org.billing_checkout
+        if not reservation:
+            reservation = {'id': str(uuid.uuid4()), 'priceId': selected_price_id, 'plan': plan,
+                           'createdAt': _utcnow().isoformat(), 'email': g.email, 'name': org.name}
+            org.billing_checkout = reservation
+        org_id, org_name, customer_id = str(org.id), reservation['name'], org.stripe_customer_id
     try:
+        if reservation.get('sessionId'):
+            previous = retrieve_billing_checkout(reservation['sessionId'])
+            if previous.get('status') == 'open':
+                if reservation['priceId'] != selected_price_id:
+                    return jsonify(error='Another plan already has an open checkout. Finish it or let it expire first.'), 409
+                return jsonify(checkoutUrl=previous['url'], sessionId=previous['id']), 200
+            if previous.get('status') == 'expired':
+                with db_session() as session:
+                    org = session.query(Org).filter_by(id=_uuid(org_id)).with_for_update().one()
+                    if org.billing_checkout and org.billing_checkout['id'] == reservation['id']:
+                        org.billing_checkout = None
+                return jsonify(error='The previous checkout expired. Please start checkout again.'), 409
+            return jsonify(error='Payment is being synchronized. Refresh billing shortly.'), 409
+        if reservation['priceId'] != selected_price_id:
+            return jsonify(error='Another plan checkout is being prepared. Retry shortly.'), 409
+        if _utcnow() - datetime.fromisoformat(reservation['createdAt']) >= timedelta(hours=23):
+            # Never reuse an uncertain provider request beyond its idempotency
+            # retention window. Reconcile it before permitting another charge.
+            return jsonify(error='This checkout needs billing support before it can be retried.'), 409
         if not customer_id:
             customer_id = create_billing_customer(
-                email=g.email, name=org_name, org_id=org_id,
+                email=reservation['email'], name=org_name, org_id=org_id,
                 idempotency_key=f'org:{org_id}:customer-v1')
             with db_session() as session:
                 org = session.query(Org).filter_by(id=_uuid(org_id)).with_for_update().one()
@@ -227,7 +261,11 @@ def business_checkout():
                     org.billing_updated_at = _utcnow()
                 customer_id = org.stripe_customer_id
         checkout = create_subscription_checkout(
-            customer_id=customer_id, org_id=org_id, request_id=str(request_id), plan=plan, price_id=selected_price_id)
+            customer_id=customer_id, org_id=org_id, request_id=reservation['id'], plan=plan, price_id=selected_price_id)
+        with db_session() as session:
+            org = session.query(Org).filter_by(id=_uuid(org_id)).with_for_update().one()
+            if org.billing_checkout and org.billing_checkout['id'] == reservation['id']:
+                org.billing_checkout = dict(reservation, sessionId=checkout['id'])
         return jsonify(checkoutUrl=checkout['url'], sessionId=checkout['id']), 201
     except RuntimeError as exc:
         return jsonify(error=str(exc)), 503
@@ -324,6 +362,35 @@ def cook_balance():
 
 # ─── Webhook ─────────────────────────────────────────────────────────────────
 
+def _process_event(session, event_type, obj):
+    if event_type == "account.updated":
+        account_id = obj["id"]
+        cook = session.query(CookProfile).filter_by(stripe_account_id=account_id).first()
+        if cook:
+            cook.stripe_onboarded = obj.get("details_submitted", False)
+
+    elif event_type == 'checkout.session.completed' and obj.get('mode') == 'subscription':
+        org = _org_for_billing_object(session, obj)
+        if org:
+            _reconcile_subscription(org, obj.get('subscription'))
+
+    elif event_type in ('customer.subscription.created', 'customer.subscription.updated',
+                        'customer.subscription.deleted'):
+        org = _org_for_billing_object(session, obj)
+        if org:
+            _reconcile_subscription(org, obj.get('id'))
+
+    elif event_type in ('invoice.paid', 'invoice.payment_failed'):
+        org = _org_for_billing_object(session, obj)
+        raw_subscription = obj.get('subscription') or ((obj.get('parent') or {}).get('subscription_details') or {}).get('subscription')
+        invoice_subscription_id = _subscription_id(raw_subscription)
+        # A customer can own unrelated Stripe products. Only the subscription
+        # already verified by a subscription webhook may change this workspace.
+        if org and invoice_subscription_id and str(invoice_subscription_id) == org.stripe_subscription_id:
+            _reconcile_subscription(org, invoice_subscription_id)
+
+
+
 @stripe_bp.route("/webhook", methods=["POST"])
 @limiter.exempt
 @limiter.limit("60 per minute")
@@ -351,8 +418,39 @@ def webhook():
     event_id = str(event['id'])
     if os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging' and event.get('livemode') is not False:
         return jsonify(error='Staging accepts only Stripe test events'), 400
+    if (os.environ.get('K_SERVICE') and os.environ.get('COOKCREDIT_ENVIRONMENT') != 'staging'
+            and event.get('livemode') is not True):
+        return jsonify(error='Production accepts only Stripe live events'), 400
     event_type = event["type"]
     obj = event["data"]["object"]
+
+    if event_type not in ('account.updated', 'checkout.session.completed',
+                          'customer.subscription.created', 'customer.subscription.updated',
+                          'customer.subscription.deleted', 'invoice.paid', 'invoice.payment_failed'):
+        return jsonify(received=True, ignored=True), 200
+    if _metadata(obj).get('cookcredit_product') not in (None, 'hiring'):
+        return jsonify(received=True, ignored=True), 200
+    if os.getenv('STRIPE_ASYNC_ENABLED') == '1':
+        compact = {key: obj[key] for key in ('id', 'customer', 'subscription', 'client_reference_id',
+                   'mode', 'details_submitted') if key in obj}
+        for key in ('id', 'customer', 'subscription'):
+            if key in compact:
+                compact[key] = _subscription_id(compact[key])
+        compact['metadata'] = {key: value for key, value in _metadata(obj).items()
+                               if key in ('cookcredit_org_id', 'cookcredit_product')}
+        if event_type.startswith('invoice.'):
+            compact['subscription'] = _subscription_id(obj.get('subscription') or
+                ((obj.get('parent') or {}).get('subscription_details') or {}).get('subscription'))
+        with db_session() as session:
+            claimed = session.execute(insert(StripeEvent).values(
+                id=event_id, event_type=event_type, livemode=bool(event.get('livemode')),
+                received_at=_utcnow(), processed_at=None, payload=compact, attempts=0,
+                next_attempt_at=_utcnow())
+                .on_conflict_do_nothing(index_elements=['id']).returning(StripeEvent.id)).scalar_one_or_none()
+            if claimed:
+                from services.webhook_dispatch import request_dispatch
+                request_dispatch(session, _utcnow(), kind='billing')
+        return jsonify(received=True, queued=bool(claimed), duplicate=not bool(claimed)), 200
 
     with db_session() as session:
         claimed = session.execute(insert(StripeEvent).values(
@@ -362,30 +460,59 @@ def webhook():
         if claimed is None:
             return jsonify({'received': True, 'duplicate': True}), 200
 
-        if event_type == "account.updated":
-            account_id = obj["id"]
-            cook = session.query(CookProfile).filter_by(stripe_account_id=account_id).first()
-            if cook:
-                cook.stripe_onboarded = obj.get("details_submitted", False)
-
-        elif event_type == 'checkout.session.completed' and obj.get('mode') == 'subscription':
-            org = _org_for_billing_object(session, obj)
-            if org:
-                _reconcile_subscription(org, obj.get('subscription'))
-
-        elif event_type in ('customer.subscription.created', 'customer.subscription.updated',
-                            'customer.subscription.deleted'):
-            org = _org_for_billing_object(session, obj)
-            if org:
-                _reconcile_subscription(org, obj.get('id'))
-
-        elif event_type in ('invoice.paid', 'invoice.payment_failed'):
-            org = _org_for_billing_object(session, obj)
-            raw_subscription = obj.get('subscription') or ((obj.get('parent') or {}).get('subscription_details') or {}).get('subscription')
-            invoice_subscription_id = _subscription_id(raw_subscription)
-            # A customer can own unrelated Stripe products. Only the subscription
-            # already verified by a subscription webhook may change this workspace.
-            if org and invoice_subscription_id and str(invoice_subscription_id) == org.stripe_subscription_id:
-                _reconcile_subscription(org, invoice_subscription_id)
+        _process_event(session, event_type, obj)
 
     return jsonify({"received": True})
+
+
+@stripe_bp.route('/internal/dispatch-events', methods=['POST'])
+@limiter.exempt
+def dispatch_events():
+    from services.internal_auth import internal_request_authorized
+    if not internal_request_authorized(request):
+        return jsonify(error='Forbidden'), 403
+    return jsonify(dispatch_billing_events())
+
+
+def dispatch_billing_events(*, limit=5):
+    """Bounded inbox drain. Row locks serialize workers; failed state stays retryable."""
+    from services.webhook_dispatch import request_dispatch
+    from services.operations import emit_event
+    stats = {'processed': 0, 'retrying': 0, 'failed': 0}
+    claimed = 0
+    for _ in range(max(1, min(5, limit))):
+        with db_session() as session:
+            row = (session.query(StripeEvent)
+                   .filter(StripeEvent.processed_at.is_(None), StripeEvent.payload.isnot(None),
+                           StripeEvent.next_attempt_at <= _utcnow(), StripeEvent.attempts < 24)
+                   .order_by(StripeEvent.next_attempt_at, StripeEvent.id)
+                   .with_for_update(skip_locked=True).first())
+            if row is None:
+                break
+            claimed += 1
+            row.attempts += 1
+            try:
+                with session.begin_nested():
+                    _process_event(session, row.event_type, row.payload)
+                row.processed_at = _utcnow()
+                row.payload = None
+                row.last_error = None
+                row.next_attempt_at = None
+                stats['processed'] += 1
+            except Exception:
+                row.last_error = 'billing_reconciliation_failed'
+                if row.attempts >= 24:
+                    row.next_attempt_at = None
+                    stats['failed'] += 1
+                else:
+                    row.next_attempt_at = _utcnow() + timedelta(seconds=min(3600, 30 * 2 ** min(row.attempts - 1, 7)))
+                    request_dispatch(session, row.next_attempt_at, kind='billing')
+                    stats['retrying'] += 1
+    if claimed == max(1, min(5, limit)):
+        with db_session() as session:
+            request_dispatch(session, _utcnow(), kind='billing')
+    with db_session() as session:
+        failed = session.query(StripeEvent).filter(StripeEvent.processed_at.is_(None), StripeEvent.attempts >= 24).count()
+    emit_event('billing_queue_health', severity='ERROR' if failed or stats['retrying'] else 'INFO',
+               failed=failed, processed=stats['processed'], retrying=stats['retrying'])
+    return stats

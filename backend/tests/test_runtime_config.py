@@ -82,7 +82,7 @@ def test_enabled_production_features_require_shared_and_provider_secrets(monkeyp
         validate_runtime_configuration()
     message = str(caught.value)
     assert ('GEMINI_API_KEY' in message and 'REDIS_URL' in message
-            and 'STRIPE_TEAM_PRICE_ID' in message and 'STRIPE_INTEGRATION_PRICE_ID' in message)
+            and 'STRIPE_SECRET_KEY' in message and 'STRIPE_WEBHOOK_SECRET' in message)
 
 
 def test_complete_production_configuration_passes(monkeypatch):

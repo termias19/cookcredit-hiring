@@ -81,10 +81,12 @@ def db_session():
     """Context manager for database sessions. Auto-commits on success, rolls back on error."""
     session = get_session()
     webhook_dispatch_due = None
+    billing_dispatch_due = None
     try:
         yield session
         session.commit()
         webhook_dispatch_due = session.info.pop('webhook_dispatch_due', None)
+        billing_dispatch_due = session.info.pop('billing_dispatch_due', None)
     except Exception:
         session.rollback()
         raise
@@ -99,6 +101,13 @@ def db_session():
         except Exception:
             from services.operations import emit_event
             emit_event('webhook_enqueue_failed', severity='ERROR')
+    if billing_dispatch_due is not None:
+        try:
+            from services.webhook_dispatch import enqueue_dispatch
+            enqueue_dispatch(billing_dispatch_due, kind='billing')
+        except Exception:
+            from services.operations import emit_event
+            emit_event('billing_enqueue_failed', severity='ERROR')
 
 
 def check_connection():

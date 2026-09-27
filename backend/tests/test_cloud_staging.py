@@ -112,7 +112,7 @@ def test_explicitly_disabled_billing_stops_provider_calls(monkeypatch):
     monkeypatch.setenv('BUSINESS_BILLING_ENABLED', '0')
     app = Flask(__name__)
     app.register_blueprint(stripe_bp, url_prefix='/stripe')
-    response = app.test_client().post('/stripe/webhook', data='not-a-provider-event')
+    response = app.test_client().post('/stripe/business/checkout', json={})
     assert response.status_code == 503
     assert response.json['code'] == 'billing_unavailable'
 

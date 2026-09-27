@@ -34,6 +34,7 @@ class Org(Base):
     subscription_period_end = Column(DateTime(timezone=True))
     subscription_cancel_at_period_end = Column(Boolean, nullable=False, default=False)
     billing_updated_at = Column(DateTime(timezone=True))
+    billing_checkout = Column(JSONB)
     brand_logo_url = Column(Text)
     brand_color = Column(Text, nullable=False, default='#1F6F5C')
     embed_allowed_origins = Column(ARRAY(Text), nullable=False, default=list)
@@ -63,7 +64,11 @@ class StripeEvent(Base):
     event_type = Column(Text, nullable=False)
     livemode = Column(Boolean, nullable=False, default=False)
     received_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    processed_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    processed_at = Column(DateTime(timezone=True), default=_utcnow)
+    payload = Column(JSONB)
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(DateTime(timezone=True))
+    last_error = Column(Text)
 
 
 class OrgAssessmentUsage(Base):

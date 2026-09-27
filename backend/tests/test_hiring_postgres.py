@@ -80,7 +80,7 @@ def db(monkeypatch):
             isolation_migration = (Path(__file__).parents[1] / 'migrations/022_partner_request_isolation.sql').read_text()
             conn.exec_driver_sql(isolation_migration)
             conn.exec_driver_sql(isolation_migration)
-            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql', '029_hiring_pricing.sql'):
+            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql', '029_hiring_pricing.sql', '030_billing_delivery.sql'):
                 sql = (Path(__file__).parents[1] / 'migrations' / name).read_text()
                 conn.exec_driver_sql(sql)
                 conn.exec_driver_sql(sql)

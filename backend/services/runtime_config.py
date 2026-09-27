@@ -47,9 +47,10 @@ def validate_runtime_configuration():
         required += ['STAGING_ALLOWED_EMAILS']
     if _enabled('PARTNER_INTEGRATIONS_ENABLED'):
         required += ['WEBHOOK_SECRET_ENCRYPTION_KEY', 'PARTNER_API_KEY_PEPPER']
-    if _enabled('BUSINESS_BILLING_ENABLED') and os.environ.get('MARKET', 'US').upper() == 'US':
-        required += ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_TEAM_PRICE_ID',
-                     'STRIPE_INTEGRATION_PRICE_ID']
+    if _enabled('BUSINESS_BILLING_ENABLED') or _enabled('STRIPE_ASYNC_ENABLED'):
+        required += ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']
+    if _enabled('STRIPE_ASYNC_ENABLED'):
+        required += ['BILLING_TASKS_QUEUE', 'BILLING_TASKS_TARGET', 'TASKS_OIDC_SA', 'TASKS_OIDC_AUDIENCE']
     provider = os.environ.get('AUTH_EMAIL_PROVIDER', 'firebase')
     if _enabled('AUTH_EMAILS_ENABLED') or _enabled('AUTH_WELCOME_EMAILS_ENABLED'):
         if provider not in ('firebase', 'sendgrid', 'google_smtp'):
