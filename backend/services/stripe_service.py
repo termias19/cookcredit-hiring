@@ -130,6 +130,13 @@ def create_subscription_checkout(*, customer_id: str, org_id: str, request_id: s
     metadata = {'cookcredit_org_id': org_id, 'plan': plan, 'cookcredit_product': 'hiring'}
     checkout = _billing_client().checkout.sessions.create({
         'mode': 'subscription', 'customer': customer_id,
+        # Session-only branding keeps the shared Stripe account's other products unchanged.
+        'branding_settings': {
+            'display_name': 'CookCredit Hiring', 'background_color': '#FEFDFB',
+            'button_color': '#1F6F5C', 'border_style': 'rectangular',
+            'logo': {'type': 'url', 'url': f'{origin}/cookcredit-mark-orange.png'},
+            'icon': {'type': 'url', 'url': f'{origin}/icon-192.png'},
+        },
         'line_items': [{'price': price_id, 'quantity': 1}],
         'success_url': f'{origin}/business/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}',
         'cancel_url': f'{origin}/business/billing?checkout=cancelled',

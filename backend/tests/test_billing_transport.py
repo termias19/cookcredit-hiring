@@ -43,6 +43,11 @@ def test_hiring_requests_have_bounded_io_metadata_and_stable_checkout_idempotenc
     assert params['subscription_data']['metadata']['cookcredit_org_id'] == 'org'
     assert options['idempotency_key'] == 'org:org:team:price_hiring-checkout:request'
     assert 'orderKind' not in params['metadata']
+    assert params['branding_settings']['display_name'] == 'CookCredit Hiring'
+    assert params['branding_settings']['button_color'] == '#1F6F5C'
+    assert params['branding_settings']['logo']['url'] == 'https://hiring.example.test/cookcredit-mark-orange.png'
+    assert params['branding_settings']['icon']['url'] == 'https://hiring.example.test/icon-192.png'
+    client.accounts.update.assert_not_called()
     assert client.billing_portal.sessions.create.call_args.args[0]['configuration'] == 'bpc_hiring'
 
 
