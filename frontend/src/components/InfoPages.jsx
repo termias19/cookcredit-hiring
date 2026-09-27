@@ -302,7 +302,7 @@ export function HelpContent() {
         <div style={{ fontSize: 12, color: '#555', lineHeight: 1.5 }}>{f.a}</div>
       </div>
     ))}
-    <button onClick={() => { window.location.href = 'mailto:connectwithus@mise.com' }} style={{
+    <button onClick={() => { window.location.href = 'mailto:connectwithus@cookcredit.com' }} style={{
       display: 'block', width: '100%', padding: 12, borderRadius: 0, marginTop: 16,
       background: '#1F6F5C', color: '#fff', textAlign: 'center',
       fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',

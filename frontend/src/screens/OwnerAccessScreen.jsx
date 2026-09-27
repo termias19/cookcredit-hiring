@@ -63,10 +63,10 @@ export default function OwnerAccessScreen() {
   }
   return <main className="cc-access-page"><div className="cc-access-wrap cc-access-owner">
     <CookCreditBrand /><p className="cc-access-eyebrow">Owner / Hiring access</p><h1>You choose who comes in.</h1>
-    {!allowed ? <p role="alert">Only the verified eassefa@cookcredit.com account can manage hiring access.</p> : <>
+    {!allowed ? <p role="alert">Only the verified owner account can manage hiring access. For help, contact connectwithus@cookcredit.com.</p> : <>
       <OwnerPricing call={call} />
       <p className="cc-access-intro">Website and email requests wait here for your decision. Approvals give people access to set up their own workspace; they do not join yours.</p>
-      <p className="cc-access-note">Inbox import: {page.inbox.enabled ? 'enabled' : 'not connected yet'}. Hiring-related requests to connectwithus@cookcredit.com and eassefa@cookcredit.com wait for your review. Message bodies and attachments are not stored.</p>
+      <p className="cc-access-note">Inbox import: {page.inbox.enabled ? 'enabled' : 'not connected yet'}. Hiring-related requests from your connected inboxes wait for your review. Public contact: connectwithus@cookcredit.com. Message bodies and attachments are not stored.</p>
       {page.inbox.enabled && (page.inbox.mailboxes || []).map(mailbox => <p key={mailbox.address} className="cc-access-note">{mailbox.address} · last checked {date(mailbox.checkedAt)}{mailbox.error && <span className="cc-access-error"> · {mailbox.error}</span>}</p>)}
       <details className="cc-access-card"><summary>Add someone who contacted you</summary><form className="cc-access-form" onSubmit={add}>
         <label>Email<input type="email" required maxLength={254} value={manual.email} onChange={e => setManual({ ...manual, email: e.target.value })} /></label>
