@@ -3,7 +3,7 @@ import os, smtplib, ssl
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
-def send_google_smtp(recipient, subject, plain, markup):
+def send_google_smtp(recipient, subject, plain, markup, *, headers=None):
     """Authenticated Google submission; never log credentials or action links."""
     sender = os.environ['GOOGLE_SMTP_USER'].strip()
     password = ''.join(os.environ['GOOGLE_SMTP_APP_PASSWORD'].split())
@@ -17,6 +17,9 @@ def send_google_smtp(recipient, subject, plain, markup):
     message['Date'] = formatdate(localtime=False)
     message['Message-ID'] = make_msgid(domain='cookcredit.com')
     message['Auto-Submitted'] = 'auto-generated'
+    for key, value in (headers or {}).items():
+        if key in ('List-Unsubscribe', 'List-Unsubscribe-Post'):
+            message[key] = value
     message.set_content(plain)
     message.add_alternative(markup, subtype='html')
     try:
@@ -30,4 +33,3 @@ def send_google_smtp(recipient, subject, plain, markup):
                 raise RuntimeError('email_provider_unavailable')
     except (OSError, smtplib.SMTPException):
         raise RuntimeError('email_provider_unavailable') from None
-

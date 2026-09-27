@@ -38,6 +38,7 @@ def db(monkeypatch):
                 sql = (Path(__file__).parents[1] / 'migrations' / name).read_text()
                 conn.exec_driver_sql(sql)
                 conn.exec_driver_sql(sql)
+            conn.exec_driver_sql('ALTER TABLE account_emails ADD COLUMN content JSONB')
         monkeypatch.setattr(database, 'engine', engine)
         monkeypatch.setattr(database, 'SessionLocal', sessionmaker(bind=engine, expire_on_commit=False))
         yield

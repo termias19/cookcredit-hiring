@@ -392,8 +392,11 @@ def _process_event(session, event_type, obj):
         invoice_subscription_id = _subscription_id(raw_subscription)
         # A customer can own unrelated Stripe products. Only the subscription
         # already verified by a subscription webhook may change this workspace.
-        if org and invoice_subscription_id and str(invoice_subscription_id) == org.stripe_subscription_id:
+        if org and invoice_subscription_id and (not org.stripe_subscription_id or str(invoice_subscription_id) == org.stripe_subscription_id):
             _reconcile_subscription(org, invoice_subscription_id)
+            if str(invoice_subscription_id) == org.stripe_subscription_id:
+                from services.customer_mail import enqueue_invoice_email
+                enqueue_invoice_email(session, org, obj, event_type)
 
 
 

@@ -18,6 +18,7 @@ const LoginScreen         = lazy(() => import('./screens/LoginScreen'))
 const AccountActionScreen = lazy(() => import('./screens/AccountActionScreen'))
 const HiringAccessRequestScreen = lazy(() => import('./screens/HiringAccessRequestScreen'))
 const OwnerAccessScreen = lazy(() => import('./screens/OwnerAccessScreen'))
+const EmailUnsubscribeScreen = lazy(() => import('./screens/EmailUnsubscribeScreen'))
 const BusinessSettingsScreen = lazy(() => import('./screens/BusinessSettingsScreen'))
 const ForgotScreen        = lazy(() => import('./screens/ForgotScreen'))
 const VerifyEmailScreen   = lazy(() => import('./screens/VerifyEmailScreen'))
@@ -161,6 +162,7 @@ export default function App() {
             <Route path="/login" element={<AuthRedirect><LoginScreen /></AuthRedirect>} />
             <Route path="/signup" element={<AuthRedirect><SignupScreen /></AuthRedirect>} />
             <Route path="/account/action" element={<AccountActionScreen />} />
+            <Route path="/email/unsubscribe" element={<EmailUnsubscribeScreen />} />
             <Route path="/request-access" element={<HiringAccessRequestScreen />} />
             <Route path="/owner/access" element={<ProtectedRoute><OwnerAccessScreen /></ProtectedRoute>} />
             <Route path="/forgot" element={<AuthRedirect><ForgotScreen /></AuthRedirect>} />

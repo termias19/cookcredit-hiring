@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import LanguageSelect from './LanguageSelect'
+import EmailPreferences from './EmailPreferences'
 import { PREVIEW } from '../config'
 
 const panel = { border: '1px solid var(--cc-border)', padding: 24, background: 'var(--cc-surface)' }
@@ -43,6 +44,7 @@ export default function AccountDetails({ profile, children }) {
         </div>
       </form>
       {children}
+      {!PREVIEW && <EmailPreferences />}
       <section style={panel}>
         <h2 className="cc-profile-heading">{t.bp_language}</h2>
         <p style={{ marginBottom: 18, fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{t.bp_language_hint}</p>

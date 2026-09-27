@@ -106,6 +106,10 @@ def retrieve_billing_subscription(subscription_id: str):
     # event when retrieval fails; never apply an old event snapshot as fallback.
     return _billing_client().subscriptions.retrieve(subscription_id)
 
+
+def retrieve_billing_invoice(invoice_id: str):
+    return _billing_client().invoices.retrieve(invoice_id)
+
 def retrieve_billing_checkout(session_id: str):
     return _billing_client().checkout.sessions.retrieve(session_id)
 

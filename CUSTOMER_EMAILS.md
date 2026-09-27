@@ -1,0 +1,15 @@
+# Hiring customer email
+
+Account verification, welcome, password reset, workspace invitations, billing confirmations and offers share the existing durable account-mail outbox and internal scheduler. SMTP uses the existing authenticated sender; customer replies go to connectwithus@cookcredit.com. No new sender identity or third-party mailing service is introduced.
+
+Verified Hiring subscription invoices queue one paid confirmation or payment-attention message per invoice and kind, addressed to the workspace creator. The worker checks current invoice payment state before sending. A payment-attention message is suppressed if payment has since succeeded. This is a Hiring account notification; Stripe remains the source of financial invoices and receipts in the billing portal. A full outbox causes reconciliation to retry rather than lose its email. SMTP acceptance does not prove inbox receipt; retries after an ambiguous SMTP response can still result in duplicate messages.
+
+The verified owner manages email campaigns on the existing owner access page: create, edit, preview, schedule once/weekly/every 30 days, pause, move to trash, and restore. Templates remain drafts until saved and explicitly scheduled. Every mutation records the owner identity and action, with revision checks to reject stale edits. Trash is recoverable; sent messages cannot be recalled. Pausing, editing or trashing prevents unsent messages from the old revision; an already in-flight send may finish.
+
+Offers default off. A verified account can opt in from profile settings. Consent is checked again at delivery, and a later opt-in does not revive mail queued under older consent. Offers include a mailing address, advertisement identification, a no-login unsubscribe page and one-click unsubscribe headers. Only POST changes the preference, so link previews cannot unsubscribe an account. Transactional mail remains enabled after marketing unsubscribe. The business mailing address must be provided by the owner before scheduling.
+
+The existing scheduler adds at most ten offers per tick and stops expansion when the active mail backlog reaches twenty. Transactional messages are claimed before offers; the existing overall queue bound and SMTP worker concurrency are unchanged. These limits deliberately protect account mail and do not establish bulk-email or mass-scale sending capacity. Review measured demand, provider limits and delivery health before raising throughput.
+
+Migration 031 is additive except for widening the allowed email-kind constraint. Apply it before the new backend. After new mail kinds are queued, prefer a forward repair; older workers do not understand them. To contain offers, pause or trash scheduled campaigns with the current backend. Do not remove queued billing records or consent/suppression history as part of rollback.
+
+Acceptance requires an actual signup/verification inbox receipt, a paid Hiring invoice and received confirmation, and a controlled opt-in/unsubscribe test. Passing automated checks alone does not establish public readiness.

@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, Text, Integer, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from services.database import Base
 
 
@@ -25,3 +25,4 @@ class AccountEmail(Base):
     access_revision = Column(Integer)
     invitation_id = Column(UUID(as_uuid=True))
     invitation_token_ciphertext = Column(Text)
+    content = Column(JSONB)

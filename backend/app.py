@@ -21,6 +21,7 @@ from extensions import limiter
 from services.database import init_db, check_connection
 from routes.auth     import auth_bp
 from routes.hiring_access import access_bp
+from routes.customer_mail import customer_mail_bp
 from routes.messages import messages_bp
 from routes.profile  import profile_bp
 from routes.reviews  import reviews_bp
@@ -128,6 +129,7 @@ init_db()
 # ── Blueprints ────────────────────────────────────────────────────────────────
 app.register_blueprint(auth_bp,     url_prefix="/api/auth")
 app.register_blueprint(access_bp, url_prefix='/api/access')
+app.register_blueprint(customer_mail_bp, url_prefix='/api/customer-mail')
 app.register_blueprint(messages_bp, url_prefix="/api/messages")
 app.register_blueprint(profile_bp,  url_prefix="/api/profile")
 app.register_blueprint(reviews_bp,  url_prefix="/api/reviews")

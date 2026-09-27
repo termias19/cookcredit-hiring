@@ -38,7 +38,7 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
         created_at=utcnow(), available_at=utcnow()).on_conflict_do_nothing(index_elements=['dedupe_key']))
 
 
-def account_email_content(kind, link):
+def account_email_content(kind, link, *, custom=None):
     content = {
         'workspace_invite': ('Your CookCredit team invitation', 'You are invited to a CookCredit workspace',
                     'A workspace administrator invited you to join their team. Sign in with this email address to review and accept the invitation. CookCredit employer approval is required before you can join. The invitation expires after seven days.',
@@ -59,7 +59,7 @@ def account_email_content(kind, link):
                             'Create an account or sign in using this email address, verify your email, and set up your own company workspace. Your team reviews assessment results and makes the hiring decisions. No subscription payment is required.',
                             'Open CookCredit hiring', 'This invitation follows an owner-approved request for hiring access. It does not add you to another company’s workspace.'),
     }
-    subject, title, body, button, footer = content[kind]
+    subject, title, body, button, footer = custom if custom else content[kind]
     safe_link = html.escape(link, quote=True)
     # Use the same published mark as the account screens. PNG is intentional:
     # many inboxes do not render SVG images inside HTML email.
@@ -67,6 +67,8 @@ def account_email_content(kind, link):
     text = (f'{title}\n\n{body}\n\n{button}: {link}\n\n{footer}\n\nThe CookCredit team\n\n'
             'Privacy Policy: https://cookcredit.com/privacy.html\n'
             'Terms of Use: https://cookcredit.com/terms.html\n')
+    title, body, button, footer = (html.escape(value).replace('\n', '<br>')
+                                    for value in (title, body, button, footer))
     markup = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f4f1ea;color:#252923;font-family:Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:#fefdfb;border:1px solid #e3e0d9">
@@ -106,6 +108,9 @@ from services.mail_transport import send_google_smtp as _send_google_smtp
 
 
 def deliver_account_email(item):
+    if item.kind in ('billing_paid', 'billing_failed', 'campaign'):
+        from services.customer_mail import deliver_customer_email
+        return deliver_customer_email(item)
     if item.kind == 'workspace_invite':
         from services.workspace_invitation_mail import deliver_invitation
         return deliver_invitation(item)
@@ -164,9 +169,12 @@ def deliver_access_email(item):
     return 'sent'
 
 
-def send_account_message(recipient, subject, plain, markup):
+def send_account_message(recipient, subject, plain, markup, *, headers=None):
     if os.environ.get('AUTH_EMAIL_PROVIDER') == 'google_smtp':
-        _send_google_smtp(recipient, subject, plain, markup)
+        if headers:
+            _send_google_smtp(recipient, subject, plain, markup, headers=headers)
+        else:
+            _send_google_smtp(recipient, subject, plain, markup)
         return
     response = requests.post('https://api.sendgrid.com/v3/mail/send', timeout=(3, 12),
         headers={'Authorization': 'Bearer ' + os.environ['SENDGRID_API_KEY']},
@@ -174,6 +182,7 @@ def send_account_message(recipient, subject, plain, markup):
               'from': {'email': os.environ.get('SENDGRID_FROM_EMAIL', 'noreply@cookcredit.com'), 'name': 'CookCredit'},
               'reply_to': {'email': 'connectwithus@cookcredit.com', 'name': 'CookCredit'},
               'subject': subject,
+              **({'headers': headers} if headers else {}),
               'content': [{'type': 'text/plain', 'value': plain}, {'type': 'text/html', 'value': markup}],
               'tracking_settings': {'click_tracking': {'enable': False, 'enable_text': False},
                                     'open_tracking': {'enable': False}}}, allow_redirects=False)
@@ -203,7 +212,8 @@ def dispatch_account_emails(limit=50):
         rows = (session.query(AccountEmail).filter(
             AccountEmail.attempts < 8, AccountEmail.available_at <= now,
             or_(AccountEmail.status == 'pending', and_(AccountEmail.status == 'sending', AccountEmail.lease_until < now)))
-            .order_by(AccountEmail.available_at).with_for_update(skip_locked=True).limit(limit).all())
+            .order_by(AccountEmail.kind == 'campaign', AccountEmail.available_at)
+            .with_for_update(skip_locked=True).limit(limit).all())
         for item in rows:
             item.status = 'sending'; item.attempts += 1
             item.lease_token = uuid.uuid4(); item.lease_until = now + timedelta(minutes=10)
