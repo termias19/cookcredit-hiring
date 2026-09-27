@@ -1,0 +1,42 @@
+{
+  "version": "sites/cookcredit-hiring/versions/9e7531d0e841f1ff",
+  "status": "released",
+  "frontendCommit": "90e3e1571b43673b55d12ca56f465f1ffb46a776",
+  "rollbackVersion": "sites/cookcredit-hiring/versions/2da5f0c9dcd22914",
+  "preservedAssessmentAssets": 33,
+  "changedAssessmentAssets": [],
+  "hostingConfigurationUnchanged": true,
+  "backendRevision": "cookcredit-hiring-00005-sp6",
+  "backendImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:dd6571e2d40c33d1f93c1d053cb638dec83f943a1541e2cf19b35e40043d399d",
+  "backendCommit": "fa1ed98ddd4dc46fbde0cb38622375e3353614ae",
+  "backendRollbackRevision": "cookcredit-hiring-00004-mxr",
+  "backendRollbackImage": "us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:65d4cf301e43c60362a4b6573d954f557fc54f3c00657eb734bb7728d7f0bfd1",
+  "ci": "https://github.com/termias19/cookcredit-hiring/actions/runs/36287025894",
+  "frontendTests": 96,
+  "localBackendTests": {
+    "passed": 593,
+    "skipped": 8
+  },
+  "ciBackendTests": {
+    "passed": 584,
+    "skipped": 17
+  },
+  "capacityConfigurationUnchanged": true,
+  "apiMinimumInstances": 0,
+  "apiMaximumInstances": 3,
+  "productionAcceptance": "Pending fresh applicant inbox, recording, submission, employer playback, saved CV and live invitation/integration acceptance.",
+  "release": "sites/cookcredit-hiring/releases/1790474317121000",
+  "productionHealth": "passed",
+  "liveRoleAcceptance": {
+    "editPersisted": true,
+    "unchangedCriteriaPreserved": true,
+    "trashList": true,
+    "trashedApplicantLinkClosed": true,
+    "restoreClosed": true,
+    "reopen": true,
+    "existingApplicantPreserved": true
+  },
+  "liveCvTextExtraction": "passed",
+  "featureCi": "https://github.com/termias19/cookcredit-hiring/actions/runs/36286442728",
+  "fullFrontendRollbackVersion": "sites/cookcredit-hiring/versions/655f3bb2bcfff753"
+}
