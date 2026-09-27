@@ -44,7 +44,7 @@ function ShortlistCard({ cook, onClick }) {
 export default function BusinessShortlistsScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
-  const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id) || biz?.shortlistCandidates?.find(candidate => candidate.id === id)).filter(Boolean)
+  const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id) || biz?.shortlistCandidates?.find(candidate => candidate.id === id) || { id, name: 'Applicant', hasVideo: false }).filter(Boolean)
 
   const header = (
     <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>

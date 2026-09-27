@@ -37,3 +37,24 @@ test('actual provider makes one settings request, two integration requests and f
     assert.deepEqual(calls,expected)
   }
 })
+
+
+test('first star immediately loads a pending applicant into the saved list; refresh failure does not undo a saved star', async () => {
+  const source = await readFile(new URL('../src/context/BusinessContext.jsx', import.meta.url), 'utf8')
+  const { code } = await transformWithEsbuild(source, 'BusinessContext.jsx', { loader: 'jsx', jsx: 'automatic', format: 'cjs' })
+  for (const failRefresh of [false, true]) {
+    const slots = []; let index = 0, writes = 0
+    const useState = initial => { const slot=index++; if (!(slot in slots)) slots[slot]=initial; return [slots[slot], next=>{slots[slot]=typeof next==='function'?next(slots[slot]):next}] }
+    const react = { createContext:()=>({Provider:'provider'}), useContext:()=>null, useState,
+      useRef: initial=>useState({current:initial})[0], useCallback:fn=>fn, useEffect:()=>{} }
+    const api = { toggleBusinessShortlist:async()=>{writes++; return {shortlisted:true}},
+      getBusinessShortlist:async()=>{if(failRefresh) throw Error('offline'); return {candidates:[{id:'pending',name:'Pending Applicant',hasVideo:false}]}} }
+    const modules={'react':react,'react/jsx-runtime':{jsx:(_,props)=>props},'react-router-dom':{useLocation:()=>({pathname:'/business/role/123',search:''})},'./AuthContext':{useAuth:()=>({user:{getIdToken:async()=>'fixture'}})},'../utils/workspaceReads':{workspaceReads},'../utils/Api':api}
+    const context={module:{exports:{}},require:name=>modules[name]}; vm.runInNewContext(code,context)
+    const render=()=>{index=0;return context.module.exports.BusinessProvider({children:null}).value}
+    const first=render(); assert.equal(await first.toggleShortlist('pending'),true)
+    const saved=render(); assert.equal(saved.isShortlisted('pending'),true); assert.equal(writes,1)
+    if(failRefresh) assert.match(saved.actionError,/saved to shortlist/)
+    else assert.equal(saved.shortlistCandidates[0].name,'Pending Applicant')
+  }
+})

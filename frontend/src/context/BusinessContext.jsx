@@ -115,6 +115,15 @@ export function BusinessProvider({ children }) {
         if (!shortlisted && on) return prev.filter(x => x !== cookId)
         return prev
       })
+      if (shortlisted && !candidates.some(candidate => candidate.id === cookId)
+          && !shortlistCandidates.some(candidate => candidate.id === cookId)) {
+        try {
+          const saved = await getBusinessShortlist({ token })
+          setShortlistCandidates(Array.isArray(saved.candidates) ? saved.candidates : [])
+        } catch {
+          setActionError('Applicant saved to shortlist. Reload to refresh their details.')
+        }
+      }
       return true
     } catch {
       setActionError('Shortlist was not saved. Check your connection and workspace access, then try again.')
@@ -124,7 +133,7 @@ export function BusinessProvider({ children }) {
         : prev.filter(x => x !== cookId)))
       return false
     } finally { shortlistInFlight.current.delete(cookId) }
-  }, [getToken, shortlist])
+  }, [getToken, shortlist, candidates, shortlistCandidates])
 
   // Advance a cook in a role's pipeline (POST). The Role screen owns its pipeline view and
   // refetches; this only persists the move.
