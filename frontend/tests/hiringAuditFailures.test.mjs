@@ -352,3 +352,29 @@ test('owner pricing loads on demand and saves exact cents without publishing', a
   assert.equal(calls.some(c => c.path.endsWith('/publish')), false)
   assert.match(s.text(), /Draft saved/)
 })
+
+
+test('saved view retains a shortlisted applicant before an assessment exists', async () => {
+  const s = await screen('BusinessShortlistsScreen', { biz: { loading: false, shortlist: ['pending'], candidateById: () => null,
+    shortlistCandidates: [{ id: 'pending', name: 'Pending Applicant', roleId: 'role-1', hasVideo: false }] } })
+  assert.equal(s.find(p => p.cook?.id === 'pending').props.cook.name, 'Pending Applicant')
+  assert.doesNotMatch(s.text(), /No one shortlisted yet/)
+  const card = await screen('BusinessShortlistsScreen', { exportName: 'ShortlistCard', props: { cook: { id: 'pending', name: 'Pending Applicant', hasVideo: false } } })
+  assert.match(card.text(), /Assessment pending/)
+  assert.doesNotMatch(card.text(), /Evidence ready/)
+})
+
+test('shortlist dropdown saves privately and refreshes the workspace shortlist', async () => {
+  let refreshed = 0, request
+  const s = await screen('../components/EmployerApplicationReview', { exportName: 'ReviewForm',
+    biz: { refresh: () => refreshed++ }, props: { canReview: true, application: { id: 'app', questions: [], review: null } },
+    api: { saveEmployerReview: async args => { request = args; return { review: { status: 'shortlisted', revision: 'saved' }, employerUpdate: null } } },
+  })
+  s.find(p => p.value === 'reviewing' && p.onChange).props.onChange({ target: { value: 'shortlisted' } }); s.render()
+  assert.match(s.text(), /Save private review to apply/)
+  await s.find(p => p.children === 'Save private review').props.onClick(); s.render()
+  assert.equal(request.review.status, 'shortlisted')
+  assert.equal(request.review.publish, false)
+  assert.equal(refreshed, 1)
+  assert.match(s.text(), /Private review saved/)
+})

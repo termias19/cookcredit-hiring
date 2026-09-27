@@ -12,7 +12,7 @@ from flask import Flask
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
-from models import (User, EaterProfile, CookProfile, Org, OrgAssessmentUsage, OrgMembership, OrgInvitation, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent,
+from models import (Shortlist, ShortlistMember, User, EaterProfile, CookProfile, Org, OrgAssessmentUsage, OrgMembership, OrgInvitation, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent,
                     AssessmentShare, AssessmentAccessLog, HiringApplication, ResumeKeypoints,
                     HiringAssessmentSession, HiringApplicationEvent, StripeEvent,
                     PartnerApiKey, PartnerInvitation, PartnerWebhook, PartnerWebhookDelivery)
@@ -35,7 +35,7 @@ def db(monkeypatch):
         conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine = create_engine(url, connect_args={'options': f'-csearch_path={schema},public'})
     try:
-        for model in (User, EaterProfile, CookProfile, Org, OrgMembership, RolePosting, PipelineCard, SkillAttempt, SkillAttemptEvent, ResumeKeypoints):
+        for model in (User, EaterProfile, CookProfile, Org, OrgMembership, RolePosting, PipelineCard, Shortlist, ShortlistMember, SkillAttempt, SkillAttemptEvent, ResumeKeypoints):
             model.__table__.create(engine)
         migration = (Path(__file__).parents[1] / 'migrations/011_hiring_evidence_sharing.sql').read_text()
         with engine.connect().execution_options(isolation_level='AUTOCOMMIT') as conn:
@@ -1678,6 +1678,7 @@ def test_application_review_cv_privacy_revision_and_withdrawal(db, client, monke
         assert client.post(url+'/review',json=draft,headers=headers(uid)).status_code==404
     saved=client.post(url+'/review',json=draft,headers=headers('employer'))
     assert saved.status_code==200 and saved.json['employerUpdate'] is None
+    assert client.get('/business/shortlist', headers=headers('employer')).json['cookIds'] == ['cook']
     revision=saved.json['review']['revision']
     assert saved.json['review']['reviewerName']=='employer'
     applicant=client.get(url,headers=headers('cook'))
@@ -1767,3 +1768,28 @@ def test_owner_pricing_requires_verified_owner_and_valid_limits(db, client, monk
     listing = client.get('/access/owner/pricing', headers=headers('owner'))
     assert len(listing.json['prices']) == 1
     assert 'stripe_price_id' not in listing.json['prices'][0]
+
+
+def test_shortlist_pending_applicant_persists_without_unlocking_video(db, client):
+    with database.db_session() as session:
+        application = HiringApplication(role_posting_id=db.role, applicant_id='cook',
+            consent_version=hiring.APPLICATION_CONSENT_VERSION, status='assessment_required',
+            applicant_details={'name': 'Pending Applicant'}, attempt_limit=3)
+        session.add(application); session.flush(); aid=application.id
+    endpoint='/business/shortlist'
+    assert client.post(endpoint, json={'cookId':'cook'}, headers=headers('other')).status_code == 403
+    assert client.post(endpoint, json={'cookId':'cook'}, headers=headers('viewer')).status_code == 403
+    saved=client.post(endpoint, json={'cookId':'cook'}, headers=headers('employer'))
+    assert saved.status_code == 200 and saved.json['shortlisted'] is True
+    listing=client.get(endpoint, headers=headers('employer')).json
+    assert listing['cookIds'] == ['cook']
+    assert listing['candidates'][0]['name'] == 'Pending Applicant'
+    assert listing['candidates'][0]['hasVideo'] is False
+    assert client.get('/business/candidate/cook/video', headers=headers('employer')).status_code == 403
+    assert client.post(endpoint, json={'cookId':'cook'}, headers=headers('employer')).json['shortlisted'] is False
+    assert client.get(endpoint, headers=headers('employer')).json['cookIds'] == []
+    client.post(endpoint, json={'cookId':'cook'}, headers=headers('employer'))
+    with database.db_session() as session:
+        session.get(HiringApplication, aid).status='withdrawn'
+    assert client.get(endpoint, headers=headers('employer')).json['cookIds'] == []
+    assert client.post(endpoint, json={'cookId':'cook'}, headers=headers('employer')).status_code == 403

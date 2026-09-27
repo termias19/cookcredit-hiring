@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
 import { getEmployerCandidateApplications, saveEmployerReview } from '../utils/Api'
 import HiringCvDownload from './HiringCvDownload'
@@ -8,6 +9,7 @@ const field = { display: 'block', width: '100%', padding: 10, marginTop: 6, bord
 
 function ReviewForm({ application, canReview }) {
   const { user } = useAuth()
+  const biz = useBusiness()
   const [review, setReview] = useState(application.review)
   const [published, setPublished] = useState(application.employerUpdate)
   const [status, setStatus] = useState(review?.status || 'reviewing')
@@ -21,6 +23,7 @@ function ReviewForm({ application, canReview }) {
       const result = await saveEmployerReview({ token: await user.getIdToken(), applicationId: application.id,
         review: { status, notes, message, publish, revision: review?.revision || null } })
       setReview(result.review); setPublished(result.employerUpdate)
+      biz?.refresh?.()
       setNotice(publish ? 'Update published to this applicant. No email was sent.' : 'Private review saved. The applicant has not been notified.')
     } catch (e) { setError(e.message || 'Review could not be saved. Your draft remains here.') }
     finally { setBusy(false) }
@@ -42,6 +45,7 @@ function ReviewForm({ application, canReview }) {
       </div>
     </fieldset>
     {!canReview && <p>Your company seat can view evidence but cannot save hiring decisions.</p>}
+    {status !== (review?.status || 'reviewing') && <p role="status">Status changed. Save private review to apply it.</p>}
     {busy && <p role="status">Saving…</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert" style={{ color: '#A44320' }}>{error} Reload to see the latest review if another reviewer saved changes.</p>}
     {published && <aside style={{ padding: 14, background: '#f3f1eb', marginTop: 16 }}><strong>Currently visible to the applicant: {labels[published.status]}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{published.message}</p></aside>}
   </section>

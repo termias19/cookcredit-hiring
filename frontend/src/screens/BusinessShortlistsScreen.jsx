@@ -29,11 +29,11 @@ function ShortlistCard({ cook, onClick }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <Star size={14} color={GOLD} fill={GOLD} strokeWidth={1.5} />
           <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a', margin: 0 }}>{cook.name}</h3>
-          <ShieldCheck size={14} color={GREEN} strokeWidth={2} />
+          {cook.hasVideo && <ShieldCheck size={14} color={GREEN} strokeWidth={2} />}
         </div>
         <p style={{ fontSize: 12, color: '#777', margin: 0 }}>{(cook.cuisines || []).join(' · ')}{cook.city ? ` · ${cook.city}` : ''}</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #E7E2D8' }}>
-          <span className="cc-evidence-pill"><ShieldCheck size={12} />Evidence ready</span>
+          <span className="cc-evidence-pill">{cook.hasVideo ? 'Evidence ready' : 'Assessment pending'}</span>
           <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a' }}>{cook.verifiedScore ?? '—'}<small style={{ fontSize: 9, color: '#70706b', marginLeft: 3 }}>/100</small></span>
         </div>
       </div>
@@ -44,7 +44,7 @@ function ShortlistCard({ cook, onClick }) {
 export default function BusinessShortlistsScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
   const biz = useBusiness()
-  const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id)).filter(Boolean)
+  const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id) || biz?.shortlistCandidates?.find(candidate => candidate.id === id)).filter(Boolean)
 
   const header = (
     <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
@@ -64,7 +64,7 @@ export default function BusinessShortlistsScreen({ embedded = false } = {}) {
             style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: 16 }}>
             <AnimatePresence initial={false}>
               {cooks.map(c => (
-                <ShortlistCard key={c.id} cook={c} onClick={() => navigate(`/business/candidate/${c.id}`)} />
+                <ShortlistCard key={c.id} cook={c} onClick={() => navigate(`/business/candidate/${c.id}${c.roleId ? `?role=${c.roleId}` : ''}`)} />
               ))}
             </AnimatePresence>
           </motion.div>

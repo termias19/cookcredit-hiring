@@ -223,7 +223,7 @@ export default function BusinessRoleScreen() {
                         <motion.div className="cc-business-card" key={c.cookId} layout variants={fadeUp} initial="hidden" animate="show" whileHover={{ borderColor: '#b2bdb6' }} exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
                           style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid #E3E0D9', background: '#FEFDFB', padding: 13, marginBottom: 9 }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                            <motion.button whileTap={tapScale} onClick={() => biz.toggleShortlist(c.cookId)} aria-label="Shortlist"
+                            <motion.button whileTap={tapScale} onClick={() => biz.toggleShortlist(c.cookId)} aria-label="Shortlist" aria-pressed={starred}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, marginTop: 2 }}>
                               <motion.span key={starred ? 'starred' : 'unstarred'} initial={{ scale: 0.6, rotate: -20 }} animate={{ scale: 1, rotate: 0 }}
                                 transition={{ type: 'spring', stiffness: 400, damping: 15 }} style={{ display: 'inline-flex' }}>

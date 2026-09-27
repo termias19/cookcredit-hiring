@@ -13,7 +13,7 @@
  */
 /* eslint-disable react-refresh/only-export-components -- a context module intentionally exports
    the provider component alongside its useBusiness() hook (same pattern as LangContext). */
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { useAuth } from './AuthContext'
 import { useLocation } from 'react-router-dom'
 import { workspaceReads } from '../utils/workspaceReads'
@@ -32,6 +32,9 @@ export function BusinessProvider({ children }) {
   const { roles: needRoles, candidates: needCandidates, shortlist: needShortlist } = workspaceReads(location.pathname, location.search)
   const [org, setOrg] = useState(null)
   const [roles, setRoles] = useState([])
+  const shortlistInFlight = useRef(new Set())
+  const [actionError, setActionError] = useState('')
+  const [shortlistCandidates, setShortlistCandidates] = useState([])
   const [shortlist, setShortlist] = useState([])     // cook ids starred for the org
   const [candidates, setCandidates] = useState([])   // verified-cook roster (de-identified for viewer seats)
   const [screeningPolicy, setScreeningPolicy] = useState(null)
@@ -65,7 +68,10 @@ export function BusinessProvider({ children }) {
       if (!live) return
       if (orgR.status === 'fulfilled') setOrg(orgR.value?.org || null)
       if (needRoles && rolesR.status === 'fulfilled') setRoles(Array.isArray(rolesR.value?.roles) ? rolesR.value.roles : [])
-      if (needShortlist && slR.status === 'fulfilled') setShortlist(Array.isArray(slR.value?.cookIds) ? slR.value.cookIds : [])
+      if (needShortlist && slR.status === 'fulfilled') {
+        setShortlist(Array.isArray(slR.value?.cookIds) ? slR.value.cookIds : [])
+        setShortlistCandidates(Array.isArray(slR.value?.candidates) ? slR.value.candidates : [])
+      }
       if (needCandidates && candR.status === 'fulfilled') {
         setCandidates(Array.isArray(candR.value?.candidates) ? candR.value.candidates : [])
         setScreeningPolicy(candR.value?.screeningPolicy || null)
@@ -95,7 +101,8 @@ export function BusinessProvider({ children }) {
 
   // Toggle the org shortlist: optimistic flip, then reconcile with the server's truth; revert on failure.
   const toggleShortlist = useCallback(async (cookId) => {
-    if (!cookId) return
+    if (!cookId || shortlistInFlight.current.has(cookId)) return false
+    shortlistInFlight.current.add(cookId); setActionError('')
     const had = shortlist.includes(cookId)
     setShortlist(prev => (had ? prev.filter(x => x !== cookId) : [...prev, cookId]))
     try {
@@ -110,12 +117,13 @@ export function BusinessProvider({ children }) {
       })
       return true
     } catch {
+      setActionError('Shortlist was not saved. Check your connection and workspace access, then try again.')
       // revert to the pre-toggle membership
       setShortlist(prev => (had
         ? (prev.includes(cookId) ? prev : [...prev, cookId])
         : prev.filter(x => x !== cookId)))
       return false
-    }
+    } finally { shortlistInFlight.current.delete(cookId) }
   }, [getToken, shortlist])
 
   // Advance a cook in a role's pipeline (POST). The Role screen owns its pipeline view and
@@ -128,7 +136,7 @@ export function BusinessProvider({ children }) {
   }, [getToken])
 
   const value = {
-    org, roles, shortlist, candidates, screeningPolicy, loading, error, refresh,
+    org, roles, shortlist, shortlistCandidates, candidates, screeningPolicy, loading, error, actionError, refresh,
     roleById: id => roles.find(r => r.id === id) || null,
     candidateById: id => candidates.find(c => c.id === id) || null,
     isShortlisted: id => shortlist.includes(id),

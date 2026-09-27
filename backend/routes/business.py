@@ -191,6 +191,28 @@ def _org_shortlist(session, org_id):
     return sl
 
 
+def _active_applications_for_org(session, org_id, cook_ids):
+    from services.hiring_consent import APPLICATION_CONSENT_VERSION
+    return (session.query(HiringApplication)
+            .join(RolePosting, RolePosting.id == HiringApplication.role_posting_id)
+            .filter(RolePosting.org_id == org_id, RolePosting.integration_environment == 'live',
+                    HiringApplication.applicant_id.in_(cook_ids),
+                    HiringApplication.consent_version == APPLICATION_CONSENT_VERSION,
+                    HiringApplication.status != 'withdrawn')
+            .order_by(HiringApplication.submitted_at.desc(), HiringApplication.id.desc()).all())
+
+
+def _set_shortlisted(session, org_id, cook_id, enabled):
+    # Serialize workspace shortlist writes, including first creation and concurrent stars.
+    session.query(Org).filter_by(id=org_id).with_for_update().one()
+    sl = _org_shortlist(session, org_id)
+    member = session.query(ShortlistMember).filter_by(shortlist_id=sl.id, cook_id=cook_id).first()
+    if enabled and member is None:
+        session.add(ShortlistMember(shortlist_id=sl.id, cook_id=cook_id))
+    elif not enabled and member is not None:
+        session.delete(member)
+
+
 def _cook_facts(session, cook_id):
     """Job-related facts for the server matcher: the verified score + latest resume key-point ids."""
     cp = session.get(CookProfile, cook_id)
@@ -951,8 +973,28 @@ def get_shortlist():
             return jsonify({"cookIds": []}), 200
         sl = _org_shortlist(session, org.id)
         members = session.query(ShortlistMember).filter_by(shortlist_id=sl.id).all()
-        out = [m.cook_id for m in members if _shared_candidate(session, org.id, m.cook_id)]
-    return jsonify({"cookIds": out}), 200
+        ids = [member.cook_id for member in members]
+        applications = _active_applications_for_org(session, org.id, ids) if ids else []
+        by_applicant = {}
+        for application in applications:
+            by_applicant.setdefault(application.applicant_id, application)
+        shared = {row[0] for row in (session.query(AssessmentShare.applicant_id)
+                  .join(RolePosting, RolePosting.id == AssessmentShare.role_posting_id)
+                  .join(SkillAttempt, SkillAttempt.id == AssessmentShare.attempt_id)
+                  .filter(RolePosting.org_id == org.id, RolePosting.integration_environment == 'live',
+                          AssessmentShare.applicant_id.in_(ids), AssessmentShare.revoked_at.is_(None),
+                          SkillAttempt.user_id == AssessmentShare.applicant_id,
+                          SkillAttempt.verification_state.in_(ATTEMPT_TERMINAL)).distinct())} if ids else set()
+        out = [uid for uid in ids if uid in by_applicant or uid in shared]
+        users = {user.id: user for user in session.query(User).filter(User.id.in_(out))} if out else {}
+        candidates = []
+        for uid in out:
+            application = by_applicant.get(uid)
+            details = (application.applicant_details or {}) if application else {}
+            candidates.append({'id': uid, 'name': details.get('name') or (users[uid].name if uid in users else 'Applicant'),
+                'roleId': str(application.role_posting_id) if application else None,
+                'hasVideo': uid in shared, 'assessmentStatus': 'shared' if uid in shared else 'assessment_required'})
+    return jsonify(cookIds=out, candidates=candidates), 200
 
 
 @business_bp.route("/shortlist", methods=["POST"])
@@ -969,17 +1011,13 @@ def toggle_shortlist():
         org = _org_for(session, g.user_id)
         if not org:
             return jsonify({"error": "Activate a workspace first"}), 400
-        if not _cook_exists(session, cook_id) or not _shared_candidate(session, org.id, cook_id):
-            return jsonify({"error": "Candidate has not shared an assessment with this company"}), 403
+        if not (_active_applications_for_org(session, org.id, [cook_id]) or _shared_candidate(session, org.id, cook_id)):
+            return jsonify(error='Candidate has no active application or assessment shared with this company'), 403
+        session.query(Org).filter_by(id=org.id).with_for_update().one()
         sl = _org_shortlist(session, org.id)
-        member = (session.query(ShortlistMember)
-                  .filter_by(shortlist_id=sl.id, cook_id=cook_id).first())
-        if member:
-            session.delete(member)
-            on = False
-        else:
-            session.add(ShortlistMember(shortlist_id=sl.id, cook_id=cook_id))
-            on = True
+        member = session.query(ShortlistMember).filter_by(shortlist_id=sl.id, cook_id=cook_id).first()
+        on = member is None
+        _set_shortlisted(session, org.id, cook_id, on)
     return jsonify({"ok": True, "shortlisted": on}), 200
 
 

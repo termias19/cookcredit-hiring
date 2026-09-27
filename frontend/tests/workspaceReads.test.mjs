@@ -28,7 +28,7 @@ test('actual provider makes one settings request, two integration requests and f
     const calls=[]
     const api={}
     for (const [name,label] of [['getBusinessOrg','org'],['getBusinessRoles','roles'],['getBusinessShortlist','shortlist'],['getBusinessCandidates','candidates']]) api[name]=async()=>{calls.push(label);return {}}
-    const react={createContext:()=>({Provider:'provider'}),useContext:()=>null,useState:initial=>[initial,()=>{}],useCallback:fn=>fn,useEffect:fn=>fn()}
+    const react={createContext:()=>({Provider:'provider'}),useContext:()=>null,useRef:initial=>({current:initial}),useState:initial=>[initial,()=>{}],useCallback:fn=>fn,useEffect:fn=>fn()}
     const modules={'react':react,'react/jsx-runtime':{jsx:()=>null},'react-router-dom':{useLocation:()=>({pathname,search})},'./AuthContext':{useAuth:()=>({user:{getIdToken:async()=>'fixture'}})},'../utils/workspaceReads':{workspaceReads},'../utils/Api':api}
     const context={module:{exports:{}},require:name=>modules[name]}
     vm.runInNewContext(code,context)

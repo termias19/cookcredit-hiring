@@ -852,6 +852,10 @@ def save_employer_review(application_id):
         revision=str(events[0].id) if events else None
         if body.get('revision')!=revision:
             return jsonify(error='Another reviewer changed this application. Reload before saving.'),409
+        if detail['status'] == 'shortlisted':
+            from routes.business import _set_shortlisted
+            role = session.get(RolePosting, application.role_posting_id)
+            _set_shortlisted(session, role.org_id, application.applicant_id, True)
         if events and events[0].detail==detail and (events[0].event_type==hiring_reviews.EVENTS[1])==body['publish']:
             response = jsonify(review=hiring_reviews.review_view(events, session=session),employerUpdate=hiring_reviews.review_view(events,public=True))
             response.headers['Cache-Control'] = 'private, no-store'

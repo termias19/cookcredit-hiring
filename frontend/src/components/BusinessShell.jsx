@@ -68,6 +68,7 @@ function Sidebar() {
 }
 
 export default function BusinessShell({ header, children, embedded = false }) {
+  const biz = useBusiness()
   const isDesktop = useIsDesktop()
   const { t } = useLang()
   const screenHeader = isValidElement(header)
@@ -84,6 +85,7 @@ export default function BusinessShell({ header, children, embedded = false }) {
         <div style={isDesktop ? { maxWidth: 1280, margin: '0 auto' } : undefined}>
           {isDesktop ? screenHeader : <header>{screenHeader}</header>}
           {previewNote}
+          {biz?.actionError && <p role="alert" style={{ margin: '12px 28px', color: '#A44320' }}>{biz.actionError}</p>}
           <div>{children}</div>
         </div>
       </main>
