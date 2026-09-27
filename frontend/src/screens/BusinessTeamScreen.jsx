@@ -24,12 +24,15 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState(null)
+  const [copyStatus, setCopyStatus] = useState('')
+  const invitationsAvailable = ['team', 'integration', 'enterprise'].includes(biz?.org?.plan)
   const getToken = biz?.getToken
 
   const load = useCallback(async () => {
-    const token = await getToken?.()
-    if (!token) { setStatus('error'); return }
+    setStatus('loading'); setError('')
     try {
+      const token = await getToken?.()
+      if (!token) throw new Error('Sign in again to load your team.')
       const result = await getBusinessTeam({ token })
       setTeam({ members: result.members || [], invitations: result.invitations || [], canManage: Boolean(result.canManage) })
       setStatus('ready')
@@ -42,8 +45,8 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
   useEffect(() => { load() }, [load])
 
   async function invite() {
-    if (!email.trim() || busy) return
-    setBusy(true); setError(''); setCreated(null)
+    if (!email.trim() || busy || !invitationsAvailable) return
+    setBusy(true); setError(''); setCreated(null); setCopyStatus('')
     try {
       const token = await getToken()
       const result = await inviteBusinessTeamMember({ token, email: email.trim(), seatRole })
@@ -53,6 +56,13 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
     } catch (err) {
       setError(err.message || 'Invitation could not be created')
     } finally { setBusy(false) }
+  }
+
+  async function copyInvitation() {
+    try {
+      await navigator.clipboard.writeText(created.inviteUrl)
+      setCopyStatus('Invitation link copied.')
+    } catch { setCopyStatus('Could not copy automatically. Select and copy the link below.') }
   }
 
   async function revoke(id) {
@@ -75,6 +85,7 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
       <p style={explain}>Choose who can review applicants and who can manage your workspace. Only admins can change billing and integration settings.</p>
       {status === 'loading' && <p style={muted}>Loading team…</p>}
       {error && <div role="alert" style={alert}>{error}</div>}
+      {status === 'error' && <button onClick={load} style={secondary}>Retry loading team</button>}
 
       {team.members.map(member => <div className="cc-business-card" key={member.id} style={row}>
         <Mail size={16} color="#888" />
@@ -88,20 +99,23 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
         {team.canManage && <button aria-label="Revoke invitation" onClick={() => revoke(item.id)} disabled={busy} style={iconButton}><X size={14} /></button>}
       </div>)}
 
-      {team.canManage && <div className="cc-business-card" style={panel}>
+      {status === 'ready' && team.canManage && !invitationsAvailable && <p role="status" style={explain}>Team invitations are not enabled for this workspace. Your current hiring access remains available. Contact CookCredit to arrange team access.</p>}
+      {status === 'ready' && team.canManage && invitationsAvailable && <div className="cc-business-card" style={panel}>
         <div style={label}>Invite a teammate</div>
         <input aria-label="Teammate email" value={email} onChange={event => setEmail(event.target.value)} type="email" placeholder="teammate@company.com" style={input} />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '9px 0' }}>
           {ROLES.map(([value, name]) => <button key={value} onClick={() => setSeatRole(value)} style={{ ...choice, ...(seatRole === value ? choiceOn : {}) }}>{name}</button>)}
         </div>
         <button onClick={invite} disabled={busy || !email.trim()} style={{ ...primary, opacity: busy || !email.trim() ? 0.5 : 1 }}><UserPlus size={15} />{busy ? 'Saving…' : 'Create invitation'}</button>
-        <p style={muted}>Team seats require an active Team or Enterprise subscription. Invitations expire after seven days and only the invited verified email can accept.</p>
+        <p style={muted}>Invitations expire after seven days and only the invited verified email can accept.</p>
       </div>}
 
       {created && <div style={{ ...panel, borderColor: '#A8D5C8', background: '#F5FBF8' }}>
         <strong>Invitation recorded</strong>
-        <p style={{ ...muted, margin: '6px 0 10px' }}>{created.emailDelivered ? 'Email delivered. You can also copy the link.' : 'Email delivery is not configured or failed. Copy this one-time link now.'}</p>
-        <button onClick={() => navigator.clipboard?.writeText(created.inviteUrl)} style={secondary}><Copy size={14} />Copy invitation link</button>
+        <p style={{ ...muted, margin: '6px 0 10px' }}>{created.emailDelivered ? 'Invitation email accepted for sending. Inbox receipt is not confirmed. You can also copy the link.' : 'The invitation was saved, but its email was not sent. Copy the link below and share it with the invited teammate.'}</p>
+        <button onClick={copyInvitation} style={secondary}><Copy size={14} />Copy invitation link</button>
+        {copyStatus && <p role="status" style={muted}>{copyStatus}</p>}
+        <input aria-label="Invitation link" readOnly value={created.inviteUrl} onFocus={event => event.target.select()} style={{ ...input, marginTop: 10 }} />
       </div>}
     </div>
   </BusinessShell>

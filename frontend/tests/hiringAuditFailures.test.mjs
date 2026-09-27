@@ -195,3 +195,45 @@ test('assessment return resolves the server-owned application with replacement n
   assert.equal(destinations[0][0], '/application/submitted-1')
   assert.equal(destinations[0][1].replace, true)
 })
+
+
+test('team load failures expose a retry and recover', async () => {
+  let fail = true
+  const s = await screen('BusinessTeamScreen', { biz: { ...biz, org: { plan: 'team' } }, api: {
+    getBusinessTeam: async () => { if (fail) throw Error('offline'); return { members: [], invitations: [], canManage: true } },
+  } })
+  await s.settle()
+  assert.match(s.text(), /offline/)
+  fail = false
+  await s.find(p => p.children === 'Retry loading team').props.onClick()
+  s.render()
+  assert.doesNotMatch(s.text(), /offline/)
+  assert.match(s.text(), /Invite a teammate/)
+})
+
+test('included hiring access never offers an invitation the backend will reject', async () => {
+  const s = await screen('BusinessTeamScreen', { biz: { ...biz, org: { plan: 'trial', integrationAccess: { earlyAccess: true } } }, api: {
+    getBusinessTeam: async () => ({ members: [], invitations: [], canManage: true }),
+  } })
+  await s.settle()
+  assert.match(s.text(), /Team invitations are not enabled/)
+  assert.equal(s.find(p => p['aria-label'] === 'Teammate email'), undefined)
+})
+
+test('invitation mail acceptance is not claimed as inbox delivery; failed copy retains selectable link', async () => {
+  const s = await screen('BusinessTeamScreen', { biz: { ...biz, org: { plan: 'team' } }, clipboard: async () => { throw Error('denied') }, api: {
+    getBusinessTeam: async () => ({ members: [], invitations: [], canManage: true }),
+    inviteBusinessTeamMember: async () => ({ invitation: { emailDelivered: true, inviteUrl: 'https://hiring.cookcredit.com/business/invite/test-only' } }),
+  } })
+  await s.settle()
+  s.find(p => p['aria-label'] === 'Teammate email').props.onChange({ target: { value: 'controlled@example.test' } })
+  s.render(); await s.settle()
+  await s.find(p => p.onClick && JSON.stringify(p.children)?.includes('Create invitation')).props.onClick()
+  s.render()
+  assert.match(s.text(), /Inbox receipt is not confirmed/)
+  assert.doesNotMatch(s.text(), /Email delivered/)
+  await s.find(p => p.onClick && JSON.stringify(p.children)?.includes('Copy invitation link')).props.onClick()
+  s.render()
+  assert.match(s.text(), /Could not copy automatically/)
+  assert.equal(s.find(p => p['aria-label'] === 'Invitation link').props.value, 'https://hiring.cookcredit.com/business/invite/test-only')
+})
