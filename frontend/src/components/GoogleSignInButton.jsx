@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { authDestination, rememberDestination, rememberAccountDestination } from '../utils/homeFor'
+import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
 
 export default function GoogleSignInButton({ destination, disabled = false }) {
   const { loginWithGoogle } = useAuth()
@@ -13,12 +13,13 @@ export default function GoogleSignInButton({ destination, disabled = false }) {
     if (busy || disabled) return
     setBusy(true); setError('')
     try {
-      if (destination) {
-        rememberDestination(destination)
-        navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: destination } })
+      const intent = safeAuthDestination(destination) || pendingDest()
+      if (intent) {
+        rememberDestination(intent)
+        navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: intent } })
       }
-      const result = await loginWithGoogle(destination)
-      const dest = authDestination(result.profile, destination, result.uid)
+      const result = await loginWithGoogle(intent)
+      const dest = authDestination(result.profile, intent, result.uid)
       rememberAccountDestination(result.uid, dest)
       navigate(result.needsVerification ? '/verify' : dest, { state: { from: dest }, replace: true })
     } catch (err) {
