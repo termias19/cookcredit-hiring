@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { authDestination, rememberDestination, rememberAccountDestination } from '../utils/homeFor'
 import { profileFailure } from '../utils/profileFailure'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
@@ -25,7 +26,7 @@ export default function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useLang()
-  const { login } = useAuth()
+  const { login, authActionPending } = useAuth()
   const [email, setEmail] = useState(location.state?.email || '')
   const [pass, setPass]   = useState('')
   const [err, setErr]     = useState('')
@@ -38,7 +39,7 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
-    if (busy) return
+    if (busy || authActionPending) return
     if (!email || !pass) { setErr('Please enter your email and password'); return }
     setBusy(true); setErr('')
     try {
@@ -73,6 +74,8 @@ export default function LoginScreen() {
 
       {/* Form */}
       <motion.div variants={staggerContainer(0.07, 0.12)} initial="hidden" animate="show" style={{ padding: '36px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <GoogleSignInButton destination={location.state?.from} disabled={busy || authActionPending} />
+        <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or sign in with email</p>
         <motion.div variants={fadeUp}>
           <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
             {t.email || 'Email'}
@@ -102,7 +105,7 @@ export default function LoginScreen() {
           )}
         </AnimatePresence>
 
-        <motion.button variants={fadeUp} onClick={handleLogin} disabled={busy} {...buttonPress} style={{
+        <motion.button variants={fadeUp} onClick={handleLogin} disabled={busy || authActionPending} {...buttonPress} style={{
           background: busy ? '#e5e5e5' : '#1a1a1a', color: busy ? '#999' : 'white',
           border: 'none', padding: '16px', fontSize: 15, fontWeight: 500,
           cursor: busy ? 'default' : 'pointer', letterSpacing: 0.5,

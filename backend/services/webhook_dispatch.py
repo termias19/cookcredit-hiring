@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 
 def request_dispatch(session, due_at, *, kind='webhook'):
-    if kind not in ('webhook', 'billing'):
+    if kind not in ('webhook', 'billing', 'email'):
         raise ValueError('Unsupported dispatch kind')
     previous = session.info.get(f'{kind}_dispatch_due')
     if previous is None or due_at < previous:
@@ -20,10 +20,15 @@ def _client():
 
 
 def enqueue_dispatch(due_at, *, kind='webhook'):
-    if kind not in ('webhook', 'billing'):
+    if kind not in ('webhook', 'billing', 'email'):
         raise ValueError('Unsupported dispatch kind')
     queue = os.environ.get(f'{kind.upper()}_TASKS_QUEUE', '').strip()
     target = os.environ.get(f'{kind.upper()}_TASKS_TARGET', '').strip()
+    if kind == 'email' and not queue and not target:
+        # Reuse the existing bounded task queue, identity and durable mail worker.
+        queue = os.environ.get('WEBHOOK_TASKS_QUEUE', '').strip()
+        origin = os.environ.get('TASKS_OIDC_AUDIENCE', '').strip()
+        target = origin + '/api/auth/internal/dispatch-emails' if queue and origin else ''
     if not queue and not target:
         return False  # Existing scheduler-only deployments remain supported.
     account = os.environ.get('TASKS_OIDC_SA', '').strip()
@@ -32,8 +37,9 @@ def enqueue_dispatch(due_at, *, kind='webhook'):
     if (not queue or not account or not audience or parsed.scheme != 'https'
             or parsed.username or parsed.password or parsed.query or parsed.fragment
             or f'{parsed.scheme}://{parsed.netloc}' != audience
-            or parsed.path != ('/api/partner/internal/dispatch-webhooks' if kind == 'webhook'
-                               else '/api/stripe/internal/dispatch-events')):
+            or parsed.path != {'webhook': '/api/partner/internal/dispatch-webhooks',
+                               'billing': '/api/stripe/internal/dispatch-events',
+                               'email': '/api/auth/internal/dispatch-emails'}[kind]):
         raise RuntimeError('Webhook task configuration is incomplete or invalid')
     from google.protobuf.timestamp_pb2 import Timestamp
     scheduled = Timestamp()

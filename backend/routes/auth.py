@@ -243,8 +243,12 @@ def request_verification_email():
     from services.account_email import enqueue_account_email
     if not g.email_verified:
         with db_session() as session:
-            enqueue_account_email(session, kind='verify', recipient=g.email, user_id=g.user_id)
-    return jsonify(accepted=True), 202
+            result = enqueue_account_email(session, kind='verify', recipient=g.email, user_id=g.user_id)
+        if result and not result['queued']:
+            return jsonify(error='Please wait before requesting another verification email.',
+                           **result), 429, {'Retry-After': str(result['retryAfterSeconds'])}
+        return jsonify(accepted=True, **(result or {})), 202
+    return jsonify(accepted=True, alreadyVerified=True), 200
 
 
 @auth_bp.route('/email/password-reset', methods=['POST'])

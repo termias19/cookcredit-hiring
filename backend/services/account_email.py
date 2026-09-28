@@ -5,13 +5,14 @@ import os
 import smtplib
 import ssl
 import uuid
+import math
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit, parse_qs, urlencode
 import requests
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from sqlalchemy.dialects.postgresql import insert
 from models.account_email import AccountEmail
 from services.database import db_session
@@ -27,7 +28,18 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
     if kind not in {'verify', 'reset', 'welcome'}:
         raise ValueError('Unsupported account email')
     identity = user_id if kind == 'welcome' else recipient.strip().casefold()
+    now = utcnow()
+    if kind == 'verify':
+        # Serialize per account without delaying unrelated signups. A rolling
+        # cooldown matches the UI and cannot double-send at a clock boundary.
+        lock = int.from_bytes(hashlib.sha256(f'verify:{identity}'.encode()).digest()[:8], 'big', signed=True)
+        session.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': lock})
+        recent = session.query(AccountEmail).filter_by(kind='verify', recipient=recipient).order_by(AccountEmail.created_at.desc()).first()
+        if recent and (now - recent.created_at).total_seconds() < 60:
+            return {'queued': False, 'retryAfterSeconds': max(1, math.ceil(60 - (now - recent.created_at).total_seconds()))}
     window = 'once' if kind == 'welcome' else str(int(utcnow().timestamp()) // 300)
+    if kind == 'verify':
+        window = uuid.uuid4().hex
     key = hashlib.sha256(f'{kind}:{identity}:{window}'.encode()).hexdigest()
     from services.email_capacity import reserve_email_slot
     if not reserve_email_slot(session, key):
@@ -36,6 +48,9 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
         id=uuid.uuid4(), dedupe_key=key, kind=kind, recipient=recipient,
         user_id=user_id, status='pending', attempts=0,
         created_at=utcnow(), available_at=utcnow()).on_conflict_do_nothing(index_elements=['dedupe_key']))
+    from services.webhook_dispatch import request_dispatch
+    request_dispatch(session, now, kind='email')
+    return {'queued': True, 'retryAfterSeconds': 60 if kind == 'verify' else 300}
 
 
 def account_email_content(kind, link, *, custom=None):

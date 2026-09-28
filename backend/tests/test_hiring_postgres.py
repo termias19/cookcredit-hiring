@@ -141,6 +141,33 @@ def headers(uid):
     return {'Authorization': 'Bearer '+uid}
 
 
+def test_new_employers_activate_separate_workspaces_and_cannot_read_each_others_roles(client, db, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from services import hiring_access
+    monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
+    monkeypatch.setattr(hiring_access, 'access_allowed', lambda email, **kw: email in ('new-a@example.test', 'new-b@example.test'))
+    with database.db_session() as session:
+        session.add_all([User(id=uid, email=uid+'@example.test', name=uid, roles=['eater'], active_role='business') for uid in ('new-a', 'new-b', 'unapproved')])
+    assert client.post('/business/activate', headers=headers('unapproved'), json={'name':'No access'}).status_code == 403
+    def activate(uid):
+        with client.application.test_client() as separate:
+            response = separate.post('/business/activate', headers=headers(uid), json={'name':uid+' kitchen','city':'Atlanta'})
+            assert response.status_code == 200
+            return response.json['org']['id']
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        repeated = list(pool.map(activate, ['new-a'] * 4))
+    assert len(set(repeated)) == 1
+    other = activate('new-b')
+    assert other != repeated[0] and other not in (str(db.org), str(db.other_org))
+    assert client.get('/business/org', headers=headers('new-a')).json['org']['id'] == repeated[0]
+    assert client.get('/business/org', headers=headers('new-b')).json['org']['id'] == other
+    with database.db_session() as session:
+        role = RolePosting(org_id=uuid.UUID(repeated[0]), title='Private company role', status='open')
+        session.add(role); session.flush(); rid = str(role.id)
+        assert session.query(OrgMembership).filter_by(user_id='new-a').count() == 1
+    assert client.get('/business/role/'+rid, headers=headers('new-b')).status_code == 404
+
+
 def test_free_early_integration_preserves_admin_scope_and_enforces_quota(client, db, monkeypatch):
     monkeypatch.setenv('BUSINESS_BILLING_ENABLED', '0')
     monkeypatch.setenv('INTEGRATION_EARLY_ACCESS_ENABLED', '1')

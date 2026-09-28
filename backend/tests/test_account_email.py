@@ -32,6 +32,21 @@ def test_verification_cannot_send_to_another_address(client, monkeypatch):
     assert calls == [{'kind': 'verify', 'recipient': 'customer@example.test', 'user_id': 'customer'}]
 
 
+def test_verification_cooldown_is_reported_instead_of_false_success(client, monkeypatch):
+    monkeypatch.setattr(account_email, 'enqueue_account_email', lambda *a, **kw: {'queued': False, 'retryAfterSeconds': 42})
+    response = client.post('/auth/email/verification', headers={'Authorization': 'Bearer token'})
+    assert response.status_code == 429
+    assert response.json['queued'] is False
+    assert response.headers['Retry-After'] == '42'
+
+
+def test_verified_account_does_not_claim_an_email_was_queued(client, monkeypatch):
+    monkeypatch.setattr(auth_middleware, '_verify_token', lambda _: {'uid': 'customer', 'email': 'customer@example.test', 'email_verified': True})
+    monkeypatch.setattr(account_email, 'enqueue_account_email', lambda *a, **kw: pytest.fail('Already verified'))
+    response = client.post('/auth/email/verification', headers={'Authorization': 'Bearer token'})
+    assert response.status_code == 200 and response.json['alreadyVerified'] is True
+
+
 def test_reset_never_discloses_account_existence(client, monkeypatch):
     calls = []
     monkeypatch.setattr(account_email, 'enqueue_account_email', lambda *a, **kw: calls.append(kw))

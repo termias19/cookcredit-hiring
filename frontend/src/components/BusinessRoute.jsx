@@ -8,6 +8,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ProtectedRoute from './ProtectedRoute'
 import { BusinessProvider } from '../context/BusinessContext'
+import HiringAccessRequestScreen from '../screens/HiringAccessRequestScreen'
 
 function BusinessAccess({ children }) {
   const { user, profile, loading } = useAuth()
@@ -23,7 +24,7 @@ function BusinessAccess({ children }) {
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   if (!user.emailVerified) return <Navigate to="/verify" state={{ from: location }} replace />
   if (!profile || profile.id !== user.uid || profile.employerAccessAllowed !== true) {
-    return <Navigate to="/applications" replace />
+    return <HiringAccessRequestScreen />
   }
 
   // Authorization is the SERVER-resolved role only — never a client localStorage flag (which any

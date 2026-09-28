@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { homeFor, safeAuthDestination, rememberDestination, rememberAccountDestination, pendingDest, clearPendingDestination, authDestination } from '../src/utils/homeFor.js'
+import { homeFor, safeAuthDestination, rememberDestination, rememberAccountDestination, pendingDest, clearPendingDestination, authDestination, signupDestination } from '../src/utils/homeFor.js'
 import { NODES, scanText } from '../src/data/culinaryTaxonomy.js'
 
 function storage() {
@@ -13,7 +13,7 @@ globalThis.localStorage = storage()
 test('only server-granted company members land in the workspace', () => {
   assert.equal(homeFor({ roles: ['business'], employerAccessAllowed: true }), '/business/roles')
   assert.equal(homeFor({ roles: ['eater'], activeRole: 'business', employerAccessAllowed: true }), '/business/onboarding')
-  assert.equal(homeFor({ roles: ['eater'], activeRole: 'business' }), '/applications')
+  assert.equal(homeFor({ roles: ['eater'], activeRole: 'business' }), '/business/onboarding')
   assert.equal(homeFor({ roles: ['cook'], activeRole: 'cook' }), '/applications')
   assert.equal(homeFor(null), '/applications')
 })
@@ -38,12 +38,22 @@ test('untrusted redirects and retired identity/service routes cannot re-enter th
   assert.equal(localStorage.getItem('cc_pending_onboarding'), null)
 })
 
-test('stale employer intent cannot route an applicant into a company or owner screen', () => {
-  for (const target of ['/business/roles', '/business/onboarding', '/business/candidates', '/owner/access']) {
+test('employer intent reaches the approval guard instead of the applicant dashboard', () => {
+  for (const target of ['/business/roles', '/business/onboarding', '/business/candidates']) {
     rememberDestination(target)
-    assert.equal(authDestination({ id: 'candidate', roles: ['eater'], employerAccessAllowed: false }), '/applications')
+    assert.equal(authDestination({ id: 'candidate', roles: ['eater'], employerAccessAllowed: false }), target)
   }
+  assert.equal(authDestination({ id: 'candidate' }, '/owner/access'), '/applications')
   clearPendingDestination()
+})
+
+test('explicit signup choice beats an old dashboard destination and preserves invitations', () => {
+  assert.equal(signupDestination('eat', '/applications'), '/business/onboarding')
+  assert.equal(signupDestination('eat', '/profile'), '/business/onboarding')
+  assert.equal(signupDestination('cook', '/business/roles'), '/applications')
+  assert.equal(signupDestination('cook', '/apply/role-123?invite=opaque'), '/apply/role-123?invite=opaque')
+  assert.equal(signupDestination('eat', '/business/invite/opaque'), '/business/invite/opaque')
+  assert.equal(signupDestination('eat', '//evil.example'), '/business/onboarding')
 })
 
 test('a verification tab restores only its account-bound applicant destination', () => {

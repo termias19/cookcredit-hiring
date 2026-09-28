@@ -6,7 +6,7 @@ export function isBusinessProfile(profile) {
 
 export function homeFor(profile) {
   if (isBusinessProfile(profile)) return '/business/roles'
-  if (profile?.employerAccessAllowed === true && (profile?.activeRole || profile?.active_role) === 'business') return '/business/onboarding'
+  if ((profile?.activeRole || profile?.active_role) === 'business') return '/business/onboarding'
   return '/applications'
 }
 
@@ -62,9 +62,17 @@ export function authDestination(profile, requested, uid = profile?.id) {
   let saved
   try { saved = JSON.parse(localStorage.getItem('cc_account_destination') || 'null') } catch { /* optional */ }
   const destination = safeAuthDestination(requested) || (uid && saved?.uid === uid ? safeAuthDestination(saved?.destination) : null) || pendingDest()
-  if (profile && destination?.startsWith('/business/') && !destination.startsWith('/business/invite/') && profile.employerAccessAllowed !== true) return '/applications'
+  // BusinessRoute shows the existing approval/setup flow without granting access.
+  // Employer intent must never silently become an applicant dashboard.
   if (profile && destination === '/owner/access' && profile.isAccessOwner !== true) return '/applications'
   return destination || homeFor(profile)
+}
+
+export function signupDestination(role, requested) {
+  const dest = safeAuthDestination(requested)
+  if (dest?.startsWith('/business/invite/')) return dest
+  if (role === 'eat') return dest?.startsWith('/business/') ? dest : '/business/onboarding'
+  return dest && !dest.startsWith('/business/') && dest !== '/owner/access' ? dest : '/applications'
 }
 
 export function rememberAccountDestination(uid, value) {

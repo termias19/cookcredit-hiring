@@ -362,7 +362,7 @@ def activate():
     loc = data.get("loc") if isinstance(data.get("loc"), dict) else None
     focus = [str(x)[:40] for x in (data.get("cuisineFocus") or [])][:12]
     with db_session() as session:
-        user = session.get(User, g.user_id)
+        user = session.query(User).filter_by(id=g.user_id).with_for_update().one_or_none()
         if user is None:
             return jsonify({"error": "User not found"}), 404
         m = _membership(session, g.user_id)

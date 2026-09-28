@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -20,28 +20,61 @@ export default function VerifyEmailScreen() {
   const [err, setErr] = useState('')
   const [resent, setResent] = useState(false)
   const [cooldown, setCooldown] = useState(0)
+  const checkingRef = useRef(false)
   const notice = verificationNotice?.uid === user?.uid ? verificationNotice : null
 
   useEffect(() => { if (cooldown <= 0) return; const id = setInterval(() => setCooldown(c => c - 1), 1000); return () => clearInterval(id) }, [cooldown])
+  useEffect(() => {
+    if (notice?.requestedAt && (notice.requested || notice.limited)) {
+      setCooldown(Math.max(0, Math.ceil((notice.requestedAt + notice.retryAfterSeconds * 1000 - Date.now()) / 1000)))
+    }
+  }, [notice])
+
+  // Returning from the inbox should continue the saved journey automatically.
+  // Focus/visibility events avoid constant Firebase polling while people read mail.
+  useEffect(() => {
+    const onReturn = async () => {
+      if (document.visibilityState === 'hidden' || checkingRef.current || !auth.currentUser) return
+      checkingRef.current = true
+      try {
+        await auth.currentUser.reload()
+        if (auth.currentUser?.emailVerified) {
+          const resolved = await completeVerification()
+          navigate(authDestination(resolved, location.state?.from), { replace: true })
+        }
+      } catch { /* Keep the explicit retry button available. */ }
+      finally { checkingRef.current = false }
+    }
+    window.addEventListener('focus', onReturn)
+    document.addEventListener('visibilitychange', onReturn)
+    return () => { window.removeEventListener('focus', onReturn); document.removeEventListener('visibilitychange', onReturn) }
+  }, [completeVerification, navigate, location.state?.from])
 
   async function handleResend() {
     if (cooldown > 0 || resending || !auth.currentUser) return
     setResending(true); setErr('')
-    try { await requestVerificationEmail(); setResent(true); setCooldown(RESEND_COOLDOWN) } catch (error) {
+    try {
+      await auth.currentUser.reload()
+      if (auth.currentUser.emailVerified) { await handleContinue(); return }
+      const result = await requestVerificationEmail()
+      if (result?.alreadyVerified) { await handleContinue(); return }
+      setResent(true); setCooldown(result?.retryAfterSeconds || RESEND_COOLDOWN)
+    } catch (error) {
       setErr(error?.status === 429 ? 'Please wait before requesting another email. Check your inbox and spam folder for the earlier message.' : 'We could not request your verification email. Please try again; you do not need to create another account.')
-      if (error?.status === 429) setCooldown(RESEND_COOLDOWN)
+      if (error?.status === 429) setCooldown(error.retryAfterSeconds || RESEND_COOLDOWN)
     } finally { setResending(false) }
   }
 
   async function handleContinue() {
-    if (checking || !auth.currentUser) return
+    if (checkingRef.current || !auth.currentUser) return
+    checkingRef.current = true
     setChecking(true); setErr('')
     try {
       await auth.currentUser.reload()
       if (!auth.currentUser.emailVerified) { setErr('Email not verified yet. Check your inbox and click the link.'); return }
       const resolvedProfile = await completeVerification()
       navigate(authDestination(resolvedProfile, location.state?.from), { replace: true })
-    } catch { setErr('Something went wrong. Try again.') } finally { setChecking(false) }
+    } catch (error) { setErr(error.message || 'We could not check verification. Please try again.') } finally { checkingRef.current = false; setChecking(false) }
   }
 
   const email = user?.email || auth.currentUser?.email || 'your inbox'

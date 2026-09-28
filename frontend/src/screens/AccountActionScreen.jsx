@@ -37,7 +37,9 @@ export default function AccountActionScreen() {
       if (state === 'verify') {
         const result = await verifyAccountLink({ auth, code, checkCode: checkActionCode, applyCode: applyActionCode, complete: completeVerification })
         setVerifiedEmail(result.email)
-        setDestination(result.profile ? authDestination(result.profile) : null)
+        const next = result.profile ? authDestination(result.profile) : null
+        setDestination(next)
+        if (next) { window.history.replaceState(null, '', '/account/action'); navigate(next, { replace: true }); return }
       } else await confirmPasswordReset(auth, code, password)
       setState('done')
       // Remove the one-time code from the address bar after it is consumed.
@@ -54,7 +56,7 @@ export default function AccountActionScreen() {
         <button style={{ ...linkStyle, background: 'none', border: 0, padding: '14px 0', cursor: 'pointer' }} onClick={async () => {
           if (mode === 'verifyEmail' && sameAccountEmail(auth.currentUser, verifiedEmail)) navigate(destination || '/verify', { replace: true })
           else { if (auth.currentUser) await logout(); navigate('/login', { replace: true, state: { email: verifiedEmail } }) }
-        }}>{destination ? 'Continue to your application' : 'Sign in to continue'}</button></>}
+        }}>{destination ? 'Continue to your account' : 'Sign in to continue'}</button></>}
       {['verify', 'reset'].includes(state) && <form onSubmit={submit} style={{ display: 'grid', gap: 20 }}>
         {state === 'verify' ? <p>Confirm that this is your email address to finish creating your CookCredit account.</p> : <><label>New password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={password} onChange={e => setPassword(e.target.value)} /></label><label>Confirm new password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={confirm} onChange={e => setConfirm(e.target.value)} /></label><p style={{ fontSize: 13 }}>Use at least 12 characters. A longer, unique passphrase works well.</p></>}
         {error && <p role="alert" style={{ color: '#a52b2b' }}>{error}</p>}

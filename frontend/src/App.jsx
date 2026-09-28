@@ -9,7 +9,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import SplashScreen from './components/SplashScreen'
 import OfflineBanner from './components/OfflineBanner'
 import ProtectedRoute from './components/ProtectedRoute'
-import { authDestination, clearPendingDestination, isBusinessProfile } from './utils/homeFor'
+import { authDestination, clearPendingDestination, isBusinessProfile, safeAuthDestination } from './utils/homeFor'
 import { pageVariants } from './styles/motion'
 
 // ── Auth screens (public) ────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ function AuthRedirect({ children }) {
   if (authActionPending || PREVIEW) return children
   if (loading) return null
   if (user) {
-    const dest = authDestination(profile, location.state?.from, user.uid)
+    const dest = authDestination(profile, location.state?.from || safeAuthDestination(new URLSearchParams(location.search).get('next')), user.uid)
     if (!user.emailVerified) return <Navigate to="/verify" state={{ from: dest }} replace />
     return <ProtectedRoute><Navigate to={dest} replace /></ProtectedRoute>
   }

@@ -5,8 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import { ArrowLeft } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
-import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
-import { REGION, normalizePhone, isValidPhone } from '../utils/region'
+import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination } from '../utils/homeFor'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
 const SERIF = "'Cormorant Garamond', 'Playfair Display', Georgia, serif"
@@ -22,13 +22,12 @@ export default function SignupScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useLang()
-  const { signUp } = useAuth()
+  const { signUp, authActionPending } = useAuth()
   const [name, setName]     = useState('')
   const [email, setEmail]   = useState('')
-  const [phone, setPhone]   = useState('')
   const [pass, setPass]     = useState('')
   // Pre-select "Cook" when arriving from a "Become a cook" CTA (LandingScreen passes state.role).
-  const requested = safeAuthDestination(location.state?.from) || pendingDest()
+  const requested = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
   const applicantInvitation = requested?.startsWith('/apply/') || requested?.startsWith('/application/') || requested?.startsWith('/application-assessment-return/')
   const [role, setRole] = useState(applicantInvitation || location.state?.role === 'cook' ? 'cook' : 'eat')
   const [err, setErr]       = useState('')
@@ -44,16 +43,16 @@ export default function SignupScreen() {
   }
 
   async function handleCreate() {
-    if (busy) return
+    if (busy || authActionPending) return
     if (!name.trim() || !email.trim() || !pass) { setErr('Please fill in all fields'); return }
     if (pass.length < 12) { setErr('Password must be at least 12 characters'); return }
-    if (phone && !isValidPhone(phone)) { setErr('Enter a valid phone number'); return }
     setBusy(true); setErr('')
     try {
-      const dest = rememberDestination(requested || (role === 'cook' ? '/profile' : '/business/onboarding'))
+      const dest = rememberDestination(signupDestination(role, requested))
+      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: dest } })
       const account = await signUp(email.trim(), pass, {
         name: name.trim(),
-        phone: phone ? normalizePhone(phone) : '',   // region-aware E.164 (+1 US / +251 ET)
+        phone: '',
         roles: ['eater'],
         activeRole: dest.startsWith('/business') ? 'business' : 'eater',
         hp,
@@ -84,7 +83,7 @@ export default function SignupScreen() {
             {applicantInvitation ? 'Create your applicant account' : t.create_account || 'Create account'}
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
-            {applicantInvitation ? 'Verify your email, then continue your application.' : 'Create your CookCredit account.'}
+            {applicantInvitation ? 'Verify your email, then continue your application.' : role === 'eat' ? 'Create your account, then request access to your own company workspace.' : 'Create your account to apply with an employer’s link.'}
           </p>
         </motion.div>
 
@@ -97,53 +96,6 @@ export default function SignupScreen() {
             tabIndex={-1} autoComplete="off" aria-hidden="true"
             style={{ position: 'absolute', left: '-9999px', top: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
 
-          {/* Name */}
-          <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
-              {t.full_name || 'Full name'}
-            </div>
-            <input style={iStyle} placeholder="Your name" type="text" aria-label="Full name" autoComplete="name" maxLength={200}
-              value={name} onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
-          </motion.div>
-
-          {/* Email */}
-          <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
-              {t.email || 'Email'}
-            </div>
-            <input style={iStyle} placeholder="you@email.com" type="email" aria-label="Email" autoComplete="email"
-              value={email} onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
-          </motion.div>
-
-          {/* Phone */}
-          {!applicantInvitation && <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
-              Phone number · optional
-            </div>
-            <div style={{ display: 'flex', gap: 0 }}>
-              <div style={{
-                padding: '14px 12px', border: '1px solid #e5e5e5', borderRight: 'none',
-                background: '#f5f5f5', fontSize: 15, color: '#666', whiteSpace: 'nowrap',
-              }}>{REGION.phone.prefix}</div>
-              <input style={{ ...iStyle, borderLeft: 'none' }}
-                placeholder={REGION.phone.placeholder} type="tel" aria-label="Phone number, optional" autoComplete="tel-national" maxLength={40}
-                value={phone} onChange={e => setPhone(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreate()} />
-            </div>
-          </motion.div>}
-
-          {/* Password */}
-          <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
-              {t.password || 'Password'}
-            </div>
-            <input style={iStyle} placeholder="12+ characters" type="password" aria-label="Password" autoComplete="new-password" minLength={12}
-              value={pass} onChange={e => setPass(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
-          </motion.div>
-
           {/* Role toggle */}
           {!applicantInvitation && <motion.div variants={fadeUp}>
             <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
@@ -153,7 +105,7 @@ export default function SignupScreen() {
               {ROLE_OPTIONS.map(opt => {
                 const active = role === opt.key
                 return (
-                  <motion.button key={opt.key} aria-pressed={active} disabled={!!applicantInvitation} onClick={() => setRole(opt.key)}
+                  <motion.button key={opt.key} aria-pressed={active} disabled={busy || authActionPending || !!applicantInvitation} onClick={() => setRole(opt.key)}
                     whileHover={{ scale: active ? 1 : 1.02 }} whileTap={tapScale}
                     animate={{ scale: active ? [1, 1.06, 1] : 1 }}
                     transition={{ duration: 0.28 }}
@@ -180,6 +132,39 @@ export default function SignupScreen() {
             </AnimatePresence>
           </motion.div>}
 
+          <GoogleSignInButton destination={signupDestination(role, requested)} disabled={busy || authActionPending} />
+          <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or create an account with email</p>
+          {/* Name */}
+          <motion.div variants={fadeUp}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+              {t.full_name || 'Full name'}
+            </div>
+            <input style={iStyle} placeholder="Your name" type="text" aria-label="Full name" autoComplete="name" maxLength={200}
+              value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+          </motion.div>
+
+          {/* Email */}
+          <motion.div variants={fadeUp}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+              {t.email || 'Email'}
+            </div>
+            <input style={iStyle} placeholder="you@email.com" type="email" aria-label="Email" autoComplete="email"
+              value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+          </motion.div>
+
+          {/* Password */}
+          <motion.div variants={fadeUp}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+              {t.password || 'Password'}
+            </div>
+            <input style={iStyle} placeholder="12+ characters" type="password" aria-label="Password" autoComplete="new-password" minLength={12}
+              value={pass} onChange={e => setPass(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+          </motion.div>
+
+
           <AnimatePresence>
             {err && (
               <motion.div key="signup-err" variants={fadeIn} initial="hidden" animate="show" exit={{ opacity: 0 }} role="alert" style={{ color: '#c53030', fontSize: 13 }}>
@@ -188,18 +173,18 @@ export default function SignupScreen() {
             )}
           </AnimatePresence>
 
-          <motion.button variants={fadeUp} onClick={handleCreate} disabled={busy} {...buttonPress} style={{
+          <motion.button variants={fadeUp} onClick={handleCreate} disabled={busy || authActionPending} {...buttonPress} style={{
             marginTop: 8,
             background: busy ? '#e5e5e5' : '#1a1a1a', color: busy ? '#999' : 'white',
             border: 'none', padding: '16px', fontSize: 15, fontWeight: 500,
             cursor: busy ? 'default' : 'pointer', letterSpacing: 0.5,
           }}>
-            {busy ? '\u2026' : (t.lets_go || "Let's go")}
+            {busy ? '\u2026' : 'Create account'}
           </motion.button>
 
           <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
             {t.already_have || 'Already have an account?'}{' '}
-          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: location.state?.from } })}
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: signupDestination(role, requested) } })}
               style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
               {t.log_in || 'Log in'}
             </motion.button>

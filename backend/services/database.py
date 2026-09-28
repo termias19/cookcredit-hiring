@@ -82,11 +82,13 @@ def db_session():
     session = get_session()
     webhook_dispatch_due = None
     billing_dispatch_due = None
+    email_dispatch_due = None
     try:
         yield session
         session.commit()
         webhook_dispatch_due = session.info.pop('webhook_dispatch_due', None)
         billing_dispatch_due = session.info.pop('billing_dispatch_due', None)
+        email_dispatch_due = session.info.pop('email_dispatch_due', None)
     except Exception:
         session.rollback()
         raise
@@ -108,6 +110,13 @@ def db_session():
         except Exception:
             from services.operations import emit_event
             emit_event('billing_enqueue_failed', severity='ERROR')
+    if email_dispatch_due is not None:
+        try:
+            from services.webhook_dispatch import enqueue_dispatch
+            enqueue_dispatch(email_dispatch_due, kind='email')
+        except Exception:
+            from services.operations import emit_event
+            emit_event('email_enqueue_failed', severity='ERROR')
 
 
 def check_connection():

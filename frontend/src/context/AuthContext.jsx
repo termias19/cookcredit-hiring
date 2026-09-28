@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useMemo, useRef } from 
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   sendEmailVerification,
@@ -67,6 +69,7 @@ async function apiFetch(path, token, opts = {}) {
     const err = new Error(body?.error || `Request failed (${res.status})`)
     err.status = res.status
     err.code = body?.code
+    err.retryAfterSeconds = Number(body?.retryAfterSeconds || res.headers.get('Retry-After')) || 60
     throw err
   }
   return res.json()
@@ -198,7 +201,8 @@ export function AuthProvider({ children }) {
         return { needsVerification: true, uid: cred.user.uid }
       }
 
-      const data = await fetchMeWithHeal(cred.user)
+      const data = await fetchProfile(cred.user)
+      if (!data) throw new Error('Signed in. Please retry loading your account.')
       if (auth.currentUser?.uid !== cred.user.uid || data.id !== cred.user.uid) throw new Error('Your signed-in account changed. Please try again.')
       setProfile(data)
       setProfileError(false)
@@ -215,14 +219,40 @@ export function AuthProvider({ children }) {
     await accountEmail.reset(email, lang)
   }
 
+  async function loginWithGoogle(destination) {
+    authActionRef.current = true
+    setAuthActionPending(true)
+    try {
+      // Open synchronously from the click, before App Check/network requests.
+      const provider = new GoogleAuthProvider()
+      provider.setCustomParameters({ prompt: 'select_account' })
+      const { user: account } = await signInWithPopup(auth, provider)
+      const values = { name: account.displayName || '', roles: ['eater'],
+        activeRole: destination?.startsWith('/business/') ? 'business' : 'eater', createOnly: true }
+      // createOnly preserves existing profiles, memberships and account choices.
+      try { sessionStorage.setItem('cc_signup_profile', JSON.stringify({ uid: account.uid, profile: values })) } catch { /* optional */ }
+      if (!account.emailVerified) {
+        await requestVerificationEmail(account).catch(() => {})
+        return { needsVerification: true, uid: account.uid }
+      }
+      const data = await fetchProfile(account)
+      if (!data) throw new Error('Signed in. Please retry loading your account.')
+      if (auth.currentUser?.uid !== account.uid || data.id !== account.uid) throw new Error('Account changed')
+      setProfile(data); setProfileError(false)
+      apiFetch('/api/auth/complete-verification', await account.getIdToken(), { method: 'POST', body: '{}' }).catch(() => {})
+      return { needsVerification: false, profile: data, uid: account.uid }
+    } finally { authActionRef.current = false; setAuthActionPending(false) }
+  }
+
   async function requestVerificationEmail(account = auth.currentUser) {
     if (!account || PREVIEW) throw new Error('Sign in to request a verification email.')
     try {
-      await accountEmail.verification(account, lang)
-      setVerificationNotice({ uid: account.uid, requested: true })
+      const result = await accountEmail.verification(account, lang)
+      setVerificationNotice({ uid: account.uid, requested: true, requestedAt: Date.now(), retryAfterSeconds: result?.retryAfterSeconds || 60 })
       try { sessionStorage.removeItem('cc_verification_pending') } catch { /* storage is optional */ }
+      return result
     } catch (error) {
-      setVerificationNotice({ uid: account.uid, requested: false, limited: error?.status === 429 })
+      setVerificationNotice({ uid: account.uid, requested: false, limited: error?.status === 429, requestedAt: Date.now(), retryAfterSeconds: error?.retryAfterSeconds || 60 })
       throw error
     }
   }
@@ -251,7 +281,7 @@ export function AuthProvider({ children }) {
   }
 
   async function refreshProfile() {
-    if (user) await fetchProfile(user)
+    if (user) return fetchProfile(user)
   }
 
   async function updateProfile(updates) {
@@ -285,7 +315,7 @@ export function AuthProvider({ children }) {
   // every provider render. Handler identities refresh exactly when user/profile do.
   const value = useMemo(() => ({
     user, profile: profile?.id === user?.uid ? profile : null, loading, profileError, authActionPending, verificationNotice,
-    signUp, login, resetPassword, requestVerificationEmail, completeVerification, logout, updateProfile, switchRole, refreshProfile,
+    signUp, login, loginWithGoogle, resetPassword, requestVerificationEmail, completeVerification, logout, updateProfile, switchRole, refreshProfile,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh handlers with state and email language
   }), [user, profile, loading, profileError, authActionPending, verificationNotice, lang])
 
