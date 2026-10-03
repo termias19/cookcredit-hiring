@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { transformWithEsbuild } from 'vite'
+import * as destinations from '../src/utils/homeFor.js'
 
 // Exercise the actual screen handlers with controlled API latency/failures.
 // Child visuals are opaque; these tests do not claim to be browser acceptance.
@@ -59,6 +60,41 @@ async function screen(name, { biz, api, clipboard = async () => {}, user = { get
 const role = { id: 'role-1', title: 'Cook', status: 'open' }
 const biz = { getToken: async () => 'test-token', roleById: () => role, candidateById: () => null, isShortlisted: () => false }
 const readyApi = { getBusinessRole: async () => ({ role, pipeline: [] }), getHiringApplications: async () => ({ applications: [], page: {} }) }
+
+test('email login keeps a deep-linked application through sign-in and verification', async () => {
+  for (const needsVerification of [false, true]) {
+    const navigations = []
+    const destination = '/apply/role-123?invite=invitation'
+    const s = await screen('LoginScreen', { biz, api: {}, extraModules: {
+      '../utils/homeFor': destinations,
+      '../context/LangContext': { useLang: () => ({ t: {} }) },
+      '../context/AuthContext': { useAuth: () => ({ login: async () => ({ uid: 'applicant', profile: { id: 'applicant' }, needsVerification }) }) },
+      'react-router-dom': { useLocation: () => ({ pathname: '/login', search: '?next=' + encodeURIComponent(destination) }), useNavigate: () => (...args) => navigations.push(args) },
+    } })
+    s.find(p => p['aria-label'] === 'Email').props.onChange({ target: { value: 'applicant@example.test' } })
+    s.find(p => p['aria-label'] === 'Password').props.onChange({ target: { value: 'not-a-real-password' } })
+    s.render()
+    await s.find(p => p.children === 'Sign In').props.onClick()
+    assert.equal(navigations[0][1].state.from, destination)
+    assert.equal(navigations.at(-1)[0], needsVerification ? '/verify' : destination)
+    if (needsVerification) assert.equal(navigations.at(-1)[1].state.from, destination)
+  }
+})
+
+test('login alternatives retain employer intent but reject external next URLs', async () => {
+  for (const [next, expected] of [['/business/onboarding', '/business/onboarding'], ['https://evil.example', null]]) {
+    const navigations = []
+    const s = await screen('LoginScreen', { biz, api: {}, extraModules: {
+      '../utils/homeFor': destinations,
+      '../context/LangContext': { useLang: () => ({ t: {} }) },
+      'react-router-dom': { useLocation: () => ({ pathname: '/login', search: '?next=' + encodeURIComponent(next) }), useNavigate: () => (...args) => navigations.push(args) },
+    } })
+    s.find(p => p.children === 'Sign up').props.onClick()
+    assert.equal(navigations.at(-1)[1].state.from, expected)
+    s.find(p => p.children === 'Forgot password?').props.onClick()
+    assert.equal(navigations.at(-1)[1].state.from, expected)
+  }
+})
 
 test('clipboard rejection never reports success and provides the actual role link', async () => {
   const s = await screen('BusinessRoleScreen', { biz, api: readyApi, clipboard: async () => { throw new Error('denied') } })

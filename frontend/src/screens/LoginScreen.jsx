@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
 import GoogleSignInButton from '../components/GoogleSignInButton'
-import { authDestination, rememberDestination, rememberAccountDestination } from '../utils/homeFor'
+import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
 import { profileFailure } from '../utils/profileFailure'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -25,6 +25,7 @@ function loginErrorFor(code) {
 export default function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
+  const destination = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
   const { t } = useLang()
   const { login, authActionPending } = useAuth()
   const [email, setEmail] = useState(location.state?.email || '')
@@ -43,9 +44,12 @@ export default function LoginScreen() {
     if (!email || !pass) { setErr('Please enter your email and password'); return }
     setBusy(true); setErr('')
     try {
-      if (location.state?.from) rememberDestination(location.state.from)
+      if (destination) {
+        rememberDestination(destination)
+        navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: destination } })
+      }
       const result = await login(email, pass)
-      const dest = authDestination(result.profile, location.state?.from, result.uid)
+      const dest = authDestination(result.profile, destination, result.uid)
       rememberAccountDestination(result.uid, dest)
       if (result?.needsVerification) { navigate('/verify', { state: { from: dest }, replace: true }); return }
       navigate(dest, { replace: true })
@@ -74,7 +78,7 @@ export default function LoginScreen() {
 
       {/* Form */}
       <motion.div variants={staggerContainer(0.07, 0.12)} initial="hidden" animate="show" style={{ padding: '36px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <GoogleSignInButton destination={location.state?.from} disabled={busy || authActionPending} />
+        <GoogleSignInButton destination={destination} disabled={busy || authActionPending} />
         <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or sign in with email</p>
         <motion.div variants={fadeUp}>
           <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
@@ -92,7 +96,7 @@ export default function LoginScreen() {
             onKeyDown={e => e.key === 'Enter' && handleLogin()} />
         </motion.div>
 
-        <motion.button type="button" variants={fadeUp} whileTap={tapScale} onClick={() => navigate('/forgot', { state: { from: location.state?.from } })}
+        <motion.button type="button" variants={fadeUp} whileTap={tapScale} onClick={() => navigate('/forgot', { state: { from: destination } })}
           style={{ border: 0, background: 'none', textAlign: 'right', color: '#1a1a1a', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #e5e5e5', display: 'inline-block', alignSelf: 'flex-end', paddingBottom: 2 }}>
           {t.forgot_password || 'Forgot password?'}
         </motion.button>
@@ -115,7 +119,7 @@ export default function LoginScreen() {
 
         <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
           {t.no_account || "Don't have an account?"}{' '}
-          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/signup', { state: { from: location.state?.from } })}
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/signup', { state: { from: destination } })}
             style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
             {t.sign_up || 'Sign up'}
           </motion.button>

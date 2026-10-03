@@ -2,15 +2,12 @@ import { workspaceDestination } from './utils/workspaceDestination'
 import AssessmentSharingScreen from './screens/AssessmentSharingScreen'
 import { useState, useEffect, lazy, Suspense, Component } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from './context/AuthContext'
-import { NotificationProvider } from './context/NotificationContext'
 import { ThemeProvider } from './context/ThemeContext'
 import SplashScreen from './components/SplashScreen'
 import OfflineBanner from './components/OfflineBanner'
 import ProtectedRoute from './components/ProtectedRoute'
 import { authDestination, clearPendingDestination, isBusinessProfile, safeAuthDestination } from './utils/homeFor'
-import { pageVariants } from './styles/motion'
 
 // ── Auth screens (public) ────────────────────────────────────────────────────
 const SignupScreen        = lazy(() => import('./screens/SignupScreen'))
@@ -134,24 +131,18 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <NotificationProvider>
         <GlobalStyle />
         <OfflineBanner />
         <RouteFocusReset />
-        <ScreenErrorBoundary>
-        <Suspense fallback={null}>
-          {/* Whole-page crossfade keyed by pathname — a lightweight route transition
-              that needs no per-screen changes (see src/styles/motion.js). */}
-          <AnimatePresence mode="wait" initial={false}>
-          <motion.div
+        <ScreenErrorBoundary key={location.pathname}>
+        <Suspense fallback={<main role="status" className="cc-hiring-page" style={{ padding: 32 }}>Loading page…</main>}>
+          {/* Route changes are immediate. Keep marketplace notification polling
+              out of Hiring: no Hiring screen consumes its beam inbox. */}
+          <div
             key={location.pathname}
             id="route-focus-root"
             tabIndex={-1}
             style={{ outline: 'none' }}
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
           >
           <Routes location={location}>
             {/* Dev preview gallery (VITE_PREVIEW=1) — a click-through index of every screen. */}
@@ -211,11 +202,9 @@ export default function App() {
             {/* ── Catch-all ──────────────────────────────────────────── */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          </motion.div>
-          </AnimatePresence>
+          </div>
         </Suspense>
         </ScreenErrorBoundary>
-      </NotificationProvider>
     </ThemeProvider>
   )
 }
