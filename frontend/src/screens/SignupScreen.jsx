@@ -67,8 +67,8 @@ export default function SignupScreen() {
   return (
     <AuthShell>
         {/* Header */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '52px 24px 32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '28px 24px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
             <button aria-label="Back to CookCredit" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
               <ArrowLeft size={20} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
             </button>
@@ -82,13 +82,13 @@ export default function SignupScreen() {
           <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 32, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
             {applicantInvitation ? 'Create your applicant account' : t.create_account || 'Create account'}
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
             {applicantInvitation ? 'Verify your email, then continue your application.' : role === 'eat' ? 'Create your account, then request access to your own company workspace.' : 'Create your account to apply with an employer’s link.'}
           </p>
         </motion.div>
 
         {/* Form */}
-        <motion.div variants={staggerContainer(0.06, 0.1)} initial="hidden" animate="show" style={{ padding: '36px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <motion.div variants={staggerContainer(0.06, 0.1)} initial="hidden" animate="show" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Honeypot — off-screen, not a real field. Bots that fill every input trip it; the
               backend rejects the signup. Hidden from users + assistive tech + tab order. */}
@@ -98,7 +98,7 @@ export default function SignupScreen() {
 
           {/* Role toggle */}
           {!applicantInvitation && <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+            <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
               {t.i_want_to || 'I want to'}
             </div>
             <div style={{ display: 'flex', gap: 0 }}>
@@ -136,7 +136,7 @@ export default function SignupScreen() {
           <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or create an account with email</p>
           {/* Name */}
           <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+            <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
               {t.full_name || 'Full name'}
             </div>
             <input style={iStyle} placeholder="Your name" type="text" aria-label="Full name" autoComplete="name" maxLength={200}
@@ -146,7 +146,7 @@ export default function SignupScreen() {
 
           {/* Email */}
           <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+            <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
               {t.email || 'Email'}
             </div>
             <input style={iStyle} placeholder="you@email.com" type="email" aria-label="Email" autoComplete="email"
@@ -156,7 +156,7 @@ export default function SignupScreen() {
 
           {/* Password */}
           <motion.div variants={fadeUp}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+            <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
               {t.password || 'Password'}
             </div>
             <input style={iStyle} placeholder="12+ characters" type="password" aria-label="Password" autoComplete="new-password" minLength={12}

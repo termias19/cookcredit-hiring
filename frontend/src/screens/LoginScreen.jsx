@@ -61,8 +61,8 @@ export default function LoginScreen() {
   return (
     <AuthShell>
       {/* Header */}
-      <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '52px 24px 32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+      <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '28px 24px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
           </div>
@@ -71,24 +71,24 @@ export default function LoginScreen() {
         <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 32, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
           {t.welcome_back || 'Welcome back'}
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
+        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
           Sign in to your CookCredit account.
         </p>
       </motion.div>
 
       {/* Form */}
-      <motion.div variants={staggerContainer(0.07, 0.12)} initial="hidden" animate="show" style={{ padding: '36px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <motion.div variants={staggerContainer(0.07, 0.12)} initial="hidden" animate="show" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <GoogleSignInButton destination={destination} disabled={busy || authActionPending} />
         <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or sign in with email</p>
         <motion.div variants={fadeUp}>
-          <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+          <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
             {t.email || 'Email'}
           </div>
           <input style={iStyle} placeholder="you@email.com" type="email" aria-label="Email" autoComplete="email"
             value={email} onChange={e => setEmail(e.target.value)} />
         </motion.div>
         <motion.div variants={fadeUp}>
-          <div style={{ fontSize: 11, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
+          <div style={{ fontSize: 11, color: '#626262', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 2 }}>
             {t.password || 'Password'}
           </div>
           <input style={iStyle} type="password" placeholder="••••••••" aria-label="Password" autoComplete="current-password"

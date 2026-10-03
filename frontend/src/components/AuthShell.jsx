@@ -27,7 +27,7 @@ export default function AuthShell({ children }) {
 
   if (isDesktop) {
     return (
-      <div className="cc-hiring-page" style={{ minHeight: '100svh', background: '#F1EEE8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 20px' }}>
+      <div className="cc-hiring-page" style={{ minHeight: '100svh', background: '#F1EEE8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
         <motion.div
           variants={scaleIn}
           initial="hidden"
