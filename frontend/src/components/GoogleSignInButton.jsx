@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { googleSignInFailure } from '../utils/googleSignInFailure'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, authEntryLink } from '../utils/homeFor'
@@ -23,11 +24,7 @@ export default function GoogleSignInButton({ destination, disabled = false }) {
       rememberAccountDestination(result.uid, dest)
       navigate(result.needsVerification ? '/verify' : dest, { state: { from: dest }, replace: true })
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        setError(err.code === 'auth/popup-blocked' ? 'Allow the Google sign-in window, then try again. You can also use email below.'
-          : err.code === 'auth/account-exists-with-different-credential' ? 'This email already has an account. Use your existing sign-in method below.'
-            : 'Google sign-in could not finish. Please try again or use email below.')
-      }
+      setError(googleSignInFailure(err))
     } finally { setBusy(false) }
   }
   return <div>

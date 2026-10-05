@@ -62,12 +62,12 @@ export default function LoginScreen() {
     <AuthShell>
       {/* Header */}
       <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '28px 24px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Link to="/" aria-label="CookCredit Hiring home" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, textDecoration: 'none' }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
           </div>
           <span style={{ color: 'white', fontFamily: SERIF, fontSize: 25, fontWeight: 500, letterSpacing: 0 }}>CookCredit</span>
-        </div>
+        </Link>
         <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 32, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
           {t.welcome_back || 'Welcome back'}
         </h1>
