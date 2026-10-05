@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
+import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, authEntryLink } from '../utils/homeFor'
 
 export default function GoogleSignInButton({ destination, disabled = false }) {
   const { loginWithGoogle } = useAuth()
@@ -16,7 +16,7 @@ export default function GoogleSignInButton({ destination, disabled = false }) {
       const intent = safeAuthDestination(destination) || pendingDest()
       if (intent) {
         rememberDestination(intent)
-        navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: intent } })
+        navigate(authEntryLink(location.pathname, intent), { replace: true, state: { ...location.state, from: intent } })
       }
       const result = await loginWithGoogle(intent)
       const dest = authDestination(result.profile, intent, result.uid)

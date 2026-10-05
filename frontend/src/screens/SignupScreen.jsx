@@ -48,7 +48,7 @@ export default function SignupScreen() {
     setBusy(true); setErr('')
     try {
       const dest = rememberDestination(signupDestination(role, requested))
-      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: dest } })
+      navigate(authEntryLink(location.pathname, dest), { replace: true, state: { ...location.state, from: dest } })
       const account = await signUp(email.trim(), pass, {
         name: name.trim(),
         phone: '',

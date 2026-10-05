@@ -142,3 +142,12 @@ test('approved employer skips setup but keeps team invitations and applicant lin
   assert.equal(authDestination({ roles: ['eater'], employerAccessAllowed: true }, '/business/onboarding'), '/business/onboarding')
   assert.equal(authEntryLink('/login', 'https://untrusted.example'), '/login')
 })
+
+
+test('changing signup role updates the explicit URL before Google can complete', () => {
+  for (const [role, old, expected] of [['cook', '/business/roles', '/applications'], ['eat', '/applications', '/business/onboarding']]) {
+    const chosen = signupDestination(role, old)
+    const next = new URL(authEntryLink('/signup', chosen), 'https://hiring.example').search
+    assert.equal(authEntryDestination({ search: next, state: { from: old } }), expected)
+  }
+})
