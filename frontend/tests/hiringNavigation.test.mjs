@@ -2,6 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { homeFor, safeAuthDestination, rememberDestination, rememberAccountDestination, pendingDest, clearPendingDestination, authDestination, signupDestination } from '../src/utils/homeFor.js'
 import { NODES, scanText } from '../src/data/culinaryTaxonomy.js'
+import { initialSignupRole } from '../src/utils/homeFor.js'
+
+test('all assessment entry routes select applicant signup, including sharing and standalone assessment', () => {
+  for (const dest of ['/assessment', '/assessment-sharing/cook/attempt', '/application-assessment-return/session', '/apply/role?invite=opaque']) {
+    assert.equal(initialSignupRole(dest), 'cook')
+    assert.equal(signupDestination(initialSignupRole(dest), dest), dest)
+  }
+  assert.equal(initialSignupRole('/business/roles', 'cook'), 'eat')
+  assert.equal(initialSignupRole('/business/invite/token'), 'eat')
+  assert.equal(initialSignupRole(null, 'cook'), 'cook')
+})
 
 function storage() {
   const values = new Map()

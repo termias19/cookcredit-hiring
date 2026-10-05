@@ -75,6 +75,12 @@ export function signupDestination(role, requested) {
   return dest && !dest.startsWith('/business/') && dest !== '/owner/access' ? dest : '/applications'
 }
 
+export function initialSignupRole(requested, selectedRole) {
+  const dest = safeAuthDestination(requested)
+  if (dest) return dest.startsWith('/business/') || dest === '/owner/access' ? 'eat' : 'cook'
+  return selectedRole === 'cook' ? 'cook' : 'eat'
+}
+
 export function rememberAccountDestination(uid, value) {
   const destination = safeAuthDestination(value)
   if (!uid || !destination) return

@@ -9,3 +9,9 @@ Verification resend has a rolling 60-second cooldown, in addition to the existin
 The verification link retains its explicit confirmation button so automated email scanners cannot consume it. After confirmation, a matching signed-in account continues automatically. Returning to an existing verification tab also checks status on focus; no continuous polling is added.
 
 Acceptance still requires real Google sign-in and email inbox receipt, plus company setup with a separate approved employer identity. Automated tests do not establish those external outcomes.
+
+Google profile creation passes the selected intent directly to the existing sync
+request. Browser storage is recovery only; restricted storage cannot silently
+convert a new employer into an applicant. Account recovery only replays a draft
+bound to that Firebase UID and only self-heals a missing (404) profile. Standalone
+assessment and assessment-sharing destinations select applicant signup too.

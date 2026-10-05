@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
-import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination } from '../utils/homeFor'
+import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination, initialSignupRole } from '../utils/homeFor'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -28,7 +28,7 @@ export default function SignupScreen() {
   // Pre-select "Cook" when arriving from a "Become a cook" CTA (LandingScreen passes state.role).
   const requested = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
   const applicantInvitation = requested?.startsWith('/apply/') || requested?.startsWith('/application/') || requested?.startsWith('/application-assessment-return/')
-  const [role, setRole] = useState(applicantInvitation || requested === '/applications' || requested === '/profile' || location.state?.role === 'cook' ? 'cook' : 'eat')
+  const [role, setRole] = useState(() => initialSignupRole(requested, location.state?.role))
   const [err, setErr]       = useState('')
   const [busy, setBusy]     = useState(false)
   // Honeypot: a hidden field humans never see/fill; bots that auto-fill forms will populate it,

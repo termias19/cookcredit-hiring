@@ -35,8 +35,12 @@ and pricing controls are separate from a company admin seat.
 Invitations are expiring, email-bound credentials stored as hashes. Seat capacity
 is checked under a company lock. **Current limitation:** with employer approvals
 enabled, an invited teammate also needs owner-approved employer access. An
-invitation alone does not bypass the platform approval gate. Existing memberships
-do not yet have a self-service role-change/removal UI; do not promise this capability.
+invitation alone does not bypass the platform approval gate. Admins can change a
+member's seat role or remove their membership in Settings > Team. The API scopes
+the target to the caller's company, serializes membership changes under the company
+lock, rechecks the acting admin after acquiring that lock, and protects the last
+admin. Removal blocks subsequent workspace requests; it does not erase the person's
+account or invalidate previously issued, short-lived media URLs.
 
 ## Applicant evidence
 
@@ -64,10 +68,17 @@ Existing records are retained in their respective systems:
 - `CampaignEvent`: owner marketing campaign changes.
 - Durable email, Stripe-event and webhook delivery records: processing and retries.
 
-These are **not a complete, immutable company audit trail**. Company profile edits,
-role configuration edits, invitation revocation and integration configuration do
-not all have a common actor/time/change history. There is no company audit-log
-export or independently verified tamper-evident archive. The public
+`WorkspaceActivity` adds transactionally recorded member changes, invitation
+creation/acceptance/revocation, company edits, role creation/edits/status changes,
+and company branding/embed configuration changes. Settings > Activity log is
+admin-only and company-scoped with bounded cursor pagination. Activity writes fail
+the associated transaction if they cannot be saved. There is no edit/delete API.
+Existing applicant and evidence events are not copied into a second event store.
+
+These are **not a complete, immutable company audit trail**. API credential changes,
+webhook management, authentication failures and billing are not yet unified in this
+view. Historical administrative actions are not reconstructed. There is no company
+audit-log export or independently verified tamper-evident archive. The public
 `/business/audit` page explains assessment evidence; it is not an activity log.
 Do not describe these controls as SOC 2 certification or a completed security audit.
 

@@ -312,6 +312,14 @@ export async function removeCompanyLogo({ token }) {
 export async function getBusinessTeam({ token }) {
   return http('/api/business/team', { token, throwOnError: true })
 }
+export async function changeBusinessMember({ token, memberId, seatRole, remove = false }) {
+  return http(`/api/business/team/members/${encodeURIComponent(memberId)}`, {
+    method: remove ? 'DELETE' : 'PATCH', token, ...(remove ? {} : { body: { seatRole } }), throwOnError: true,
+  })
+}
+export async function getBusinessActivity({ token, before }) {
+  return http(`/api/business/activity${before ? `?before=${encodeURIComponent(before)}` : ''}`, { token, throwOnError: true })
+}
 export async function inviteBusinessTeamMember({ token, email, seatRole }) {
   return http('/api/business/team/invitations', {
     method: 'POST', token, body: { email, seatRole }, throwOnError: true,
