@@ -19,6 +19,10 @@ export default defineConfig({
       injectRegister: null,
       manifest: false,
       workbox: {
+        // After an explicit Update, take control so AppUpdateNotice receives
+        // controllerchange and reloads only the tab that accepted the update.
+        // Other tabs keep their unsaved work and receive their own prompt.
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,woff2,png,svg,ico}'],
         globIgnores: ['**/firebase-messaging-sw.js', '**/vendor-cv-parser-*', '**/readCvPdf-*', '**/pdf.worker*'],
         navigateFallback: '/index.html',
