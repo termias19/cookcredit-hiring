@@ -266,6 +266,7 @@ def test_simultaneous_account_bootstrap_creates_one_profile_without_losing_signu
 
 
 def test_nearby_cooks_use_real_distance_visibility_and_minimal_payload(db, client, monkeypatch):
+    monkeypatch.setenv('PUBLIC_COOK_DIRECTORY_ENABLED', '1')
     from services.location import search_token
     monkeypatch.setenv('LOCATION_TOKEN_SECRET', 'nearby-isolated-secret-' * 3)
     with database.db_session() as session:

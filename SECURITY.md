@@ -44,6 +44,13 @@ account or invalidate previously issued, short-lived media URLs.
 
 ## Applicant evidence
 
+Legacy public cook listing, public profile and nearby-directory endpoints are
+disabled by default. `PUBLIC_COOK_DIRECTORY_ENABLED=1` is an explicit opt-in for a
+separate public-directory deployment and must remain unset or `0` in Hiring.
+Employer approval and assessment completion are not permission to publish a cook.
+Private self-service profiles and company-consented evidence use their existing
+authenticated routes.
+
 Candidate recordings require an active applicant sharing grant for the caller's
 company and a terminal assessment attempt. Playback returns short-lived signed
 URLs for pinned storage objects. The evidence access endpoint records issuance in
