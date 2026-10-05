@@ -517,6 +517,15 @@ def workspace_activity():
             from sqlalchemy import tuple_
             query = query.filter(tuple_(WorkspaceActivity.created_at, WorkspaceActivity.id) <
                                  (marker.created_at, marker.id))
+        # Exact-match filters retain tenant scoping and bounded cursor pagination.
+        action = request.args.get('action', '').strip()
+        actor = request.args.get('actor', '').strip()
+        if len(action) > 100 or len(actor) > 128:
+            return jsonify(error='Invalid activity filter'), 400
+        if action:
+            query = query.filter(WorkspaceActivity.event_type == action)
+        if actor:
+            query = query.filter(WorkspaceActivity.actor_id == actor)
         rows = query.order_by(WorkspaceActivity.created_at.desc(), WorkspaceActivity.id.desc()).limit(51).all()
         names = dict(session.query(User.id, User.name).filter(User.id.in_({row.actor_id for row in rows})).all()) if rows else {}
         return jsonify(events=[{

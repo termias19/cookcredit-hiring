@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from models import OrgMembership, Org, OrgInvitation, User
+from models import OrgMembership, Org, OrgInvitation, User, PartnerApiKey, PartnerWebhook, PartnerWebhookDelivery
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
@@ -29,7 +29,7 @@ def db(monkeypatch):
         conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine = create_engine(url, connect_args={'options': f'-csearch_path={schema},public'})
     try:
-        for model in (User, Org, OrgMembership, OrgInvitation):
+        for model in (User, Org, OrgMembership, OrgInvitation, PartnerApiKey, PartnerWebhook, PartnerWebhookDelivery):
             model.__table__.create(engine)
         with engine.begin() as conn:
             sql = (Path(__file__).parents[1] / 'migrations/033_workspace_activity.sql').read_text()
@@ -119,3 +119,64 @@ def test_activity_cursor_is_company_bound_and_does_not_skip_equal_timestamps(cli
     assert len({row['id'] for row in first['events'] + second['events']}) == 55
     assert second['nextCursor'] is None
     assert client.get('/business/activity?before='+other_id, headers=headers('employer')).status_code == 400
+
+
+def test_activity_filters_remain_admin_and_tenant_scoped(client, db):
+    with database.db_session() as session:
+        for org, actor, action in [(db.org, 'employer', 'api_key.created'),
+                (db.org, 'employer', 'webhook.created'), (db.other_org, 'other', 'api_key.created')]:
+            session.add(WorkspaceActivity(org_id=org, actor_id=actor, event_type=action, target_id='safe'))
+    response = client.get('/business/activity?action=api_key.created&actor=employer', headers=headers('employer'))
+    assert len(response.json['events']) == 1
+    assert response.json['events'][0]['actorId'] == 'employer'
+    assert client.get('/business/activity?actor=other', headers=headers('employer')).json['events'] == []
+    assert client.get('/business/activity?action=api_key.created', headers=headers('viewer')).status_code == 403
+    assert client.get('/business/activity?action='+'x'*101, headers=headers('employer')).status_code == 400
+
+
+def test_api_key_activity_is_atomic_and_never_contains_secret(client, monkeypatch):
+    from routes import partner
+    monkeypatch.setattr(partner, 'integration_access', lambda org: {'api': True})
+    body = {'name': 'Synthetic', 'scopes': ['roles:read'], 'environment': 'test'}
+    response = client.post('/partner/manage/api-keys', headers=headers('employer'), json=body)
+    assert response.status_code == 201
+    key = response.json['key']
+    url = '/partner/manage/api-keys/'+key['id']+'/revoke'
+    assert client.post(url, headers=headers('other')).status_code == 404
+    assert client.post(url, headers=headers('employer')).status_code == 200
+    assert client.post(url, headers=headers('employer')).status_code == 200
+    events = client.get('/business/activity', headers=headers('employer')).json['events']
+    assert [row['action'] for row in events] == ['api_key.revoked', 'api_key.created']
+    assert key['secret'] not in str(events)
+    def fail(*args, **kwargs): raise RuntimeError('audit unavailable')
+    monkeypatch.setattr(partner, 'record_activity', fail)
+    with pytest.raises(RuntimeError):
+        client.post('/partner/manage/api-keys', headers=headers('employer'), json=body)
+    with database.db_session() as session:
+        assert session.query(PartnerApiKey).count() == 1
+
+
+def test_webhook_admin_actions_are_logged_without_endpoint_or_secret(client, monkeypatch):
+    from routes import partner
+    from services import webhook_dispatch
+    monkeypatch.setattr(partner, 'integration_access', lambda org: {'api': True})
+    monkeypatch.setattr(partner, 'validate_webhook_url', lambda value: value)
+    monkeypatch.setattr(webhook_dispatch, 'request_dispatch', lambda *args: None)
+    response = client.post('/partner/manage/webhooks', headers=headers('employer'), json={
+        'url': 'https://receiver.example.test/private-token',
+        'eventTypes': ['assessment.completed'], 'environment': 'test'})
+    assert response.status_code == 201, response.json
+    hook = response.json['webhook']
+    url = '/partner/manage/webhooks/'+hook['id']
+    assert client.patch(url, headers=headers('viewer'), json={'active': False}).status_code == 403
+    assert client.patch(url, headers=headers('other'), json={'active': False}).status_code == 404
+    for active in (False, False, True):
+        assert client.patch(url, headers=headers('employer'), json={'active': active}).status_code == 200
+    with database.db_session() as session:
+        delivery = PartnerWebhookDelivery(webhook_id=uuid.UUID(hook['id']), event_id=uuid.uuid4(),
+            event_type='assessment.completed', payload={'private': 'evidence'}, status='failed')
+        session.add(delivery); session.flush(); delivery_id = str(delivery.id)
+    assert client.post('/partner/manage/webhook-deliveries/'+delivery_id+'/replay', headers=headers('employer')).status_code == 200
+    events = client.get('/business/activity', headers=headers('employer')).json['events']
+    assert [row['action'] for row in events] == ['webhook.replay_requested', 'webhook.updated', 'webhook.updated', 'webhook.created']
+    assert all(value not in str(events) for value in (hook['secret'], 'private-token', 'evidence'))

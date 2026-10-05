@@ -70,15 +70,20 @@ Existing records are retained in their respective systems:
 
 `WorkspaceActivity` adds transactionally recorded member changes, invitation
 creation/acceptance/revocation, company edits, role creation/edits/status changes,
-and company branding/embed configuration changes. Settings > Activity log is
+company branding/embed configuration changes, API key creation/revocation, webhook
+creation/status changes and manual delivery replay requests. Credentials, webhook
+URLs and delivery payloads are excluded from activity details. Settings > Activity log is
 admin-only and company-scoped with bounded cursor pagination. Activity writes fail
 the associated transaction if they cannot be saved. There is no edit/delete API.
 Existing applicant and evidence events are not copied into a second event store.
 
-These are **not a complete, immutable company audit trail**. API credential changes,
-webhook management, authentication failures and billing are not yet unified in this
-view. Historical administrative actions are not reconstructed. There is no company
-audit-log export or independently verified tamper-evident archive. The public
+Admins can filter by event type and export the latest 50 matching records as JSON.
+The export rechecks current server authorization and includes a continuation cursor
+when more records exist; it is not a full-history archive. The API also supports an
+exact actor-ID filter.
+
+These are **not a complete, immutable company audit trail**. Authentication failures
+and billing are not yet unified in this view. Historical administrative actions are not reconstructed. There is no independently verified tamper-evident archive. The public
 `/business/audit` page explains assessment evidence; it is not an activity log.
 Do not describe these controls as SOC 2 certification or a completed security audit.
 

@@ -21,6 +21,7 @@ from models import (
 )
 from routes.business import _assessment_report, _can, _org_for
 from services.database import db_session
+from services.workspace_activity import record as record_activity
 from services.hiring_presentation import assessment_instructions
 from services.hiring_applications import sync_application
 from services.assessment_outcomes import evaluate_assessment, normalize_criteria
@@ -91,6 +92,8 @@ def api_keys():
         key, raw = issue_api_key(org_id=org.id, name=name, scopes=scopes,
                                  created_by=g.user_id, environment=environment)
         session.add(key); session.flush()
+        record_activity(session, org.id, g.user_id, "api_key.created", key.id,
+                        {"environment": environment, "scopes": key.scopes})
         return jsonify(key={**_key_view(key), 'secret': raw}), 201
 
 
@@ -106,7 +109,10 @@ def revoke_api_key(key_id):
         key = session.query(PartnerApiKey).filter_by(id=kid, org_id=org.id).with_for_update().one_or_none() if kid else None
         if not key:
             return jsonify(error='Not found'), 404
-        key.revoked_at = key.revoked_at or _utcnow()
+        if not key.revoked_at:
+            key.revoked_at = _utcnow()
+            record_activity(session, org.id, g.user_id, "api_key.revoked", key.id,
+                            {"environment": key.environment})
         return jsonify(key=_key_view(key)), 200
 
 
@@ -150,6 +156,8 @@ def webhooks():
         hook = PartnerWebhook(org_id=org.id, url=url, event_types=events, environment=environment,
                               secret_ciphertext=ciphertext, created_by=g.user_id)
         session.add(hook); session.flush()
+        record_activity(session, org.id, g.user_id, "webhook.created", hook.id,
+                        {"environment": environment, "eventTypes": events})
         return jsonify(webhook={
             'id': str(hook.id), 'url': hook.url, 'eventTypes': hook.event_types,
             'active': True, 'secret': raw_secret, 'environment': environment,
@@ -172,6 +180,10 @@ def update_webhook(webhook_id):
                 .with_for_update().one_or_none()) if hook_id else None
         if not hook:
             return jsonify(error='Not found'), 404
+        if hook.active != body['active'] or (body['active'] and hook.failure_count):
+            record_activity(session, org.id, g.user_id, 'webhook.updated', hook.id,
+                            {'environment': hook.environment, 'previousActive': hook.active,
+                             'active': body['active']})
         hook.active = body['active']
         hook.disabled_at = None if hook.active else _utcnow()
         if hook.active:
@@ -238,6 +250,9 @@ def replay_webhook_delivery(delivery_id):
         row.lock_token = None; row.locked_until = None; row.delivered_at = None; row.last_error = None
         from services.webhook_dispatch import request_dispatch
         request_dispatch(session, row.next_attempt_at)
+        record_activity(session, org.id, g.user_id, "webhook.replay_requested", row.id,
+                        {"environment": hook.environment, "webhookId": str(hook.id),
+                         "eventId": str(row.event_id)})
         return jsonify(delivery=_delivery_view(row, hook)), 200
 
 
