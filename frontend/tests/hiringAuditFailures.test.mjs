@@ -90,7 +90,9 @@ test('login alternatives retain employer intent but reject external next URLs', 
       'react-router-dom': { useLocation: () => ({ pathname: '/login', search: '?next=' + encodeURIComponent(next) }), useNavigate: () => (...args) => navigations.push(args) },
     } })
     s.find(p => p.children === 'Sign up').props.onClick()
-    assert.equal(navigations.at(-1)[1].state.from, expected)
+    const target = new URL(navigations.at(-1)[0], 'https://hiring.example')
+    assert.equal(target.pathname, '/signup')
+    assert.equal(target.searchParams.get('next'), expected)
     s.find(p => p.children === 'Forgot password?').props.onClick()
     assert.equal(navigations.at(-1)[1].state.from, expected)
   }
