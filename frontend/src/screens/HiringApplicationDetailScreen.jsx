@@ -50,11 +50,11 @@ export default function HiringApplicationDetailScreen({ applicationId: suppliedI
     {error && <div role="alert" style={{ marginBottom: 20, color: '#A44320' }}><p>{error}</p><button onClick={() => setRevision(value => value + 1)}>Refresh application</button></div>}
     {!application && !error && <p role="status">Loading application…</p>}
     {application && <>
-      <p style={{ fontSize: 12, color: '#70706b', marginBottom: 16 }}>Details saved · {application.status === 'ready' ? 'Assessment submitted' : application.status === 'assessment_processing' ? 'Assessment processing' : application.status === 'withdrawn' ? 'Application withdrawn' : 'Next: record your assessment'}</p>
+      <p style={{ fontSize: 12, color: 'var(--cc-muted)', marginBottom: 16 }}>Details saved · {application.status === 'ready' ? 'Assessment submitted' : application.status === 'assessment_processing' ? 'Assessment processing' : application.status === 'withdrawn' ? 'Application withdrawn' : 'Next: record your assessment'}</p>
       {application.employerUpdate && <section className="cc-business-card" style={{ padding: 20, margin: '16px 0', border: '1px solid var(--cc-border)' }}><h2 className="cc-profile-heading">Employer update</h2><p style={{ textTransform: 'capitalize' }}>{application.employerUpdate.status.replaceAll('_', ' ')}</p><p style={{ whiteSpace: 'pre-wrap' }}>{application.employerUpdate.message}</p><p>{new Date(application.employerUpdate.updatedAt).toLocaleString()}</p></section>}
       <AttemptStatus application={application} onStart={start} starting={busy} />
       <details style={{ marginTop: 24, border: '1px solid var(--cc-border)', padding: 20 }}>
-        <summary style={{ cursor: 'pointer', color: '#1F6F5C' }}>Your saved details and CV</summary>
+        <summary style={{ cursor: 'pointer', color: 'var(--cc-forest)' }}>Your saved details and CV</summary>
         {application.applicantName && <p style={{ margin: '14px 0' }}>{application.applicantName}</p>}
         {application.hasCv && <HiringCvDownload applicationId={application.id} getToken={() => user.getIdToken()} />}
         {(application.questions || []).map(question => {
@@ -63,7 +63,7 @@ export default function HiringApplicationDetailScreen({ applicationId: suppliedI
         })}
         {!application.questions?.length && <p style={{ fontSize: 14, color: 'var(--cc-muted)' }}>This employer did not request additional answers.</p>}
       </details>
-      {application.status !== 'withdrawn' && <details style={{ marginTop: 24, fontSize: 13, lineHeight: 1.7 }}><summary style={{ cursor: 'pointer', color: '#70706b' }}>Sharing and withdrawal</summary>
+      {application.status !== 'withdrawn' && <details style={{ marginTop: 24, fontSize: 13, lineHeight: 1.7 }}><summary style={{ cursor: 'pointer', color: 'var(--cc-muted)' }}>Sharing and withdrawal</summary>
         <p>Your employer can review the evidence shared for this application. Withdrawing stops future recording access; existing playback links expire within five minutes.</p>
         {confirmWithdraw ? <div style={{ marginTop: 12 }}><p>Withdraw this application? You will no longer be able to submit attempts for it.</p><button disabled={busy} onClick={withdraw} style={{ padding: '10px 16px', margin: '10px 12px 0 0' }}>{busy ? 'Withdrawing…' : 'Confirm withdrawal'}</button><button disabled={busy} onClick={() => setConfirmWithdraw(false)} style={{ padding: '10px 16px' }}>Keep application</button></div> : <button disabled={busy} onClick={() => setConfirmWithdraw(true)} style={{ padding: '10px 16px', marginTop: 12 }}>Withdraw application</button>}
       </details>}

@@ -19,6 +19,6 @@ export default function HiringAssessmentReturnScreen() {
     return () => { active = false }
   }, [sessionId, user, navigate, retry])
   return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 28 }}>
-    <div>{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setRetry(value => value + 1) }} style={{ marginTop: 16, padding: '12px 22px', border: 0, background: '#1F6F5C', color: '#fff' }}>Retry</button></> : <p role="status">Opening your application…</p>}</div>
+    <div>{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setRetry(value => value + 1) }} style={{ marginTop: 16, padding: '12px 22px', border: 0, background: 'var(--cc-forest)', color: '#fff' }}>Retry</button></> : <p role="status">Opening your application…</p>}</div>
   </main>
 }

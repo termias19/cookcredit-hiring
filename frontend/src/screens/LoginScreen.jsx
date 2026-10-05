@@ -35,8 +35,8 @@ export default function LoginScreen() {
 
   const iStyle = {
     width: '100%', padding: '14px 16px',
-    border: '1px solid #e5e5e5', background: 'white',
-    fontSize: 15, color: '#1a1a1a',
+    border: '1px solid var(--cc-border)', background: 'white',
+    fontSize: 15, color: 'var(--cc-ink)',
   }
 
   async function handleLogin() {
@@ -61,7 +61,7 @@ export default function LoginScreen() {
   return (
     <AuthShell>
       {/* Header */}
-      <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '28px 24px 24px' }}>
+      <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '28px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
@@ -97,7 +97,7 @@ export default function LoginScreen() {
         </motion.div>
 
         <motion.button type="button" variants={fadeUp} whileTap={tapScale} onClick={() => navigate('/forgot', { state: { from: destination } })}
-          style={{ border: 0, background: 'none', textAlign: 'right', color: '#1a1a1a', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #e5e5e5', display: 'inline-block', alignSelf: 'flex-end', paddingBottom: 2 }}>
+          style={{ border: 0, background: 'none', textAlign: 'right', color: 'var(--cc-ink)', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid var(--cc-border)', display: 'inline-block', alignSelf: 'flex-end', paddingBottom: 2 }}>
           {t.forgot_password || 'Forgot password?'}
         </motion.button>
 
@@ -110,7 +110,7 @@ export default function LoginScreen() {
         </AnimatePresence>
 
         <motion.button variants={fadeUp} onClick={handleLogin} disabled={busy || authActionPending} {...buttonPress} style={{
-          background: busy ? '#e5e5e5' : '#1a1a1a', color: busy ? '#999' : 'white',
+          background: busy ? 'var(--cc-border)' : 'var(--cc-forest)', color: busy ? '#999' : 'white',
           border: 'none', padding: '16px', fontSize: 15, fontWeight: 500,
           cursor: busy ? 'default' : 'pointer', letterSpacing: 0.5,
         }}>
@@ -120,7 +120,7 @@ export default function LoginScreen() {
         <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
           {t.no_account || "Don't have an account?"}{' '}
           <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/signup', { state: { from: destination } })}
-            style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
+            style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: 'var(--cc-ink)', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid var(--cc-ink)', paddingBottom: 1, display: 'inline-block' }}>
             {t.sign_up || 'Sign up'}
           </motion.button>
         </motion.div>

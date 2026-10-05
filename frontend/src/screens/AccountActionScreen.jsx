@@ -47,7 +47,7 @@ export default function AccountActionScreen() {
     } catch (e) { setError(e.code === 'auth/weak-password' ? 'Choose a stronger password.' : 'This link could not be used. Request a new link and try again.') }
     finally { setBusy(false) }
   }
-  return <AuthShell><header style={{ background: '#1a1a1a', color: '#fff', padding: '40px 24px' }}><p style={{ fontFamily: 'var(--cc-display)', fontSize: 27, marginBottom: 24 }}>CookCredit</p><h1 style={{ fontFamily: 'var(--cc-display)', fontSize: 32, fontWeight: 400 }}>{mode === 'resetPassword' ? 'Reset your password' : 'Verify your email'}</h1></header>
+  return <AuthShell><header style={{ background: 'var(--cc-ink)', color: '#fff', padding: '40px 24px' }}><p style={{ fontFamily: 'var(--cc-display)', fontSize: 27, marginBottom: 24 }}>CookCredit</p><h1 style={{ fontFamily: 'var(--cc-display)', fontSize: 32, fontWeight: 400 }}>{mode === 'resetPassword' ? 'Reset your password' : 'Verify your email'}</h1></header>
     <div style={{ padding: '32px 24px', lineHeight: 1.7 }}>
       {state === 'checking' && <p role="status">Checking your link…</p>}
       {state === 'invalid' && <><p role="alert">This link is missing, expired, or has already been used.</p><Link style={linkStyle} to="/forgot">Request a password reset</Link><p><Link style={linkStyle} to="/login">Sign in to resend a verification email</Link></p></>}
@@ -60,9 +60,9 @@ export default function AccountActionScreen() {
       {['verify', 'reset'].includes(state) && <form onSubmit={submit} style={{ display: 'grid', gap: 20 }}>
         {state === 'verify' ? <p>Confirm that this is your email address to finish creating your CookCredit account.</p> : <><label>New password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={password} onChange={e => setPassword(e.target.value)} /></label><label>Confirm new password<input style={field} type="password" autoComplete="new-password" required minLength={12} value={confirm} onChange={e => setConfirm(e.target.value)} /></label><p style={{ fontSize: 13 }}>Use at least 12 characters. A longer, unique passphrase works well.</p></>}
         {error && <p role="alert" style={{ color: '#a52b2b' }}>{error}</p>}
-        <button disabled={busy} style={{ padding: 16, background: '#1F6F5C', border: 0, color: '#fff', fontSize: 15 }}>{busy ? 'Please wait…' : state === 'verify' ? 'Verify my email' : 'Save new password'}</button>
+        <button disabled={busy} style={{ padding: 16, background: 'var(--cc-forest)', border: 0, color: '#fff', fontSize: 15 }}>{busy ? 'Please wait…' : state === 'verify' ? 'Verify my email' : 'Save new password'}</button>
       </form>}
     </div></AuthShell>
 }
-const field = { display: 'block', width: '100%', marginTop: 8, padding: '14px 16px', background: '#fff', border: '1px solid #e3e0d9', fontSize: 15 }
-const linkStyle = { color: '#1F6F5C', textUnderlineOffset: 3 }
+const field = { display: 'block', width: '100%', marginTop: 8, padding: '14px 16px', background: '#fff', border: '1px solid var(--cc-border)', fontSize: 15 }
+const linkStyle = { color: 'var(--cc-forest)', textUnderlineOffset: 3 }

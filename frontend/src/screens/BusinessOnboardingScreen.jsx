@@ -45,8 +45,8 @@ export default function BusinessOnboardingScreen() {
   }
 
   const header = (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #eee', padding: '18px 20px' }}>
-      <span style={{ fontSize: 11, letterSpacing: 3, color: '#1F6F5C', textTransform: 'uppercase' }}>CookCredit · Skill hiring</span>
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid #eee', padding: '18px 20px' }}>
+      <span style={{ fontSize: 11, letterSpacing: 3, color: 'var(--cc-forest)', textTransform: 'uppercase' }}>CookCredit · Skill hiring</span>
       <h1 style={{ fontFamily: SERIF, fontSize: 34, fontWeight: 400, letterSpacing: '-0.02em', color: '#090A09', margin: '4px 0 0' }}>Set up your workspace</h1>
     </div>
   )
@@ -72,7 +72,7 @@ export default function BusinessOnboardingScreen() {
               return <motion.button key={f} whileHover={{ scale: 1.05 }} whileTap={tapScale} animate={{ scale: on ? 1.04 : 1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 onClick={() => setFocus(p => on ? p.filter(x => x !== f) : [...p, f])}
-                style={{ border: `1px solid ${on ? '#1a1a1a' : '#e5e5e5'}`, background: on ? '#1a1a1a' : '#fff', color: on ? '#fff' : '#555', padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>{f}</motion.button>
+                style={{ border: `1px solid ${on ? 'var(--cc-ink)' : 'var(--cc-border)'}`, background: on ? 'var(--cc-ink)' : '#fff', color: on ? '#fff' : '#555', padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>{f}</motion.button>
             })}
           </div>
         </motion.div>
@@ -81,7 +81,7 @@ export default function BusinessOnboardingScreen() {
 
         <motion.div variants={fadeUp}>
           <motion.button {...buttonPress} onClick={enter} disabled={busy || !name.trim() || !city.trim()} style={{ width: '100%', marginTop: 24, padding: 14, border: 'none',
-            background: busy ? '#e5e5e5' : '#1a1a1a', color: busy ? '#999' : '#fff',
+            background: busy ? 'var(--cc-border)' : 'var(--cc-ink)', color: busy ? '#999' : '#fff',
             fontSize: 14, fontWeight: 500, letterSpacing: 0.5, cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             {busy ? 'Setting up…' : <>Enter workspace <ArrowRight size={16} strokeWidth={1.5} /></>}
           </motion.button>
@@ -93,4 +93,4 @@ export default function BusinessOnboardingScreen() {
 }
 
 const lbl = { display: 'block', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: '#74756f', marginBottom: 2 }
-const input = { width: '100%', padding: '11px 12px', border: '1px solid #e5e5e5', fontSize: 15, color: '#1a1a1a', marginTop: 6, fontFamily: 'inherit' }
+const input = { width: '100%', padding: '11px 12px', border: '1px solid var(--cc-border)', fontSize: 15, color: 'var(--cc-ink)', marginTop: 6, fontFamily: 'inherit' }

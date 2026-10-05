@@ -3,13 +3,13 @@
 :root {
   --cc-display: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   --cc-body: 'Inter', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
-  --cc-ink: #1a1a1a;
-  --cc-muted: #70706b;
-  --cc-canvas: #f4f1ea;
-  --cc-surface: #fefdfb;
-  --cc-surface-soft: #f0ece3;
-  --cc-border: #e3e0d9;
-  --cc-forest: #1f6f5c;
+  --cc-ink: #302d27;
+  --cc-muted: #655f54;
+  --cc-canvas: #f8f4ec;
+  --cc-surface: #fffaf3;
+  --cc-surface-soft: #efe1d3;
+  --cc-border: #d8d0c3;
+  --cc-forest: #934b33;
 }
 
 .cc-business-workspace, .cc-hiring-page {
@@ -110,3 +110,10 @@ button.cc-business-card:hover { border-color: #b2bdb6; }
 .cc-profile-heading { font-family: var(--cc-display); font-weight: 400; font-size: 25px; margin: 0 0 20px; }
 .cc-profile-link { display: inline-flex; gap: 8px; align-items: center; color: var(--cc-forest); font-size: 14px; }
 button:disabled { cursor: wait; opacity: .6; }
+
+/* Account screens share the workspace palette; state/error colors stay semantic. */
+.cc-auth-heading {background:var(--cc-surface-soft);padding:28px 24px 24px;border-bottom:1px solid var(--cc-border)}
+.cc-auth-heading :is(h1,h2,span) {color:var(--cc-ink)!important}
+.cc-auth-heading p {color:var(--cc-muted)!important}
+.cc-auth-heading svg {color:var(--cc-forest);stroke:var(--cc-forest)}
+.cc-auth-home {display:block;padding:18px 24px;color:var(--cc-muted);font-size:13px;text-underline-offset:4px}

@@ -18,6 +18,6 @@ export default function BusinessSettingsScreen() {
     <nav aria-label="Workspace settings" className="cc-workspace-sections">
       {[['company', t.bp_profile], ['team', t.bn_team], ['integrations', t.bn_integrations], ['billing', t.bn_billing]].map(([key, label]) => <Link key={key} to={`/business/profile?section=${key}`} aria-current={section === key ? 'page' : undefined}>{label}</Link>)}
     </nav>
-    {profile?.isAccessOwner && <Link to="/owner/access" style={{ display: 'inline-block', marginTop: 14, color: '#1F6F5C', fontSize: 13 }}>Manage hiring access</Link>}
+    {profile?.isAccessOwner && <Link to="/owner/access" style={{ display: 'inline-block', marginTop: 14, color: 'var(--cc-forest)', fontSize: 13 }}>Manage hiring access</Link>}
   </div>}><Suspense fallback={<p role="status" style={{ padding: 28 }}>Loading settings…</p>}><Content embedded /></Suspense></BusinessShell>
 }

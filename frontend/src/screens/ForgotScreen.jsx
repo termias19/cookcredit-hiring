@@ -21,8 +21,8 @@ export default function ForgotScreen() {
 
   const iStyle = {
     width: '100%', padding: '14px 16px',
-    border: '1px solid #e5e5e5', background: 'white',
-    fontSize: 15, color: '#1a1a1a',
+    border: '1px solid var(--cc-border)', background: 'white',
+    fontSize: 15, color: 'var(--cc-ink)',
   }
 
   async function handleReset() {
@@ -38,7 +38,7 @@ export default function ForgotScreen() {
 
   if (sent) return (
     <AuthShell>
-        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '52px 24px 32px' }}>
+        <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '52px 24px 32px' }}>
           <img src="/cookcredit-mark-orange.svg" alt="CookCredit" width="48" height="37" style={{ display: 'block', margin: '0 auto 20px' }} />
           <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 28, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
             {t.forgot_sent_title || 'Check your email'}
@@ -46,13 +46,13 @@ export default function ForgotScreen() {
         </motion.div>
         <motion.div variants={staggerContainer(0.08, 0.1)} initial="hidden" animate="show"
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
-          <motion.div variants={scaleIn} style={{ width: 56, height: 56, border: '1px solid #e5e5e5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+          <motion.div variants={scaleIn} style={{ width: 56, height: 56, border: '1px solid var(--cc-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
             <Mail size={24} color="#555" strokeWidth={1.5} />
           </motion.div>
           <motion.p variants={fadeUp} style={{ fontSize: 15, color: '#777', lineHeight: 1.7, marginBottom: 8 }}>
             If a CookCredit account exists for this address, a reset link from CookCredit will arrive shortly.
           </motion.p>
-          <motion.p variants={fadeUp} style={{ fontSize: 15, color: '#1a1a1a', fontWeight: 500, marginBottom: 36 }}>{email}</motion.p>
+          <motion.p variants={fadeUp} style={{ fontSize: 15, color: 'var(--cc-ink)', fontWeight: 500, marginBottom: 36 }}>{email}</motion.p>
           <motion.button variants={fadeUp} onClick={() => navigate('/login', { state: { from: location.state?.from } })} {...buttonPress} style={{
             background: '#1F6F5C', color: 'white', border: 'none',
             padding: '16px 40px', fontSize: 15, fontWeight: 500,
@@ -67,7 +67,7 @@ export default function ForgotScreen() {
   return (
     <AuthShell>
         {/* Header */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '52px 24px 32px' }}>
+        <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '52px 24px 32px' }}>
           <img src="/cookcredit-mark-orange.svg" alt="CookCredit" width="48" height="37" style={{ display: 'block', margin: '0 auto 20px' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
             <button aria-label="Back to sign in" onClick={() => navigate('/login', { state: { from: location.state?.from } })} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -104,7 +104,7 @@ export default function ForgotScreen() {
           <motion.button variants={fadeUp} onClick={handleReset} disabled={!email || busy}
             whileHover={email && !busy ? { scale: 1.02 } : undefined} whileTap={email && !busy ? tapScale : undefined}
             style={{
-              background: email && !busy ? '#1a1a1a' : '#e5e5e5',
+              background: email && !busy ? 'var(--cc-forest)' : 'var(--cc-border)',
               color: email && !busy ? 'white' : '#999',
               border: 'none', padding: '16px', fontSize: 15, fontWeight: 500,
               cursor: email && !busy ? 'pointer' : 'default', letterSpacing: 0.5,

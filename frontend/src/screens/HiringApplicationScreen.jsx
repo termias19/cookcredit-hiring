@@ -11,7 +11,7 @@ import HiringApplicationDetailScreen from './HiringApplicationDetailScreen'
 import { PREVIEW } from '../config'
 
 const SERIF = "'Cormorant Garamond', 'Playfair Display', Georgia, serif"
-const GREEN = '#1F6F5C', INK = '#1a1a1a'
+const GREEN = 'var(--cc-forest)', INK = 'var(--cc-ink)'
 const field = { width: '100%', border: '1px solid #dedbd4', background: '#fff', padding: '12px 13px', fontSize: 15, color: INK }
 const overline = { fontSize: 10, letterSpacing: 2.4, textTransform: 'uppercase', color: '#8c8a84', margin: '0 0 7px' }
 
@@ -124,15 +124,15 @@ export default function HiringApplicationScreen() {
 
   if (activeApplicationId) return <HiringApplicationDetailScreen key={activeApplicationId} applicationId={activeApplicationId} entryError={entryError} />
   if (status === 'loading') return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', color: '#888' }}>Loading role…</main>
-  if (status === 'error' || !role) return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 30, textAlign: 'center' }}><div><CircleAlert /><p role="alert">{error}</p><button type="button" onClick={() => { setError(''); setStatus('loading'); setReloadKey(key => key + 1) }} style={{ border: 0, background: GREEN, color: '#fff', padding: '12px 22px', cursor: 'pointer' }}>Retry</button><p style={{ fontSize: 13, color: '#70706b' }}>If the role is closed or your invitation has expired, ask the employer for a current link.</p></div></main>
+  if (status === 'error' || !role) return <main className="cc-hiring-page" style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: 30, textAlign: 'center' }}><div><CircleAlert /><p role="alert">{error}</p><button type="button" onClick={() => { setError(''); setStatus('loading'); setReloadKey(key => key + 1) }} style={{ border: 0, background: GREEN, color: '#fff', padding: '12px 22px', cursor: 'pointer' }}>Retry</button><p style={{ fontSize: 13, color: 'var(--cc-muted)' }}>If the role is closed or your invitation has expired, ask the employer for a current link.</p></div></main>
   const brandColor = /^#[0-9A-F]{6}$/i.test(role.company?.brandColor || '') ? role.company.brandColor : GREEN
 
   return <main className="cc-hiring-page" style={{ minHeight: '100svh', background: '#F7F5F0', color: INK }}>
-    <header style={{ background: '#FEFDFB', color: INK, padding: '24px clamp(18px, 5vw, 64px)', borderTop: `3px solid ${brandColor}`, borderBottom: '1px solid #E3E0D9' }}>
-      <button onClick={() => navigate('/')} style={{ border: 0, background: 'none', color: '#70706b', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', padding: 0, marginBottom: 24 }}><ArrowLeft size={14} /> CookCredit</button>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>{role.company.logoUrl && <img src={role.company.logoUrl} alt="" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'contain', background: '#fff' }} />}<p style={{ ...overline, color: '#70706b', margin: 0 }}>{role.company.name}</p></div>
+    <header style={{ background: 'var(--cc-surface)', color: INK, padding: '24px clamp(18px, 5vw, 64px)', borderTop: `3px solid ${brandColor}`, borderBottom: '1px solid var(--cc-border)' }}>
+      <button onClick={() => navigate('/')} style={{ border: 0, background: 'none', color: 'var(--cc-muted)', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', padding: 0, marginBottom: 24 }}><ArrowLeft size={14} /> CookCredit</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>{role.company.logoUrl && <img src={role.company.logoUrl} alt="" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'contain', background: '#fff' }} />}<p style={{ ...overline, color: 'var(--cc-muted)', margin: 0 }}>{role.company.name}</p></div>
       <h1 style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 'clamp(30px, 6vw, 48px)', margin: '0 0 10px' }}>{role.title}</h1>
-      <p style={{ margin: 0, color: '#70706b', fontSize: 14 }}>{role.location?.label || role.company.city || 'Location shown by employer'} · {role.employment?.type || 'Role'}</p>
+      <p style={{ margin: 0, color: 'var(--cc-muted)', fontSize: 14 }}>{role.location?.label || role.company.city || 'Location shown by employer'} · {role.employment?.type || 'Role'}</p>
     </header>
     {PREVIEW && <div className="cc-preview-note" role="status">Preview application · sample role. Nothing is submitted to an employer.</div>}
 
@@ -164,13 +164,13 @@ export default function HiringApplicationScreen() {
             <input id="application-name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" maxLength={200} required style={field} /></div>
           {role.cvRequired && <div><label htmlFor="application-cv" style={{ display: 'block', fontSize: 14, marginBottom: 7 }}>CV / résumé *</label>
             <input id="application-cv" type="file" accept="application/pdf,.pdf" onChange={e => setCv(e.target.files?.[0] || null)} required />
-            <p style={{ fontSize: 12, color: '#70706b' }}>PDF, up to 2 MB. Shared only with this company for this application.</p></div>}
+            <p style={{ fontSize: 12, color: 'var(--cc-muted)' }}>PDF, up to 2 MB. Shared only with this company for this application.</p></div>}
           {(role.questions || []).map(question => <Question key={question.id} question={question} value={answers[question.id]} onChange={value => setAnswers(current => ({ ...current, [question.id]: value }))} />)}
           <div>
             <label htmlFor="application-city" style={{ display: 'block', fontSize: 14, marginBottom: 7 }}>City or area{locationRequired ? ' *' : ' (optional)'}</label>
             <input id="application-city" value={city} onChange={event => setCity(event.target.value)} placeholder="e.g. Brooklyn, NY" style={field} />
             <button type="button" onClick={useApproximateLocation} disabled={locating} style={{ background: 'none', border: 0, color: GREEN, padding: '9px 0 0', cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}><MapPin size={13} /> {locating ? 'Reading location…' : coordinates ? 'Approximate location added' : 'Add approximate location'}</button>
-            <p style={{ margin: '5px 0 0', color: '#70706b', fontSize: 12 }}>Optional: share your neighborhood to help the employer check travel distance. Your precise location is not saved.</p>
+            <p style={{ margin: '5px 0 0', color: 'var(--cc-muted)', fontSize: 12 }}>Optional: share your neighborhood to help the employer check travel distance. Your precise location is not saved.</p>
           </div>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 12, color: '#555', lineHeight: 1.55 }}>
             <input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} style={{ marginTop: 3, accentColor: GREEN }} />

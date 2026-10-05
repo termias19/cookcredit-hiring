@@ -16,8 +16,8 @@ import { getBusinessRole, getHiringApplications, changeBusinessRoleStatus } from
 import { fadeUp, scaleIn, staggerContainer, tapScale, buttonPress } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C', GOLD = '#9A781E', TERRA = '#C4561F'
-const roleAction = { border: '1px solid #1F6F5C', color: GREEN, background: 'transparent', padding: '10px 16px', marginRight: 12, borderRadius: 2, cursor: 'pointer', fontFamily: 'inherit' }
+const GREEN = 'var(--cc-forest)', GOLD = '#9A781E', TERRA = '#C4561F'
+const roleAction = { border: '1px solid var(--cc-forest)', color: GREEN, background: 'transparent', padding: '10px 16px', marginRight: 12, borderRadius: 2, cursor: 'pointer', fontFamily: 'inherit' }
 const STAGES = ['invited', 'assessing', 'verified', 'shortlisted', 'contacted', 'hired', 'not_selected']
 // Keep the persisted stage key; a workflow position does not certify the evidence.
 const stageLabel = stage => stage === 'verified' ? 'Ready for review' : stage.replaceAll('_', ' ')
@@ -100,12 +100,12 @@ export default function BusinessRoleScreen() {
   const role = data.role || biz?.roleById?.(id) || null
 
   const header = (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
       <button onClick={() => navigate('/business/roles')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 10 }}>
         <ArrowLeft size={14} color="#999" strokeWidth={1.5} />
         <span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>Roles</span>
       </button>
-      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>{role?.title || 'Role'}</h1>
+      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: 0 }}>{role?.title || 'Role'}</h1>
     </div>
   )
 
@@ -162,7 +162,7 @@ export default function BusinessRoleScreen() {
           {role.status === 'trashed' ? 'In trash. The application link is closed; applications and recordings are preserved.' : role.status === 'open' ? 'Open for applications' : 'Closed to new applications and assessment submissions. Existing applications remain available for review.'}
         </p>
         {!role.integrationManaged && <button type="button" disabled={changingStatus} onClick={() => changeStatus(role.status === 'trashed' || role.status === 'open' ? 'closed' : 'open')}
-          style={{ border: '1px solid #1F6F5C', color: GREEN, background: 'transparent', padding: '10px 16px', cursor: changingStatus ? 'wait' : 'pointer', marginRight: 12 }}>
+          style={{ border: '1px solid var(--cc-forest)', color: GREEN, background: 'transparent', padding: '10px 16px', cursor: changingStatus ? 'wait' : 'pointer', marginRight: 12 }}>
           {changingStatus ? 'Saving…' : role.status === 'trashed' ? 'Restore role (closed)' : role.status === 'open' ? 'Close role' : 'Reopen role'}
         </button>}
         {!role.integrationManaged && role.status !== 'trashed' && <>
@@ -210,7 +210,7 @@ export default function BusinessRoleScreen() {
             const inStage = cards.filter(c => c.stage === stage)
             return (
               <motion.div key={stage} layout initial="hidden" animate="show" variants={fadeUp}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: '#70706b', textTransform: 'uppercase', marginBottom: 9, padding: '0 4px 7px', borderBottom: '1px solid #E3E0D9' }}>{stageLabel(stage)} · {inStage.length}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: 'var(--cc-muted)', textTransform: 'uppercase', marginBottom: 9, padding: '0 4px 7px', borderBottom: '1px solid var(--cc-border)' }}>{stageLabel(stage)} · {inStage.length}</div>
                 <motion.div variants={staggerContainer(0.05)} initial="hidden" animate="show">
                   {!inStage.length && <div style={{ border: '1px dashed #ddd4c7', color: '#a09689', padding: '16px 10px', fontSize: 11, textAlign: 'center' }}>No candidates</div>}
                   <AnimatePresence initial={false}>
@@ -221,7 +221,7 @@ export default function BusinessRoleScreen() {
                       const canOpenEvidence = Boolean(c.application?.bestAssessment || c.application?.latestAssessment || c.hasVideo)
                       return (
                         <motion.div className="cc-business-card" key={c.cookId} layout variants={fadeUp} initial="hidden" animate="show" whileHover={{ borderColor: '#b2bdb6' }} exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
-                          style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid #E3E0D9', background: '#FEFDFB', padding: 13, marginBottom: 9 }}>
+                          style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid var(--cc-border)', background: 'var(--cc-surface)', padding: 13, marginBottom: 9 }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                             <motion.button whileTap={tapScale} onClick={() => biz.toggleShortlist(c.cookId)} aria-label="Shortlist" aria-pressed={starred}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, marginTop: 2 }}>
@@ -232,7 +232,7 @@ export default function BusinessRoleScreen() {
                             </motion.button>
                             <motion.button whileTap={canOpenApplication || canOpenEvidence ? tapScale : undefined} onClick={() => (canOpenApplication || canOpenEvidence) && navigate(`/business/candidate/${c.cookId}?role=${role.id}`)} style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: canOpenApplication || canOpenEvidence ? 'pointer' : 'default', padding: 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, color: '#1a1a1a' }}>{c.cook?.name || 'Candidate'}</span>
+                                <span style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, color: 'var(--cc-ink)' }}>{c.cook?.name || 'Candidate'}</span>
                                 {canOpenEvidence && <ShieldCheck size={13} color={GREEN} strokeWidth={2} />}
                                 {c.hasVideo && <Video size={12} color="#aaa" strokeWidth={1.5} aria-label="Has skill video" />}
                               </div>
@@ -246,7 +246,7 @@ export default function BusinessRoleScreen() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, paddingLeft: 25 }}>
                             <motion.span initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1, duration: 0.3 }}
-                              style={{ fontFamily: SERIF, fontSize: 18, color: '#1a1a1a', lineHeight: 1 }}>{c.cook?.verifiedScore ?? '—'}</motion.span>
+                              style={{ fontFamily: SERIF, fontSize: 18, color: 'var(--cc-ink)', lineHeight: 1 }}>{c.cook?.verifiedScore ?? '—'}</motion.span>
                             <span style={{ fontSize: 9, color: '#74756f', letterSpacing: 1, textTransform: 'uppercase' }}>{canOpenEvidence ? 'recorded result' : 'awaiting result'}</span>
                           </div>
                           {c.application?.hasCv && <HiringCvDownload applicationId={c.application.id} getToken={getToken} />}
@@ -264,15 +264,15 @@ export default function BusinessRoleScreen() {
         </div>
         {withdrawn.length > 0 && <details style={{ borderTop: '1px solid #e7dfd3', marginTop: 12, paddingTop: 12 }}><summary style={{ cursor: 'pointer', color: '#786f65', fontSize: 12 }}>Archived · {withdrawn.length} withdrawn</summary><p style={{ color: '#968d83', fontSize: 11, margin: '8px 0 0' }}>Withdrawn applicants remain in the audit history and outside the active six-stage pipeline.</p></details>}
         {data.status === 'ready' && !cards.length && <p style={{ color: '#74756f', fontSize: 13, padding: '20px 0' }}>{filters.status || filters.city || filters.outcome ? 'No applications match these filters.' : 'No candidates yet — invite cooks to assess for this role.'}</p>}
-        {nextCursor && <button onClick={loadMore} disabled={loadingMore} style={{ border: '1px solid #1a1a1a', background: '#fff', color: '#1a1a1a', padding: '10px 16px', cursor: 'pointer' }}>{loadingMore ? 'Loading…' : 'Load more applications'}</button>}
+        {nextCursor && <button onClick={loadMore} disabled={loadingMore} style={{ border: '1px solid var(--cc-ink)', background: '#fff', color: 'var(--cc-ink)', padding: '10px 16px', cursor: 'pointer' }}>{loadingMore ? 'Loading…' : 'Load more applications'}</button>}
       </div>
     </BusinessShell>
   )
 }
 
 const chip = (solid) => ({
-  border: `1px solid ${solid ? '#1a1a1a' : '#e5e5e5'}`,
-  background: solid ? '#1a1a1a' : '#fff', color: solid ? '#fff' : '#777',
+  border: `1px solid ${solid ? 'var(--cc-ink)' : 'var(--cc-border)'}`,
+  background: solid ? 'var(--cc-ink)' : '#fff', color: solid ? '#fff' : '#777',
   padding: '4px 10px', fontSize: 11, letterSpacing: 0.3,
 })
-const filterField = { border: '1px solid #E3E0D9', background: '#fff', color: '#1a1a1a', borderRadius: 2, padding: '9px 11px', fontSize: 12, minWidth: 170 }
+const filterField = { border: '1px solid var(--cc-border)', background: '#fff', color: 'var(--cc-ink)', borderRadius: 2, padding: '9px 11px', fontSize: 12, minWidth: 170 }

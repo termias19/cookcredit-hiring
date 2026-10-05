@@ -4,12 +4,12 @@ import { PREVIEW } from '../config'
 import CookCreditBrand from './CookCreditBrand'
 
 export default function AccountShell({ title, intro, children }) {
-  return <main className="cc-hiring-page" style={{ minHeight: '100svh', background: '#FEFDFB', color: 'var(--cc-ink)' }}>
+  return <main className="cc-hiring-page" style={{ minHeight: '100svh', background: 'var(--cc-surface)', color: 'var(--cc-ink)' }}>
     <header style={{ borderBottom: '1px solid var(--cc-border)', padding: '18px clamp(18px, 4vw, 48px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
       <CookCreditBrand />
       <nav aria-label="CookCredit account" style={{ display: 'flex', gap: 22, fontSize: 14, alignItems: 'center' }}>
-        <Link to="/applications" style={{ color: '#1F6F5C' }}>My applications</Link>
-        <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1F6F5C' }}><UserCircle size={21} /> Profile</Link>
+        <Link to="/applications" style={{ color: 'var(--cc-forest)' }}>My applications</Link>
+        <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--cc-forest)' }}><UserCircle size={21} /> Profile</Link>
       </nav>
     </header>
     {PREVIEW && <div className="cc-preview-note" role="status">UI preview · sample account. No live application is submitted.</div>}

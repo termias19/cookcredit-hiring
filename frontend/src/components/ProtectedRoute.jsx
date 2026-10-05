@@ -17,10 +17,10 @@ function ProfileLoadError({ error, onRetry, onSignOut }) {
   return (
     <div style={{
       minHeight: '100svh', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', gap: 12, padding: 40, textAlign: 'center', background: '#FEFDFB',
+      justifyContent: 'center', gap: 12, padding: 40, textAlign: 'center', background: 'var(--cc-surface)',
     }}>
       <CookCreditBrand />
-      <p role="alert" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 24, color: '#1a1a1a', margin: 0 }}>
+      <p role="alert" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 24, color: 'var(--cc-ink)', margin: 0 }}>
         {failure.title}
       </p>
       <p style={{ fontSize: 14, color: '#777', margin: 0, maxWidth: 340, lineHeight: 1.5 }}>
@@ -28,15 +28,15 @@ function ProfileLoadError({ error, onRetry, onSignOut }) {
       </p>
       <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         {failure.retry && <button onClick={onRetry} style={{
-          padding: '12px 32px', background: '#1a1a1a', color: '#fff',
+          padding: '12px 32px', background: 'var(--cc-ink)', color: '#fff',
           border: 'none', fontSize: 13, fontWeight: 600, letterSpacing: 1,
           textTransform: 'uppercase', cursor: 'pointer',
         }}>
           Retry
         </button>}
         <button onClick={onSignOut} style={{
-          padding: '12px 24px', background: 'transparent', color: '#1a1a1a',
-          border: '1px solid #1a1a1a', fontSize: 13, fontWeight: 600, letterSpacing: 1,
+          padding: '12px 24px', background: 'transparent', color: 'var(--cc-ink)',
+          border: '1px solid var(--cc-ink)', fontSize: 13, fontWeight: 600, letterSpacing: 1,
           textTransform: 'uppercase', cursor: 'pointer',
         }}>
           Sign out

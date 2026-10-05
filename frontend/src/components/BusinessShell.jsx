@@ -17,7 +17,7 @@ import HiringBottomNav from './HiringBottomNav'
 
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C'
+const GREEN = 'var(--cc-forest)'
 
 const NAV = [
   { to: '/business/roles', label: 'bn_roles', base: '/business/role', icon: BriefcaseBusiness },
@@ -31,17 +31,17 @@ function Sidebar() {
   const biz = useBusiness()
   const { t } = useLang()
   return (
-    <aside style={{ width: 248, flexShrink: 0, background: '#FEFDFB', borderRight: '1px solid #e5e5e5',
+    <aside style={{ width: 248, flexShrink: 0, background: 'var(--cc-surface)', borderRight: '1px solid var(--cc-border)',
       height: '100svh', position: 'fixed', top: 0, left: 0, zIndex: 100,
       display: 'flex', flexDirection: 'column', padding: '24px 16px', overflowY: 'auto' }}>
       <div style={{ padding: '0 8px' }}>
         <CookCreditBrand />
-        <div style={{ fontSize: 10, letterSpacing: 2, color: '#70706b', textTransform: 'uppercase', marginTop: 2 }}>{t.bn_assessment}</div>
+        <div style={{ fontSize: 10, letterSpacing: 2, color: 'var(--cc-muted)', textTransform: 'uppercase', marginTop: 2 }}>{t.bn_assessment}</div>
         {biz?.org?.name && <div style={{ fontSize: 12, color: '#777', marginTop: 16 }}>{biz.org.name}</div>}
       </div>
 
       <button onClick={() => navigate('/business/role/new')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-        margin: '18px 8px 16px', padding: '10px 12px', background: '#1F6F5C', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+        margin: '18px 8px 16px', padding: '10px 12px', background: 'var(--cc-forest)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
         <Plus size={15} strokeWidth={1.5} /> {t.bn_post}
       </button>
 
@@ -50,7 +50,7 @@ function Sidebar() {
           const active = pathname === to || (base && pathname.startsWith(base))
           return (
             <button key={to} aria-current={active ? 'page' : undefined} onClick={() => navigate(to)} style={{ display: 'flex', alignItems: 'center', gap: 10,
-              padding: '9px 10px', background: active ? '#e8eee5' : 'none', border: 'none', cursor: 'pointer',
+              padding: '9px 10px', background: active ? 'var(--cc-surface-soft)' : 'none', border: 'none', cursor: 'pointer',
               textAlign: 'left', color: active ? GREEN : '#777', fontSize: 14 }}>
               {createElement(icon, { size: 17, strokeWidth: 1.5, color: active ? GREEN : '#999' })} {t[label]}
             </button>
@@ -60,8 +60,8 @@ function Sidebar() {
 
       <div style={{ flex: 1 }} />
       <div style={{ padding: '0 8px' }}>
-        <div style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: '#70706b' }}>{t.bn_plan}</div>
-        <div style={{ fontSize: 13, color: '#1a1a1a', textTransform: 'capitalize', marginTop: 2 }}>{biz?.org?.integrationAccess?.earlyAccess ? t.bn_included : biz?.org?.plan || '—'}</div>
+        <div style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--cc-muted)' }}>{t.bn_plan}</div>
+        <div style={{ fontSize: 13, color: 'var(--cc-ink)', textTransform: 'capitalize', marginTop: 2 }}>{biz?.org?.integrationAccess?.earlyAccess ? t.bn_included : biz?.org?.plan || '—'}</div>
       </div>
     </aside>
   )
@@ -79,9 +79,9 @@ export default function BusinessShell({ header, children, embedded = false }) {
   // Keep the content subtree mounted across responsive breakpoints. Moving an
   // unsaved review into a different layout tree would discard the employer draft.
   return (
-    <div className={`cc-business-workspace${isDesktop ? '' : ' cc-business-mobile'}`} style={isDesktop ? { minHeight: '100svh', background: '#F4F1EA' } : undefined}>
+    <div className={`cc-business-workspace${isDesktop ? '' : ' cc-business-mobile'}`} style={isDesktop ? { minHeight: '100svh', background: 'var(--cc-canvas)' } : undefined}>
       {isDesktop ? <Sidebar /> : <div style={{ padding: '14px 20px 0', fontFamily: SERIF, fontSize: 25, fontWeight: 500 }}><CookCreditBrand /></div>}
-      <main key="workspace-content" className={isDesktop ? 'cc-business-main' : undefined} style={isDesktop ? { marginLeft: 248, minWidth: 0, background: '#FEFDFB', minHeight: '100svh' } : undefined}>
+      <main key="workspace-content" className={isDesktop ? 'cc-business-main' : undefined} style={isDesktop ? { marginLeft: 248, minWidth: 0, background: 'var(--cc-surface)', minHeight: '100svh' } : undefined}>
         <div style={isDesktop ? { maxWidth: 1280, margin: '0 auto' } : undefined}>
           {isDesktop ? screenHeader : <header>{screenHeader}</header>}
           {previewNote}

@@ -21,8 +21,8 @@ import { reportPlayback } from '../utils/reportPlayback'
 import { fadeUp, scaleIn, staggerContainer, buttonPress } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C', TERRA = '#C4561F', GOLD = '#9A781E'
-const overline = { fontSize: 10, letterSpacing: 2, color: '#70706b', fontWeight: 500, textTransform: 'uppercase', margin: '0 0 8px' }
+const GREEN = 'var(--cc-forest)', TERRA = '#C4561F', GOLD = '#9A781E'
+const overline = { fontSize: 10, letterSpacing: 2, color: 'var(--cc-muted)', fontWeight: 500, textTransform: 'uppercase', margin: '0 0 8px' }
 const CAT_LABEL = { certification: 'Certifications', technique: 'Technique & skill', cuisine: 'Cuisines',
   station: 'Experience & work arrangement', food_safety: 'Safety & protocol', server_skill: 'Service', barista_skill: 'Specialty service',
   dish_skill: 'Kitchen tasks', alcohol_cert: 'State certifications', pos: 'Scheduling', soft: 'Strengths' }
@@ -79,10 +79,10 @@ function CandidateReport({ id, roleId }) {
   }
 
   const header = (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
       <button onClick={() => navigate(-1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-        <ArrowLeft size={14} color="#70706b" strokeWidth={1.5} />
-        <span style={{ fontSize: 10, letterSpacing: 2.3, color: '#70706b', fontWeight: 500, textTransform: 'uppercase' }}>Back to applicants</span>
+        <ArrowLeft size={14} color="var(--cc-muted)" strokeWidth={1.5} />
+        <span style={{ fontSize: 10, letterSpacing: 2.3, color: 'var(--cc-muted)', fontWeight: 500, textTransform: 'uppercase' }}>Back to applicants</span>
       </button>
     </div>
   )
@@ -107,25 +107,25 @@ function CandidateReport({ id, roleId }) {
 
       {/* trust summary — intentionally remains in document flow so it never covers evidence while scrolling. */}
       <motion.div variants={fadeUp} style={{ flex: '1 1 280px', maxWidth: '100%' }}>
-        <div className="cc-business-card" style={{ background: '#FEFDFB', border: '1px solid #E3E0D9', padding: '26px 22px', textAlign: 'center' }}>
+        <div className="cc-business-card" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)', padding: '26px 22px', textAlign: 'center' }}>
           <div aria-hidden="true" style={{ width: 118, height: 118, flexShrink: 0, margin: '0 auto 16px', borderRadius: 2, background: c.photo ? `#EDE7DF url(${c.photo}) center/cover` : '#EDE7DF', border: '1px solid #E0DDD3', display: 'grid', placeItems: 'center', fontFamily: SERIF, fontSize: 44, color: '#8e8272' }}>{!c.photo && (c.name || '?').trim().charAt(0).toUpperCase()}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <h1 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500, color: '#1a1a1a', margin: 0 }}>{c.name}</h1>
+            <h1 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500, color: 'var(--cc-ink)', margin: 0 }}>{c.name}</h1>
             {report?.assessment?.status === 'verified' && <ShieldCheck size={16} color={GREEN} strokeWidth={2} aria-label="Verified assessment" />}
           </div>
           <p style={{ fontSize: 10, letterSpacing: 1.2, color: GREEN, textTransform: 'uppercase', margin: '5px 0 18px', fontWeight: 700 }}>Shared knife assessment</p>
 
           <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, padding: '8px 0' }}>
             <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              style={{ fontFamily: SERIF, fontSize: 44, fontWeight: 400, color: '#1a1a1a', lineHeight: 1 }}>{s == null ? '—' : s}</motion.span>
-            <span style={{ fontSize: 10, color: '#70706b', letterSpacing: .6, textTransform: 'uppercase' }}>{s == null ? 'Measurement unavailable' : `/ 100 ${estimated != null ? 'browser estimate' : 'verified result'}`}</span>
+              style={{ fontFamily: SERIF, fontSize: 44, fontWeight: 400, color: 'var(--cc-ink)', lineHeight: 1 }}>{s == null ? '—' : s}</motion.span>
+            <span style={{ fontSize: 10, color: 'var(--cc-muted)', letterSpacing: .6, textTransform: 'uppercase' }}>{s == null ? 'Measurement unavailable' : `/ 100 ${estimated != null ? 'browser estimate' : 'verified result'}`}</span>
           </div>
 
           <p style={{ fontSize: 13, color: '#777', margin: '18px 0 0' }}>{(c.cuisines || []).join(' · ')}</p>
           <p style={{ fontSize: 13, color: '#74756f', margin: '4px 0 20px' }}>{[c.city, c.years != null ? `${c.years} yrs experience` : null].filter(Boolean).join(' · ')}</p>
 
           <motion.button {...buttonPress} onClick={() => biz?.toggleShortlist?.(id)} style={{ width: '100%', padding: 13, border: shortlisted ? `1px solid ${GREEN}` : 'none',
-            background: shortlisted ? '#FEFDFB' : GREEN, color: shortlisted ? GREEN : '#fff', fontSize: 14, fontWeight: 500, letterSpacing: 0.2, cursor: 'pointer',
+            background: shortlisted ? 'var(--cc-surface)' : GREEN, color: shortlisted ? GREEN : '#fff', fontSize: 14, fontWeight: 500, letterSpacing: 0.2, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <motion.span key={shortlisted ? 'on' : 'off'} initial={{ scale: 0.6 }} animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 400, damping: 15 }} style={{ display: 'inline-flex' }}>
@@ -167,7 +167,7 @@ function CandidateReport({ id, roleId }) {
           ) : video.url ? (
             <CandidateVideoPlayer key={video.url} url={video.url} cookId={id} roleId={roleId} attemptId={report?.assessment?.attemptId} onRetry={playVideo} />
           ) : (
-            <div style={{ border: '1px solid #e5e5e5', padding: '14px 16px', fontSize: 13, color: '#777', lineHeight: 1.5 }}>
+            <div style={{ border: '1px solid var(--cc-border)', padding: '14px 16px', fontSize: 13, color: '#777', lineHeight: 1.5 }}>
               {video.loading ? 'Loading…' : 'The recording could not be loaded. Close and reopen the report to retry.'}
             </div>
           )}
@@ -193,7 +193,7 @@ function CandidateReport({ id, roleId }) {
           {!m.gates.passed && (
             <div style={{ display: 'flex', gap: 8, border: `1px solid ${TERRA}`, background: '#FBF1EC', padding: '10px 12px', marginBottom: 10 }}>
               <CircleAlert size={15} color={TERRA} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: '#1a1a1a' }}>Does not meet: {m.gates.failures.join(', ')}</span>
+              <span style={{ fontSize: 13, color: 'var(--cc-ink)' }}>Does not meet: {m.gates.failures.join(', ')}</span>
             </div>
           )}
           {m.requirements.map(r => (
@@ -201,7 +201,7 @@ function CandidateReport({ id, roleId }) {
               <span style={{ width: 16, height: 16, flexShrink: 0, border: `1px solid ${r.status === 'met' ? GREEN : '#ccc'}`, background: r.status === 'met' ? GREEN : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 {r.status === 'met' && <Check size={11} color="#fff" strokeWidth={3} />}
               </span>
-              <span style={{ color: r.status === 'met' ? '#1a1a1a' : '#999', flex: 1 }}>{labelOf(r.id)}{r.kind === 'preferred' ? ' (nice-to-have)' : ''}</span>
+              <span style={{ color: r.status === 'met' ? 'var(--cc-ink)' : '#999', flex: 1 }}>{labelOf(r.id)}{r.kind === 'preferred' ? ' (nice-to-have)' : ''}</span>
               {r.source && <span style={{ fontSize: 11, color: '#74756f' }}>{r.source}</span>}
             </div>
           ))}
@@ -214,7 +214,7 @@ function CandidateReport({ id, roleId }) {
           <div style={{ display: 'flex', gap: 8, border: `1px solid ${claims[0].status === 'contradicted' ? TERRA : claims[0].status === 'verified' ? GREEN : GOLD}`,
             background: claims[0].status === 'contradicted' ? '#FBF1EC' : claims[0].status === 'verified' ? '#E8F1EC' : '#FBF7EC', padding: '10px 12px' }}>
             {claims[0].status === 'verified' ? <ShieldCheck size={15} color={GREEN} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /> : <CircleAlert size={15} color={claims[0].status === 'contradicted' ? TERRA : GOLD} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />}
-            <span style={{ fontSize: 13, color: '#1a1a1a' }}>Résumé claims a skill — {claims[0].status === 'verified' ? 'confirmed by' : claims[0].status === 'partial' ? 'partly backed by' : 'NOT supported by'} the {claims[0].detail}.</span>
+            <span style={{ fontSize: 13, color: 'var(--cc-ink)' }}>Résumé claims a skill — {claims[0].status === 'verified' ? 'confirmed by' : claims[0].status === 'partial' ? 'partly backed by' : 'NOT supported by'} the {claims[0].detail}.</span>
           </div>
         </motion.div>
       )}
@@ -238,7 +238,7 @@ function CandidateReport({ id, roleId }) {
               <motion.div variants={staggerContainer(0.03)} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {grouped[cat].map(pid => (
                   <motion.span key={pid} variants={scaleIn}
-                    style={{ border: '1px solid #e5e5e5', background: '#fff', padding: '5px 10px', fontSize: 12, color: '#1a1a1a' }}>{labelOf(pid)}</motion.span>
+                    style={{ border: '1px solid var(--cc-border)', background: '#fff', padding: '5px 10px', fontSize: 12, color: 'var(--cc-ink)' }}>{labelOf(pid)}</motion.span>
                 ))}
               </motion.div>
             </div>
@@ -253,12 +253,12 @@ function CandidateReport({ id, roleId }) {
           {creds.map(cr => (
             <div key={cr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500 }}>{cr.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--cc-ink)', fontWeight: 500 }}>{cr.label}</div>
                 <div style={{ fontSize: 11, color: '#74756f', marginTop: 1 }}>{cr.standard} · {cr.accreditor}</div>
               </div>
               <span style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', padding: '3px 8px', whiteSpace: 'nowrap',
-                border: `1px solid ${cr.trust >= 0.95 ? GREEN : cr.trust >= 0.75 ? '#1a1a1a' : '#ccc'}`,
-                color: cr.trust >= 0.95 ? GREEN : cr.trust >= 0.75 ? '#1a1a1a' : '#999' }}>{cr.tier}</span>
+                border: `1px solid ${cr.trust >= 0.95 ? GREEN : cr.trust >= 0.75 ? 'var(--cc-ink)' : '#ccc'}`,
+                color: cr.trust >= 0.95 ? GREEN : cr.trust >= 0.75 ? 'var(--cc-ink)' : '#999' }}>{cr.tier}</span>
               <span style={{ fontSize: 11, color: cr.status === 'verified' ? GREEN : '#bbb', whiteSpace: 'nowrap' }}>
                 {cr.status === 'verified' ? 'Verified' : cr.status === 'pending' ? 'Pending' : 'Claimed'}
               </span>
@@ -287,7 +287,7 @@ function CandidateReport({ id, roleId }) {
             ['Finished product gradeable', report.assessment.measurements?.productGradeable ? 'Yes' : 'No'],
             ['Product-quality score', report.assessment.measurements?.productScore ?? 'Unavailable'],
           ]).map(([label, value]) => <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '8px 0', borderBottom: '1px solid #eee', fontSize: 13 }}>
-            <span style={{ color: '#777' }}>{label}</span><span style={{ color: '#1a1a1a', textAlign: 'right' }}>{value}</span>
+            <span style={{ color: '#777' }}>{label}</span><span style={{ color: 'var(--cc-ink)', textAlign: 'right' }}>{value}</span>
           </div>)}
           <div style={{ marginTop: 12, padding: '10px 12px', background: '#F6F3ED', fontSize: 12, lineHeight: 1.55, color: '#555' }}>
             <b>How the number is produced:</b> {report.assessment.calculation?.scoreSource}. {report.assessment.calculation?.comparison}

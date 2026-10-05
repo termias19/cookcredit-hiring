@@ -81,7 +81,7 @@ export default function VerifyEmailScreen() {
 
   return (
     <AuthShell>
-        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '52px 24px 32px', textAlign: 'center' }}>
+        <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '52px 24px 32px', textAlign: 'center' }}>
           <img src="/cookcredit-mark-orange.svg" alt="CookCredit" width="48" height="37" style={{ display: 'block', margin: '0 auto 20px' }} />
           <motion.div variants={scaleIn} style={{ width: 56, height: 56, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <Mail size={24} color="white" strokeWidth={1.5} />
@@ -92,7 +92,7 @@ export default function VerifyEmailScreen() {
         </motion.div>
 
         <motion.div variants={staggerContainer(0.07, 0.15)} initial="hidden" animate="show" style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
-          <motion.div variants={fadeUp} style={{ border: '1px solid #e5e5e5', padding: '16px 18px', fontSize: 14, color: '#777', lineHeight: 1.6 }}>
+          <motion.div variants={fadeUp} style={{ border: '1px solid var(--cc-border)', padding: '16px 18px', fontSize: 14, color: '#777', lineHeight: 1.6 }}>
             {notice?.requested === false
               ? notice.limited ? 'Please wait before requesting another email. Check your inbox and spam folder for the earlier message.' : 'We could not request your verification email. Use the button below to try again; your account has already been created.'
               : notice?.requested ? 'Your verification email has been requested. Delivery can take a few minutes. Check your inbox and spam folder, open the CookCredit link, then return here.'
@@ -108,11 +108,11 @@ export default function VerifyEmailScreen() {
             )}
           </AnimatePresence>
 
-          <motion.button variants={fadeUp} onClick={handleContinue} disabled={checking} {...buttonPress} style={{ background: checking ? '#e5e5e5' : '#1a1a1a', color: checking ? '#999' : 'white', border: 'none', padding: 16, fontSize: 16, fontWeight: 500, cursor: checking ? 'default' : 'pointer', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <motion.button variants={fadeUp} onClick={handleContinue} disabled={checking} {...buttonPress} style={{ background: checking ? 'var(--cc-border)' : 'var(--cc-forest)', color: checking ? '#999' : 'white', border: 'none', padding: 16, fontSize: 16, fontWeight: 500, cursor: checking ? 'default' : 'pointer', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             {checking ? 'Checking\u2026' : "I've verified, continue"} {!checking && <ArrowRight size={16} strokeWidth={1.5} />}
           </motion.button>
 
-          <motion.button variants={fadeUp} onClick={handleResend} disabled={cooldown > 0 || resending} whileHover={cooldown > 0 ? undefined : { scale: 1.02 }} whileTap={cooldown > 0 ? undefined : tapScale} style={{ background: 'transparent', color: cooldown > 0 ? '#999' : '#1a1a1a', border: `1px solid ${cooldown > 0 ? '#e5e5e5' : '#1a1a1a'}`, padding: 14, fontSize: 15, fontWeight: 500, cursor: cooldown > 0 ? 'default' : 'pointer' }}>
+          <motion.button variants={fadeUp} onClick={handleResend} disabled={cooldown > 0 || resending} whileHover={cooldown > 0 ? undefined : { scale: 1.02 }} whileTap={cooldown > 0 ? undefined : tapScale} style={{ background: 'transparent', color: cooldown > 0 ? '#999' : 'var(--cc-ink)', border: `1px solid ${cooldown > 0 ? 'var(--cc-border)' : 'var(--cc-ink)'}`, padding: 14, fontSize: 15, fontWeight: 500, cursor: cooldown > 0 ? 'default' : 'pointer' }}>
             {resending ? 'Sending\u2026' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend email'}
           </motion.button>
 
@@ -122,7 +122,7 @@ export default function VerifyEmailScreen() {
               await logout()
               rememberDestination(from)
               navigate('/login', { state: { from } })
-            }} style={{ fontSize: 13, color: '#999', cursor: 'pointer', borderBottom: '1px solid #e5e5e5', paddingBottom: 2, display: 'inline-block' }}>Use a different account</motion.span>
+            }} style={{ fontSize: 13, color: '#999', cursor: 'pointer', borderBottom: '1px solid var(--cc-border)', paddingBottom: 2, display: 'inline-block' }}>Use a different account</motion.span>
           </motion.div>
         </motion.div>
     </AuthShell>

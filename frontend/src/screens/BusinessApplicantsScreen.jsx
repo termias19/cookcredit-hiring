@@ -13,6 +13,6 @@ export default function BusinessApplicantsScreen() {
       <Link to="/business/candidates" aria-current={!saved ? 'page' : undefined}>{t.bn_assessments}</Link>
       <Link to="/business/candidates?view=saved" aria-current={saved ? 'page' : undefined}>{t.bn_shortlist}</Link>
     </nav>
-    <p style={{ marginTop: 12, fontSize: 13, color: '#70706b' }}>Shared assessments appear here. Open a role to see all its applications, including those still in progress.</p>
+    <p style={{ marginTop: 12, fontSize: 13, color: 'var(--cc-muted)' }}>Shared assessments appear here. Open a role to see all its applications, including those still in progress.</p>
   </div>}><Suspense fallback={<p role="status" style={{ padding: 28 }}>Loading applicants…</p>}>{saved ? <Saved embedded /> : <Applicants embedded />}</Suspense></BusinessShell>
 }

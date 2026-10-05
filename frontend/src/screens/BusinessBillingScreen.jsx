@@ -9,7 +9,7 @@ import { createBusinessBillingPortal, createBusinessCheckout, getBusinessBilling
 import { fadeIn, staggerContainer } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C'
+const GREEN = 'var(--cc-forest)'
 
 export default function BusinessBillingScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
@@ -86,12 +86,12 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
   }))
 
 
-  const header = <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
+  const header = <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
     <button onClick={() => navigate('/business/roles')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 10 }}>
       <ArrowLeft size={14} color="#999" strokeWidth={1.5} /><span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>{biz?.org?.name || 'Workspace'}</span>
     </button>
-    <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Plans & billing</h1>
-    <p style={{ fontSize: 13, color: '#70706b', margin: '5px 0 0' }}>{biz?.loading || !biz?.org ? 'Your workspace access and billing details.' : earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
+    <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: 0 }}>Plans & billing</h1>
+    <p style={{ fontSize: 13, color: 'var(--cc-muted)', margin: '5px 0 0' }}>{biz?.loading || !biz?.org ? 'Your workspace access and billing details.' : earlyAccess ? 'Your workspace includes five open roles. No subscription payment is required.' : 'Choose the plan that fits your hiring process. Manage payments and invoices securely with Stripe.'}</p>
   </div>
 
   if (biz?.loading || !biz?.org) return <BusinessShell embedded={embedded} header={embedded ? null : header} showNav={false}>
@@ -124,18 +124,18 @@ export default function BusinessBillingScreen({ embedded = false } = {}) {
           const checkoutReady = billing.billingEnabled && billing.checkoutConfigured
           const action = paidSelfServe && current && billing.hasCustomer ? openPortal : paidSelfServe && checkoutReady ? () => startCheckout(plan.id) : plan.id === 'enterprise' && !current ? () => { window.location.href = 'mailto:connectwithus@cookcredit.com?subject=CookCredit%20Enterprise' } : null
           const label = paidSelfServe && current && billing.hasCustomer ? 'Manage billing' : current ? 'Current plan' : paidSelfServe ? (checkoutReady ? `Choose ${plan.name}` : 'Subscriptions not open yet') : plan.id === 'enterprise' ? 'Contact sales' : 'Included fallback'
-          return <motion.div className="cc-business-card" key={plan.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} style={{ minWidth: 0, border: `1px solid ${current ? GREEN : '#E3E0D9'}`, background: '#FEFDFB', padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+          return <motion.div className="cc-business-card" key={plan.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} style={{ minWidth: 0, border: `1px solid ${current ? GREEN : 'var(--cc-border)'}`, background: 'var(--cc-surface)', padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ minHeight: 22, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: GREEN, marginBottom: 6 }}>{current ? 'Your current plan' : plan.id === 'integration' ? 'Connect your hiring software' : ''}</div>
-            <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 500, color: '#1a1a1a' }}>{plan.name}</div>
+            <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 500, color: 'var(--cc-ink)' }}>{plan.name}</div>
             <div style={{ margin: '6px 0 14px' }}><span style={{ fontFamily: SERIF, fontSize: 30 }}>{plan.price}</span><span style={{ fontSize: 12, color: '#74756f', marginLeft: 4 }}>{plan.cadence}</span></div>
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px', flex: 1 }}>{plan.features.map(feature => <li key={feature} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: '#555', padding: '4px 0' }}><Check size={14} color={GREEN} style={{ flexShrink: 0, marginTop: 2 }} />{feature}</li>)}</ul>
-            <motion.button whileTap={action ? { scale: .97 } : undefined} onClick={action || undefined} disabled={!action || pending !== ''} style={{ width: '100%', padding: 12, fontSize: 13, fontWeight: 500, cursor: action ? 'pointer' : 'default', border: current ? '1px solid #E3E0D9' : 'none', background: action ? GREEN : '#FEFDFB', color: action ? '#fff' : '#70706b', opacity: pending ? .6 : 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6 }}>
+            <motion.button whileTap={action ? { scale: .97 } : undefined} onClick={action || undefined} disabled={!action || pending !== ''} style={{ width: '100%', padding: 12, fontSize: 13, fontWeight: 500, cursor: action ? 'pointer' : 'default', border: current ? '1px solid var(--cc-border)' : 'none', background: action ? GREEN : 'var(--cc-surface)', color: action ? '#fff' : 'var(--cc-muted)', opacity: pending ? .6 : 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6 }}>
               {pending === plan.id || (pending === 'portal' && current) ? 'Opening…' : label}{action && <ExternalLink size={13} />}
             </motion.button>
           </motion.div>
         })}
       </motion.div>
-      <p style={{ fontSize: 12, color: '#70706b', marginTop: 16 }}>Paid subscriptions use Stripe for payment details, invoices, and cancellation.</p>
+      <p style={{ fontSize: 12, color: 'var(--cc-muted)', marginTop: 16 }}>Paid subscriptions use Stripe for payment details, invoices, and cancellation.</p>
     </div>
   </BusinessShell>
 }

@@ -25,11 +25,11 @@ import {
 import { fadeUp, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C', GOLD = '#9A781E'
-const lbl = { display: 'block', fontSize: 10, fontWeight: 500, letterSpacing: 1.5, textTransform: 'uppercase', color: '#70706b', margin: '18px 0 6px' }
+const GREEN = 'var(--cc-forest)', GOLD = '#9A781E'
+const lbl = { display: 'block', fontSize: 10, fontWeight: 500, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--cc-muted)', margin: '18px 0 6px' }
 const note = { fontSize: 11, color: '#74756f', textTransform: 'none', letterSpacing: 0, marginLeft: 6 }
-const input = { width: '100%', padding: '11px 12px', border: '1px solid #E3E0D9', background: '#fff', borderRadius: 2, fontSize: 15, color: '#1a1a1a', fontFamily: 'inherit' }
-const seg = on => ({ border: `1px solid ${on ? GREEN : '#E3E0D9'}`, background: on ? GREEN : '#fff', color: on ? '#fff' : '#526057', borderRadius: 2, padding: '7px 11px', fontSize: 12, cursor: 'pointer' })
+const input = { width: '100%', padding: '11px 12px', border: '1px solid var(--cc-border)', background: '#fff', borderRadius: 2, fontSize: 15, color: 'var(--cc-ink)', fontFamily: 'inherit' }
+const seg = on => ({ border: `1px solid ${on ? GREEN : 'var(--cc-border)'}`, background: on ? GREEN : '#fff', color: on ? '#fff' : '#526057', borderRadius: 2, padding: '7px 11px', fontSize: 12, cursor: 'pointer' })
 const QUESTION_TYPES = [
   ['short_text', 'Short answer'], ['long_text', 'Long answer'], ['yes_no', 'Yes / no'],
   ['select', 'Choose one'], ['multiselect', 'Choose several'], ['phone', 'Phone'],
@@ -183,12 +183,12 @@ function RoleForm({ initialRole }) {
   }
 
   const header = (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
       <button onClick={() => navigate('/business/roles')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 10 }}>
         <ArrowLeft size={14} color="#999" strokeWidth={1.5} />
         <span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>Roles</span>
       </button>
-      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>{initialRole ? 'Edit role' : 'Post a role'}</h1>
+      <h1 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: 0 }}>{initialRole ? 'Edit role' : 'Post a role'}</h1>
     </div>
   )
 
@@ -242,8 +242,8 @@ function RoleForm({ initialRole }) {
                   return <motion.button key={id} type="button" whileHover={{ scale: 1.05 }} whileTap={tapScale}
                     animate={{ scale: st ? 1.04 : 1 }} transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                     onClick={() => cycleSkill(id)} style={{
-                    border: `1px solid ${st === 'must' ? '#1a1a1a' : st === 'preferred' ? GOLD : '#e5e5e5'}`,
-                    background: st === 'must' ? '#1a1a1a' : st === 'preferred' ? GOLD : '#fff',
+                    border: `1px solid ${st === 'must' ? 'var(--cc-ink)' : st === 'preferred' ? GOLD : 'var(--cc-border)'}`,
+                    background: st === 'must' ? 'var(--cc-ink)' : st === 'preferred' ? GOLD : '#fff',
                     color: st ? '#fff' : '#555', padding: '6px 11px', fontSize: 12, cursor: 'pointer' }}>
                     {labelOf(id)}{st === 'must' ? ' · must' : ''}</motion.button>
                 })}
@@ -274,8 +274,8 @@ function RoleForm({ initialRole }) {
               {thresholds.minimumCadence !== undefined && <MetricRange title="Pace" unit="strokes / second" limit={30} step={0.1}
                 minimum={thresholds.minimumCadence} maximum={thresholds.maximumCadence}
                 onChange={(minimumCadence, maximumCadence) => setThresholds(current => ({ ...current, minimumCadence, maximumCadence }))} />}
-              <p style={{ fontSize: 12, color: '#70706b', lineHeight: 1.6 }}>Drag the minimum and maximum controls to set your range. Rhythm describes timing steadiness; consistency describes stroke-amplitude steadiness; form describes the tracked chopping motion. Pace is a rate, not a quality score. Review stroke count and the recording for context.</p>
-              <p style={{ fontSize: 12, color: '#70706b', lineHeight: 1.6 }}>These criteria match the published knife assessment and are saved with each application. Live assessment measurements are not independently verified. Review them with the recording; hiring decisions remain yours.</p>
+              <p style={{ fontSize: 12, color: 'var(--cc-muted)', lineHeight: 1.6 }}>Drag the minimum and maximum controls to set your range. Rhythm describes timing steadiness; consistency describes stroke-amplitude steadiness; form describes the tracked chopping motion. Pace is a rate, not a quality score. Review stroke count and the recording for context.</p>
+              <p style={{ fontSize: 12, color: 'var(--cc-muted)', lineHeight: 1.6 }}>These criteria match the published knife assessment and are saved with each application. Live assessment measurements are not independently verified. Review them with the recording; hiring decisions remain yours.</p>
             </motion.div>
 
             <motion.div variants={fadeUp}>
@@ -331,7 +331,7 @@ function RoleForm({ initialRole }) {
               <textarea id="assessment-instructions" value={assessmentInstructions} onChange={e => setAssessmentInstructions(e.target.value)} maxLength={1500} rows={3}
                 placeholder="Keep your knife hand, blade and cutting board in view. Record 20–60 seconds at your normal, safe pace. Review, then submit."
                 style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} />
-              <p style={{ fontSize: 12, color: '#70706b', margin: '6px 0 0' }}>Leave blank to use CookCredit’s instructions. Your company logo comes from Integrations.</p>
+              <p style={{ fontSize: 12, color: 'var(--cc-muted)', margin: '6px 0 0' }}>Leave blank to use CookCredit’s instructions. Your company logo comes from Integrations.</p>
             </motion.div>
 
             <motion.div variants={fadeUp}>
@@ -346,7 +346,7 @@ function RoleForm({ initialRole }) {
                 <button type="button" onClick={addQuestion} disabled={questions.length >= 20} style={{ border: 0, background: 'none', color: GREEN, padding: '0 0 6px', cursor: 'pointer', display: 'flex', gap: 5, alignItems: 'center', fontSize: 12 }}><Plus size={14} /> Add question</button>
               </div>
               <div style={{ display: 'grid', gap: 10 }}>
-                {questions.map((question, index) => <div className="cc-business-card" key={question.id} style={{ border: '1px solid #E3E0D9', borderRadius: 2, padding: 13, background: '#FEFDFB' }}>
+                {questions.map((question, index) => <div className="cc-business-card" key={question.id} style={{ border: '1px solid var(--cc-border)', borderRadius: 2, padding: 13, background: 'var(--cc-surface)' }}>
                   <div className="cc-question-row">
                     <input value={question.label} onChange={event => changeQuestion(index, { label: event.target.value })} placeholder="Question" style={input} />
                     <select value={question.type} onChange={event => changeQuestion(index, { type: event.target.value, options: [] })} style={input}>

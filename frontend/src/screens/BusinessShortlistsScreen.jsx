@@ -11,7 +11,7 @@ import { useBusiness } from '../context/BusinessContext'
 import { fadeUp, staggerContainer, tapScale } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C', GOLD = '#9A781E'
+const GREEN = 'var(--cc-forest)', GOLD = '#9A781E'
 
 function ShortlistCard({ cook, onClick }) {
   return (
@@ -19,7 +19,7 @@ function ShortlistCard({ cook, onClick }) {
       exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.2 } }}
       onClick={onClick} style={{
         display: 'flex', flexDirection: 'column', textAlign: 'left', cursor: 'pointer',
-        background: '#FEFDFB', border: '1px solid #E3E0D9', padding: 0, overflow: 'hidden',
+        background: 'var(--cc-surface)', border: '1px solid var(--cc-border)', padding: 0, overflow: 'hidden',
       }}>
       <div style={{ width: '100%', height: 132, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: cook.photo ? `#EDE7DF url(${cook.photo}) center/cover` : '#EDE7DF' }}>
@@ -28,13 +28,13 @@ function ShortlistCard({ cook, onClick }) {
       <div style={{ flex: 1, padding: '14px 16px 16px', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <Star size={14} color={GOLD} fill={GOLD} strokeWidth={1.5} />
-          <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a', margin: 0 }}>{cook.name}</h3>
+          <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: 'var(--cc-ink)', margin: 0 }}>{cook.name}</h3>
           {cook.hasVideo && <ShieldCheck size={14} color={GREEN} strokeWidth={2} />}
         </div>
         <p style={{ fontSize: 12, color: '#777', margin: 0 }}>{(cook.cuisines || []).join(' · ')}{cook.city ? ` · ${cook.city}` : ''}</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #E7E2D8' }}>
           <span className="cc-evidence-pill">{cook.hasVideo ? 'Evidence ready' : 'Assessment pending'}</span>
-          <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a' }}>{cook.verifiedScore ?? '—'}<small style={{ fontSize: 9, color: '#70706b', marginLeft: 3 }}>/100</small></span>
+          <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: 'var(--cc-ink)' }}>{cook.verifiedScore ?? '—'}<small style={{ fontSize: 9, color: 'var(--cc-muted)', marginLeft: 3 }}>/100</small></span>
         </div>
       </div>
     </motion.button>
@@ -47,12 +47,12 @@ export default function BusinessShortlistsScreen({ embedded = false } = {}) {
   const cooks = (biz?.shortlist || []).map(id => biz?.candidateById?.(id) || biz?.shortlistCandidates?.find(candidate => candidate.id === id) || { id, name: 'Applicant', hasVideo: false }).filter(Boolean)
 
   const header = (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
       <button onClick={() => navigate('/business/roles')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 10 }}>
         <ArrowLeft size={14} color="#999" strokeWidth={1.5} />
         <span style={{ fontSize: 11, letterSpacing: 3, color: '#74756f', textTransform: 'uppercase' }}>Workspace</span>
       </button>
-      <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: 0 }}>Shortlist</h1>
+      <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: 0 }}>Shortlist</h1>
     </div>
   )
 
@@ -74,7 +74,7 @@ export default function BusinessShortlistsScreen({ embedded = false } = {}) {
           <div style={{ padding: '30px 0', textAlign: 'center' }}>
             <p style={{ color: '#777', fontSize: 13, margin: '0 0 12px' }}>Couldn&rsquo;t load the shortlist — check your connection.</p>
             <button onClick={() => biz?.refresh?.()} style={{
-              background: '#1a1a1a', color: '#fff', border: 'none', padding: '10px 20px',
+              background: 'var(--cc-ink)', color: '#fff', border: 'none', padding: '10px 20px',
               fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
             }}>Retry</button>
           </div>

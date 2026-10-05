@@ -3,14 +3,13 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
-import { ArrowLeft } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
 import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination } from '../utils/homeFor'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
 const SERIF = "'Cormorant Garamond', 'Playfair Display', Georgia, serif"
-const BLUSH = '#D4B2A7'
+const BLUSH = 'var(--cc-surface-soft)'
 
 // Applicants keep their invitation; employers activate a company workspace after verification.
 const ROLE_OPTIONS = [
@@ -38,8 +37,8 @@ export default function SignupScreen() {
 
   const iStyle = {
     width: '100%', padding: '14px 16px',
-    border: '1px solid #e5e5e5', background: 'white',
-    fontSize: 15, color: '#1a1a1a',
+    border: '1px solid var(--cc-border)', background: 'white',
+    fontSize: 15, color: 'var(--cc-ink)',
   }
 
   async function handleCreate() {
@@ -67,11 +66,8 @@ export default function SignupScreen() {
   return (
     <AuthShell>
         {/* Header */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show" style={{ background: '#1A1A1A', padding: '28px 24px 24px' }}>
+        <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '28px 24px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-            <button aria-label="Back to CookCredit" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <ArrowLeft size={20} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
-            </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
@@ -112,9 +108,9 @@ export default function SignupScreen() {
                     style={{
                       flex: 1, padding: '14px 0', fontSize: 15, fontWeight: 500,
                       cursor: 'pointer', letterSpacing: 0.5,
-                      border: active ? `2px solid ${BLUSH}` : '1px solid #e5e5e5',
+                      border: active ? `2px solid ${BLUSH}` : '1px solid var(--cc-border)',
                       background: active ? BLUSH : 'white',
-                      color: active ? '#1a1a1a' : '#999',
+                      color: active ? 'var(--cc-forest)' : '#999',
                     }}>
                     {opt.label}
                   </motion.button>
@@ -175,7 +171,7 @@ export default function SignupScreen() {
 
           <motion.button variants={fadeUp} onClick={handleCreate} disabled={busy || authActionPending} {...buttonPress} style={{
             marginTop: 8,
-            background: busy ? '#e5e5e5' : '#1a1a1a', color: busy ? '#999' : 'white',
+            background: busy ? 'var(--cc-border)' : 'var(--cc-forest)', color: busy ? '#999' : 'white',
             border: 'none', padding: '16px', fontSize: 15, fontWeight: 500,
             cursor: busy ? 'default' : 'pointer', letterSpacing: 0.5,
           }}>
@@ -185,7 +181,7 @@ export default function SignupScreen() {
           <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
             {t.already_have || 'Already have an account?'}{' '}
           <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: signupDestination(role, requested) } })}
-              style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: '#1a1a1a', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid #1a1a1a', paddingBottom: 1, display: 'inline-block' }}>
+              style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: 'var(--cc-ink)', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid var(--cc-ink)', paddingBottom: 1, display: 'inline-block' }}>
               {t.log_in || 'Log in'}
             </motion.button>
           </motion.div>

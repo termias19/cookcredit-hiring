@@ -21,18 +21,18 @@ import { searchCandidates } from '../utils/search'
 import { fadeUp, staggerContainer, tapScale } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
-const GREEN = '#1F6F5C', GOLD = '#9A781E'
+const GREEN = 'var(--cc-forest)', GOLD = '#9A781E'
 
 function Header({ q, setQ, embedded }) {
   return (
-    <div style={{ background: '#FEFDFB', borderBottom: '1px solid #E3E0D9', padding: '20px 28px' }}>
-      <span style={{ fontSize: 10, letterSpacing: 2.3, color: '#70706b', textTransform: 'uppercase', fontWeight: 500 }}>Knife skill assessment</span>
-      {!embedded && <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: '#1a1a1a', margin: '5px 0 16px' }}>Candidates</h1>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '1px solid #E3E0D9', background: '#FFF', padding: '11px 13px', maxWidth: 500, borderRadius: 2 }}>
-        <Search size={17} color="#70706b" strokeWidth={1.7} />
+    <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
+      <span style={{ fontSize: 10, letterSpacing: 2.3, color: 'var(--cc-muted)', textTransform: 'uppercase', fontWeight: 500 }}>Knife skill assessment</span>
+      {!embedded && <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: '5px 0 16px' }}>Candidates</h1>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--cc-border)', background: '#FFF', padding: '11px 13px', maxWidth: 500, borderRadius: 2 }}>
+        <Search size={17} color="var(--cc-muted)" strokeWidth={1.7} />
         <input type="search" aria-label="Search candidates" value={q} onChange={e => setQ(e.target.value)}
           placeholder="Search by name, skill, or city"
-          style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#1a1a1a', background: 'transparent', padding: 0, borderRadius: 0 }} />
+          style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: 'var(--cc-ink)', background: 'transparent', padding: 0, borderRadius: 0 }} />
       </div>
     </div>
   )
@@ -44,7 +44,7 @@ function CandidateCard({ rank, cook, onClick, onStar, starred, rankingEnabled })
     <div style={{ position: 'relative' }}>
       <motion.button className="cc-business-card" variants={fadeUp} whileHover={{ borderColor: '#b2bdb6' }} whileTap={tapScale} onClick={onClick} style={{
         display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', cursor: 'pointer',
-        background: '#FEFDFB', border: '1px solid #E3E0D9', padding: 0, overflow: 'hidden',
+        background: 'var(--cc-surface)', border: '1px solid var(--cc-border)', padding: 0, overflow: 'hidden',
       }}>
         <div style={{ width: '100%', height: 132, flexShrink: 0, position: 'relative',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -55,22 +55,22 @@ function CandidateCard({ rank, cook, onClick, onStar, starred, rankingEnabled })
         </div>
         <div style={{ flex: 1, padding: '16px 17px 17px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: '#1a1a1a', margin: 0 }}>{cook.name}</h3>
+            <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: 'var(--cc-ink)', margin: 0 }}>{cook.name}</h3>
             <Video size={14} color={GREEN} strokeWidth={2} aria-label="Shared assessment on file" />
           </div>
-          <p style={{ fontSize: 12, color: '#70706b', margin: '2px 0 11px' }}>{(cook.cuisines || []).join(' · ')}{cook.years != null ? ` · ${cook.years} yrs` : ''}</p>
+          <p style={{ fontSize: 12, color: 'var(--cc-muted)', margin: '2px 0 11px' }}>{(cook.cuisines || []).join(' · ')}{cook.years != null ? ` · ${cook.years} yrs` : ''}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: rankingEnabled ? 9 : 14 }}>
             <span className="cc-evidence-pill">Shared assessment</span>
             {cook.hasVideo && <span className="cc-evidence-pill"><Video size={12} strokeWidth={2} />Recording ready</span>}
           </div>
           {rankingEnabled && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15, duration: 0.3 }}
-            style={{ fontSize: 12, color: '#70706b', margin: '0 0 11px', lineHeight: 1.5 }}>{(cook._rank?.reasons || []).join(' · ')}</motion.p>}
+            style={{ fontSize: 12, color: 'var(--cc-muted)', margin: '0 0 11px', lineHeight: 1.5 }}>{(cook._rank?.reasons || []).join(' · ')}</motion.p>}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #E7E2D8' }}>
             <span style={{ fontSize: 12, color: GREEN, fontWeight: 500 }}>Review {firstName}&rsquo;s evidence</span>
             <span style={{ display: 'inline-flex', alignItems: 'baseline', whiteSpace: 'nowrap' }}>
               <motion.span initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1, duration: 0.3 }}
-                style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 500, color: '#1a1a1a', lineHeight: 1 }}>{cook.verifiedScore ?? '—'}</motion.span>
-              <span style={{ fontSize: 9, color: '#70706b', letterSpacing: .6, textTransform: 'uppercase', marginLeft: 3 }}>{cook.verifiedScore == null ? 'Review' : '/100'}</span>
+                style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 500, color: 'var(--cc-ink)', lineHeight: 1 }}>{cook.verifiedScore ?? '—'}</motion.span>
+              <span style={{ fontSize: 9, color: 'var(--cc-muted)', letterSpacing: .6, textTransform: 'uppercase', marginLeft: 3 }}>{cook.verifiedScore == null ? 'Review' : '/100'}</span>
             </span>
           </div>
         </div>
@@ -116,17 +116,17 @@ export default function BusinessDashboardScreen({ embedded = false } = {}) {
           <p style={{ textAlign: 'center', color: '#74756f', fontSize: 14, padding: '40px 0' }}>Loading candidates…</p>
         ) : biz?.error && rosterEmpty ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <p style={{ fontFamily: SERIF, fontSize: 22, color: '#1a1a1a', margin: '0 0 6px' }}>Couldn&rsquo;t load the workspace</p>
+            <p style={{ fontFamily: SERIF, fontSize: 22, color: 'var(--cc-ink)', margin: '0 0 6px' }}>Couldn&rsquo;t load the workspace</p>
             <p style={{ fontSize: 13, color: '#777', margin: '0 0 16px' }}>Check your connection and retry.</p>
             <button onClick={() => biz?.refresh?.()} style={{
-              background: '#1a1a1a', color: '#fff', border: 'none', padding: '11px 24px',
+              background: 'var(--cc-ink)', color: '#fff', border: 'none', padding: '11px 24px',
               fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
             }}>Retry</button>
           </div>
         ) : rosterEmpty ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
             <ShieldCheck size={28} color="#cbb" strokeWidth={1.5} style={{ marginBottom: 12 }} />
-            <p style={{ fontFamily: SERIF, fontSize: 22, color: '#1a1a1a', margin: '0 0 6px' }}>No consenting applicants yet</p>
+            <p style={{ fontFamily: SERIF, fontSize: 22, color: 'var(--cc-ink)', margin: '0 0 6px' }}>No consenting applicants yet</p>
             <p style={{ fontSize: 13, color: '#74756f', margin: 0, lineHeight: 1.5 }}>
               Candidates appear here after they share a completed assessment with your company for a role.
             </p>
@@ -136,7 +136,7 @@ export default function BusinessDashboardScreen({ embedded = false } = {}) {
             {!rankingEnabled && <div className="cc-business-notice" style={{ border: '1px solid #D7C99D', background: '#FCF8EC', padding: '12px 14px', marginBottom: 18, fontSize: 12, color: '#65561E', lineHeight: 1.55 }}>
               Shown in application order. Review the recording and measured results alongside experience and references. Automatic ranking is off while the assessment is being validated for hiring.
             </div>}
-            <p style={{ fontSize: 10, letterSpacing: 1.8, color: '#70706b', textTransform: 'uppercase', fontWeight: 500, margin: '0 0 13px' }}>
+            <p style={{ fontSize: 10, letterSpacing: 1.8, color: 'var(--cc-muted)', textTransform: 'uppercase', fontWeight: 500, margin: '0 0 13px' }}>
               {rows.length} candidate{rows.length === 1 ? '' : 's'} · {rankingEnabled ? 'transparent job-related ranking' : 'application list'}
             </p>
             <motion.div variants={staggerContainer()} initial="hidden" animate="show"
