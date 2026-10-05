@@ -28,6 +28,7 @@ frontend/dist/
 frontend/dist-staging/
 frontend/preview-dist/
 frontend/.preview-bin/
+frontend/.vite-preview-cache/
 frontend/.firebase/
 
 # Env files
