@@ -15,3 +15,11 @@ request. Browser storage is recovery only; restricted storage cannot silently
 convert a new employer into an applicant. Account recovery only replays a draft
 bound to that Firebase UID and only self-heals a missing (404) profile. Standalone
 assessment and assessment-sharing destinations select applicant signup too.
+
+Employer sign-in links use `/login?next=/business/roles`; applicant sign-in uses
+`/login?next=/applications`. A specific application or team invitation keeps its
+full allowed destination. Explicit link intent takes precedence over stale router
+or session state, and switching between login/signup retains that intent in the URL.
+Existing approved business accounts bypass the setup form when opening an old
+onboarding link. New employers still require approval and company setup; navigation
+never grants company access.

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
-import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination, initialSignupRole } from '../utils/homeFor'
+import { rememberDestination, rememberAccountDestination, authEntryDestination, authEntryLink, signupDestination, initialSignupRole } from '../utils/homeFor'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -26,7 +26,7 @@ export default function SignupScreen() {
   const [email, setEmail]   = useState('')
   const [pass, setPass]     = useState('')
   // Pre-select "Cook" when arriving from a "Become a cook" CTA (LandingScreen passes state.role).
-  const requested = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
+  const requested = authEntryDestination(location)
   const applicantInvitation = requested?.startsWith('/apply/') || requested?.startsWith('/application/') || requested?.startsWith('/application-assessment-return/')
   const [role, setRole] = useState(() => initialSignupRole(requested, location.state?.role))
   const [err, setErr]       = useState('')
@@ -180,7 +180,7 @@ export default function SignupScreen() {
 
           <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
             {t.already_have || 'Already have an account?'}{' '}
-          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: signupDestination(role, requested) } })}
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate(authEntryLink('/login', signupDestination(role, requested)))}
               style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: 'var(--cc-ink)', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid var(--cc-ink)', paddingBottom: 1, display: 'inline-block' }}>
               {t.log_in || 'Log in'}
             </motion.button>

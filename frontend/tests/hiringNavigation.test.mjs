@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { homeFor, safeAuthDestination, rememberDestination, rememberAccountDestination, pendingDest, clearPendingDestination, authDestination, signupDestination } from '../src/utils/homeFor.js'
 import { NODES, scanText } from '../src/data/culinaryTaxonomy.js'
-import { initialSignupRole } from '../src/utils/homeFor.js'
+import { initialSignupRole, authEntryDestination, authEntryLink } from '../src/utils/homeFor.js'
 
 test('all assessment entry routes select applicant signup, including sharing and standalone assessment', () => {
   for (const dest of ['/assessment', '/assessment-sharing/cook/attempt', '/application-assessment-return/session', '/apply/role?invite=opaque']) {
@@ -118,4 +118,27 @@ test('culinary evidence retains its meaning instead of inherited domestic-servic
 test('role editor survives authentication without allowing arbitrary nested redirects', () => {
   assert.equal(safeAuthDestination('/business/role/role-1/edit'), '/business/role/role-1/edit')
   assert.equal(safeAuthDestination('/business/role/role-1/edit/elsewhere'), null)
+})
+
+
+test('copied employer links override stale applicant state through login and signup', () => {
+  rememberDestination('/apply/old-role')
+  const dest = authEntryDestination({ search: '?next=/business/roles', state: { from: '/applications' } })
+  assert.equal(dest, '/business/roles')
+  const signup = authEntryLink('/signup', dest)
+  assert.equal(authEntryDestination({ search: new URL(signup, 'https://hiring.example').search }), dest)
+  assert.equal(initialSignupRole(dest), 'eat')
+  assert.equal(authDestination({ roles: ['eater'] }, dest), '/business/roles')
+  clearPendingDestination()
+})
+
+test('approved employer skips setup but keeps team invitations and applicant links', () => {
+  const manager = { id: 'manager', roles: ['business'], employerAccessAllowed: true }
+  for (const dest of ['/business/onboarding', '/business/onboarding?source=invite']) assert.equal(authDestination(manager, dest), '/business/roles')
+  for (const dest of ['/business/invite/token', '/apply/role?invite=token', '/assessment']) {
+    assert.equal(authDestination(manager, dest), dest)
+    assert.equal(authEntryDestination({ search: new URL(authEntryLink('/login', dest), 'https://hiring.example').search }), dest)
+  }
+  assert.equal(authDestination({ roles: ['eater'], employerAccessAllowed: true }, '/business/onboarding'), '/business/onboarding')
+  assert.equal(authEntryLink('/login', 'https://untrusted.example'), '/login')
 })
