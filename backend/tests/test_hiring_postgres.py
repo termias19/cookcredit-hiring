@@ -93,7 +93,7 @@ def db(monkeypatch):
                 session.add(User(id=uid, email=f'{uid}@example.test', name=uid,
                                  roles=['cook'] if uid == 'cook' else ['business']))
             session.flush()
-            session.add_all([Org(id=ids.org, name='Kitchen'), Org(id=ids.other_org, name='Other kitchen')])
+            session.add_all([Org(id=ids.org, name='Kitchen', created_by='employer'), Org(id=ids.other_org, name='Other kitchen', created_by='other')])
             session.flush()
             session.add_all([OrgMembership(org_id=ids.org, user_id='employer', seat_role='admin'),
                              OrgMembership(org_id=ids.org, user_id='viewer', seat_role='viewer'),
@@ -114,6 +114,10 @@ def db(monkeypatch):
 
 @pytest.fixture
 def client(db, monkeypatch):
+    # Blueprint decorators share a process-wide limiter across test apps.
+    # These DB tests isolate authorization/concurrency; rate limits have their own tests.
+    from extensions import limiter
+    monkeypatch.setattr(limiter, "enabled", False)
     monkeypatch.setenv('WEBHOOK_SECRET_ENCRYPTION_KEY', Fernet.generate_key().decode())
     monkeypatch.setenv('PARTNER_API_KEY_PEPPER', 'test-only-pepper')
     monkeypatch.setattr(auth, '_verify_token', lambda token: {
@@ -1760,7 +1764,7 @@ def test_application_review_cv_privacy_revision_and_withdrawal(db, client, monke
     assert board_review['employerUpdate']['status']=='shortlisted'
     assert client.post(url+'/review',json={**draft,'revision':private.json['review']['revision']},headers=headers('employer')).status_code==409
     monkeypatch.setattr(hiring_access,'enabled',lambda:True)
-    monkeypatch.setattr(hiring_access,'access_allowed',lambda *a:False)
+    monkeypatch.setattr(hiring_access,'access_allowed',lambda *a, **kw:False)
     # Shared authorization rejects a revoked employer before the route executes.
     for denied in (client.get(listing,headers=headers('employer')),
                    client.post(url+'/review',json=draft,headers=headers('employer'))):

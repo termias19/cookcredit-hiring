@@ -105,13 +105,16 @@ def test_retry_retains_same_token_without_duplicate_invitation(db, client, monke
         assert session.query(OrgInvitation).count() == 1
 
 
-def test_owner_approval_is_not_bypassed_by_team_invitation(db, client, monkeypatch):
+def test_explicit_recipient_denial_is_not_bypassed_by_team_invitation(db, client, monkeypatch):
     included(monkeypatch)
     monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
     monkeypatch.setattr('services.hiring_access.access_allowed', lambda email, **kw: email == 'employer@example.test')
     created = invite(client)
     assert created.status_code == 201
     token = created.json['invitation']['inviteUrl'].rsplit('/', 1)[1]
+    from models.hiring_access import HiringAccessRequest
+    with database.db_session() as session:
+        session.add(HiringAccessRequest(email='new@example.test', source='owner', status='declined'))
     response = client.post('/business/team/invitations/accept', headers=headers('new'), json={'token': token})
     assert response.status_code == 403 and response.json['code'] == 'workspace_access_denied'
 
