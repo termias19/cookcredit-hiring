@@ -113,7 +113,7 @@ def test_owner_approval_is_not_bypassed_by_team_invitation(db, client, monkeypat
     assert created.status_code == 201
     token = created.json['invitation']['inviteUrl'].rsplit('/', 1)[1]
     response = client.post('/business/team/invitations/accept', headers=headers('new'), json={'token': token})
-    assert response.status_code == 403 and response.json['code'] == 'staging_access_denied'
+    assert response.status_code == 403 and response.json['code'] == 'workspace_access_denied'
 
 
 def test_accepted_link_does_not_recreate_a_removed_member(db, client, monkeypatch):

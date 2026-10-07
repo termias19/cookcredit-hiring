@@ -642,6 +642,11 @@ def accept_team_invitation():
             return jsonify(error='This invitation has expired'), 409
         if item.invited_email != str(g.email or '').casefold():
             return jsonify(error='Sign in with the email address that received this invitation'), 403
+        # This endpoint bypasses the individual employer gate, never company
+        # approval or explicit platform revocation. Check before granting a seat.
+        from services.hiring_access import enabled, access_blocked, workspace_access_allowed
+        if enabled() and (access_blocked(session, g.email) or not workspace_access_allowed(session, org)):
+            return jsonify(error='This invitation requires an active, approved workspace and account.', code='workspace_access_denied'), 403
         # A user can accept at most one workspace even across concurrent org invites.
         user = session.query(User).filter_by(id=g.user_id).with_for_update().one_or_none()
         if not user:

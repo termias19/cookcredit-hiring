@@ -116,3 +116,14 @@ email receipt and verification, correct workspace/application return, consented
 recording and submission, employer retrieval/playback, CV save, teammate acceptance,
 customer webhook receipt, and subscription payment plus confirmation email.
 Automated tests and SMTP acceptance cannot establish these real customer outcomes.
+
+
+### Employer approval and invited teammates
+
+The existing workspace creator (`orgs.created_by`) anchors CookCredit employer approval. Invited administrators cannot approve another company. A missing creator fails closed and requires operational review. Explicit platform denial of a recipient overrides invitations and membership; revocation of the originating employer blocks inherited workspace access.
+
+A workspace administrator may invite teammates within the subscription seat allowance. Joining requires a verified email matching the unexpired invitation, an approved originating employer, and no membership in a different workspace. Acceptance checks capacity under the existing company lock and records membership plus an activity event transactionally. An accepted invitation cannot restore a removed member.
+
+Membership grants access only to that workspace and its assigned permissions, not independent employer approval. The API resolves current membership on requests and retains its resource-level tenant checks. The verified platform owner retains the separate owner administration path. Shared Firebase identities, applicant consent, recording access, and CV retention are unchanged.
+
+Coverage: `backend/tests/test_workspace_access.py` and `backend/tests/test_workspace_security.py`. Live acceptance still requires the invited recipient to complete sign-in and acceptance; automated coverage does not establish that browser outcome.

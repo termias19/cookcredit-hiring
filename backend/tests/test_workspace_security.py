@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from models.business import WorkspaceActivity
+from models.hiring_access import HiringAccessRequest
 from services import database
 from tests.test_hiring_postgres import client, headers
 
@@ -29,7 +30,7 @@ def db(monkeypatch):
         conn.execute(text(f'CREATE SCHEMA {schema}'))
     engine = create_engine(url, connect_args={'options': f'-csearch_path={schema},public'})
     try:
-        for model in (User, Org, OrgMembership, OrgInvitation, PartnerApiKey, PartnerWebhook, PartnerWebhookDelivery):
+        for model in (HiringAccessRequest, User, Org, OrgMembership, OrgInvitation, PartnerApiKey, PartnerWebhook, PartnerWebhookDelivery):
             model.__table__.create(engine)
         with engine.begin() as conn:
             sql = (Path(__file__).parents[1] / 'migrations/033_workspace_activity.sql').read_text()

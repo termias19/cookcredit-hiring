@@ -115,7 +115,7 @@ def require_auth(f):
             return jsonify({"error": "Invalid or expired token"}), 401
 
         # Hiring has shared Firebase identities but separately approved API access.
-        from services.hiring_access import enabled, access_allowed
+        from services.hiring_access import enabled, employer_access_allowed
         if os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging' or enabled():
             allowed = {x.strip().casefold() for x in os.environ.get('STAGING_ALLOWED_EMAILS', '').split(',') if x.strip()}
             if not allowed and not enabled():
@@ -123,6 +123,7 @@ def require_auth(f):
             # Employer approval does not apply to applicants following public role links.
             # These routes still enforce identity, verified email, ownership and consent.
             applicant_route = enabled() and (request.endpoint, request.method) in {
+                ('business.accept_team_invitation', 'POST'),
                 ('auth.sync_user', 'POST'), ('auth.get_me', 'GET'),
                 ('auth.update_me', 'PATCH'), ('auth.request_verification_email', 'POST'),
                 ('auth.complete_verification', 'POST'),
@@ -133,7 +134,7 @@ def require_auth(f):
                 ('hiring.get_assessment_session', 'GET'),
                 ('hiring.withdraw_application', 'POST'), ('hiring.application_cv', 'GET'),
             }
-            if not applicant_route and not access_allowed(g.email):
+            if not applicant_route and not employer_access_allowed(g.email, g.user_id):
                 return jsonify(error='Employer access requires approval from CookCredit', code='staging_access_denied'), 403
             # An invited new account must be able to create its own inert
             # profile before email verification. Otherwise signup stops at
