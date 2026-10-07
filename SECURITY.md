@@ -33,9 +33,9 @@ authorized employer. A UUID alone never authorizes access. Platform-owner approv
 and pricing controls are separate from a company admin seat.
 
 Invitations are expiring, email-bound credentials stored as hashes. Seat capacity
-is checked under a company lock. **Current limitation:** with employer approvals
-enabled, an invited teammate also needs owner-approved employer access. An
-invitation alone does not bypass the platform approval gate. Admins can change a
+is checked under a company lock. An invited teammate inherits access from the
+approved originating employer, without receiving independent employer approval.
+Explicit platform denials still override invitations and membership. Admins can change a
 member's seat role or remove their membership in Settings > Team. The API scopes
 the target to the caller's company, serializes membership changes under the company
 lock, rechecks the acting admin after acquiring that lock, and protects the last
