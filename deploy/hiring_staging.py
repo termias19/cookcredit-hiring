@@ -727,6 +727,7 @@ def frontend_build():
         'VITE_DEPLOYMENT_ENVIRONMENT': 'staging', 'VITE_PREVIEW': '0',
         'VITE_FIREBASE_API_KEY': config['apiKey'], 'VITE_FIREBASE_PROJECT_ID': config['projectId'],
         'VITE_FIREBASE_AUTH_DOMAIN': config['authDomain'], 'VITE_FIREBASE_APP_ID': config['appId'],
+        'VITE_HIRING_AUTH_DOMAIN': 'cookcredit.com',
         'VITE_FIREBASE_STORAGE_BUCKET': BUCKET, 'VITE_FIREBASE_MESSAGING_SENDER_ID': config['messagingSenderId'],
         'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY': record['recaptchaSiteKey'],
         'VITE_FIREBASE_EMAIL_BRANDING_READY': '1' if record.get('sharedCookCreditAuth') and record.get('emailInboxConfirmed') else '0',

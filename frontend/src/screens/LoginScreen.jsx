@@ -1,11 +1,11 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
 import GoogleSignInButton from '../components/GoogleSignInButton'
-import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest } from '../utils/homeFor'
+import { authDestination, rememberDestination, rememberAccountDestination, authEntryDestination, authEntryLink } from '../utils/homeFor'
 import { profileFailure } from '../utils/profileFailure'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -25,7 +25,7 @@ function loginErrorFor(code) {
 export default function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
-  const destination = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
+  const destination = authEntryDestination(location)
   const { t } = useLang()
   const { login, authActionPending } = useAuth()
   const [email, setEmail] = useState(location.state?.email || '')
@@ -62,22 +62,27 @@ export default function LoginScreen() {
     <AuthShell>
       {/* Header */}
       <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '28px 24px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Link to="/" aria-label="CookCredit Hiring home" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, textDecoration: 'none' }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
           </div>
           <span style={{ color: 'white', fontFamily: SERIF, fontSize: 25, fontWeight: 500, letterSpacing: 0 }}>CookCredit</span>
-        </div>
+        </Link>
         <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 32, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
           {t.welcome_back || 'Welcome back'}
         </h1>
         <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 8, fontWeight: 300, letterSpacing: 0.5 }}>
-          Sign in to your CookCredit account.
+          {destination?.startsWith('/business/') ? 'Sign in to your hiring workspace.' : destination ? 'Sign in to continue your application or assessment.' : 'Sign in to hire cooks or continue your application.'}
         </p>
       </motion.div>
 
       {/* Form */}
       <motion.div variants={staggerContainer(0.07, 0.12)} initial="hidden" animate="show" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {(!destination || ['/applications', '/business/roles', '/business/onboarding'].includes(destination)) &&
+          <nav aria-label="Choose your sign-in destination" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 14 }}>
+            <Link to="/login?next=/business/roles" aria-current={destination?.startsWith('/business/') ? 'page' : undefined} style={{ color: 'var(--cc-forest)', fontWeight: 600 }}>Hiring manager sign-in</Link>
+            <Link to="/login?next=/applications" aria-current={destination === '/applications' ? 'page' : undefined} style={{ color: 'var(--cc-forest)', fontWeight: 600 }}>Applicant sign-in</Link>
+          </nav>}
         <GoogleSignInButton destination={destination} disabled={busy || authActionPending} />
         <p style={{ textAlign: 'center', color: '#777', fontSize: 13 }}>or sign in with email</p>
         <motion.div variants={fadeUp}>
@@ -119,7 +124,7 @@ export default function LoginScreen() {
 
         <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
           {t.no_account || "Don't have an account?"}{' '}
-          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/signup', { state: { from: destination } })}
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate(authEntryLink('/signup', destination))}
             style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: 'var(--cc-ink)', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid var(--cc-ink)', paddingBottom: 1, display: 'inline-block' }}>
             {t.sign_up || 'Sign up'}
           </motion.button>

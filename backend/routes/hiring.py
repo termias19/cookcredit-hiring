@@ -762,8 +762,8 @@ def application_cv(application_id):
             return jsonify(error='Not found'), 404
         owner = application.applicant_id == g.user_id
         # The applicant exemption must not restore a revoked employer's CV access.
-        from services.hiring_access import enabled, access_allowed
-        if not owner and enabled() and not access_allowed(g.email):
+        from services.hiring_access import enabled, employer_access_allowed
+        if not owner and enabled() and not employer_access_allowed(g.email, g.user_id):
             return jsonify(error='Not found'), 404
         if not owner and (application.consent_version != APPLICATION_CONSENT_VERSION or application.status == 'withdrawn' or not _can(session, g.user_id, 'candidates')
                           or not _role_owned(session, application.role_posting_id, g.user_id)):
@@ -789,8 +789,8 @@ def application_cv(application_id):
 
 
 def _employer_review_access(session):
-    from services.hiring_access import enabled, access_allowed
-    if (enabled() or os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging') and not access_allowed(g.email):
+    from services.hiring_access import enabled, employer_access_allowed
+    if (enabled() or os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging') and not employer_access_allowed(g.email, g.user_id):
         return False
     return _can(session, g.user_id, 'candidates')
 

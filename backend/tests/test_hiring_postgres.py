@@ -80,7 +80,7 @@ def db(monkeypatch):
             isolation_migration = (Path(__file__).parents[1] / 'migrations/022_partner_request_isolation.sql').read_text()
             conn.exec_driver_sql(isolation_migration)
             conn.exec_driver_sql(isolation_migration)
-            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql', '029_hiring_pricing.sql', '030_billing_delivery.sql', '031_customer_mail.sql'):
+            for name in ('023_account_emails.sql', '024_application_screening.sql', '025_partner_list_cursor.sql', '026_hiring_access.sql', '028_workspace_invitation_mail.sql', '029_hiring_pricing.sql', '030_billing_delivery.sql', '031_customer_mail.sql', '033_workspace_activity.sql'):
                 sql = (Path(__file__).parents[1] / 'migrations' / name).read_text()
                 conn.exec_driver_sql(sql)
                 conn.exec_driver_sql(sql)
@@ -93,7 +93,7 @@ def db(monkeypatch):
                 session.add(User(id=uid, email=f'{uid}@example.test', name=uid,
                                  roles=['cook'] if uid == 'cook' else ['business']))
             session.flush()
-            session.add_all([Org(id=ids.org, name='Kitchen'), Org(id=ids.other_org, name='Other kitchen')])
+            session.add_all([Org(id=ids.org, name='Kitchen', created_by='employer'), Org(id=ids.other_org, name='Other kitchen', created_by='other')])
             session.flush()
             session.add_all([OrgMembership(org_id=ids.org, user_id='employer', seat_role='admin'),
                              OrgMembership(org_id=ids.org, user_id='viewer', seat_role='viewer'),
@@ -114,6 +114,10 @@ def db(monkeypatch):
 
 @pytest.fixture
 def client(db, monkeypatch):
+    # Blueprint decorators share a process-wide limiter across test apps.
+    # These DB tests isolate authorization/concurrency; rate limits have their own tests.
+    from extensions import limiter
+    monkeypatch.setattr(limiter, "enabled", False)
     monkeypatch.setenv('WEBHOOK_SECRET_ENCRYPTION_KEY', Fernet.generate_key().decode())
     monkeypatch.setenv('PARTNER_API_KEY_PEPPER', 'test-only-pepper')
     monkeypatch.setattr(auth, '_verify_token', lambda token: {
@@ -266,6 +270,7 @@ def test_simultaneous_account_bootstrap_creates_one_profile_without_losing_signu
 
 
 def test_nearby_cooks_use_real_distance_visibility_and_minimal_payload(db, client, monkeypatch):
+    monkeypatch.setenv('PUBLIC_COOK_DIRECTORY_ENABLED', '1')
     from services.location import search_token
     monkeypatch.setenv('LOCATION_TOKEN_SECRET', 'nearby-isolated-secret-' * 3)
     with database.db_session() as session:
@@ -1759,7 +1764,7 @@ def test_application_review_cv_privacy_revision_and_withdrawal(db, client, monke
     assert board_review['employerUpdate']['status']=='shortlisted'
     assert client.post(url+'/review',json={**draft,'revision':private.json['review']['revision']},headers=headers('employer')).status_code==409
     monkeypatch.setattr(hiring_access,'enabled',lambda:True)
-    monkeypatch.setattr(hiring_access,'access_allowed',lambda *a:False)
+    monkeypatch.setattr(hiring_access,'access_allowed',lambda *a, **kw:False)
     # Shared authorization rejects a revoked employer before the route executes.
     for denied in (client.get(listing,headers=headers('employer')),
                    client.post(url+'/review',json=draft,headers=headers('employer'))):

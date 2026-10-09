@@ -7,7 +7,6 @@ import { useBusiness } from '../context/BusinessContext'
 import { updateBusinessOrg } from '../utils/Api'
 import { useLang } from '../context/LangContext'
 import AccountDetails from '../components/AccountDetails'
-import LocationFinder from '../components/LocationFinder'
 
 const panel = { border: '1px solid var(--cc-border)', padding: 24, background: 'var(--cc-surface)' }
 const input = { width: '100%', padding: '12px 14px', border: '1px solid var(--cc-border)', background: '#fff', fontSize: 14, color: 'var(--cc-ink)' }
@@ -53,7 +52,6 @@ function Details({ profile, org }) {
         <p style={{ margin: '12px 0 20px', fontSize: 13, color: 'var(--cc-muted)', lineHeight: 1.7 }}>{org.integrationAccess?.earlyAccess ? t.bp_included_hint : t.bp_billing_hint}</p>
         <Link className="cc-profile-link" to="/business/profile?section=billing">{t.bn_billing}<ArrowRight size={16} /></Link>
       </section>
-      <LocationFinder />
     </AccountDetails>
   </div>
 }

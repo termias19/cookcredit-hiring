@@ -1,10 +1,10 @@
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AuthShell from '../components/AuthShell'
-import { rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, signupDestination } from '../utils/homeFor'
+import { rememberDestination, rememberAccountDestination, authEntryDestination, authEntryLink, signupDestination, initialSignupRole } from '../utils/homeFor'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { fadeUp, fadeIn, staggerContainer, buttonPress, tapScale } from '../styles/motion'
 
@@ -26,9 +26,9 @@ export default function SignupScreen() {
   const [email, setEmail]   = useState('')
   const [pass, setPass]     = useState('')
   // Pre-select "Cook" when arriving from a "Become a cook" CTA (LandingScreen passes state.role).
-  const requested = safeAuthDestination(location.state?.from) || safeAuthDestination(new URLSearchParams(location.search).get('next')) || pendingDest()
+  const requested = authEntryDestination(location)
   const applicantInvitation = requested?.startsWith('/apply/') || requested?.startsWith('/application/') || requested?.startsWith('/application-assessment-return/')
-  const [role, setRole] = useState(applicantInvitation || requested === '/applications' || requested === '/profile' || location.state?.role === 'cook' ? 'cook' : 'eat')
+  const [role, setRole] = useState(() => initialSignupRole(requested, location.state?.role))
   const [err, setErr]       = useState('')
   const [busy, setBusy]     = useState(false)
   // Honeypot: a hidden field humans never see/fill; bots that auto-fill forms will populate it,
@@ -48,7 +48,7 @@ export default function SignupScreen() {
     setBusy(true); setErr('')
     try {
       const dest = rememberDestination(signupDestination(role, requested))
-      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, from: dest } })
+      navigate(authEntryLink(location.pathname, dest), { replace: true, state: { ...location.state, from: dest } })
       const account = await signUp(email.trim(), pass, {
         name: name.trim(),
         phone: '',
@@ -68,12 +68,12 @@ export default function SignupScreen() {
         {/* Header */}
         <motion.div variants={fadeUp} initial="hidden" animate="show" className="cc-auth-heading" style={{ padding: '28px 24px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link to="/" aria-label="CookCredit Hiring home" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img src="/cookcredit-mark-orange.svg" alt="" width="32" height="26" />
               </div>
               <span style={{ color: 'white', fontFamily: SERIF, fontSize: 25, fontWeight: 500, letterSpacing: 0 }}>CookCredit</span>
-            </div>
+            </Link>
           </div>
           <h1 style={{ fontFamily: SERIF, color: 'white', fontSize: 32, fontWeight: 300, letterSpacing: 0.5, margin: 0 }}>
             {applicantInvitation ? 'Create your applicant account' : t.create_account || 'Create account'}
@@ -180,7 +180,7 @@ export default function SignupScreen() {
 
           <motion.div variants={fadeUp} style={{ textAlign: 'center', fontSize: 13, color: '#999' }}>
             {t.already_have || 'Already have an account?'}{' '}
-          <motion.button type="button" whileTap={tapScale} onClick={() => navigate('/login', { state: { from: signupDestination(role, requested) } })}
+          <motion.button type="button" whileTap={tapScale} onClick={() => navigate(authEntryLink('/login', signupDestination(role, requested)))}
               style={{ background: 'none', border: 0, font: 'inherit', padding: 0, color: 'var(--cc-ink)', cursor: 'pointer', fontWeight: 500, borderBottom: '1px solid var(--cc-ink)', paddingBottom: 1, display: 'inline-block' }}>
               {t.log_in || 'Log in'}
             </motion.button>

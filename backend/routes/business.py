@@ -61,6 +61,8 @@ from models import (User, CookProfile, Org, OrgMembership, OrgInvitation, RolePo
                     AedtAuditLog, CandidateNotice, OptOutRequest)
 
 log = logging.getLogger(__name__)
+from models.business import WorkspaceActivity
+from services.workspace_activity import record as record_activity
 business_bp = Blueprint("business", __name__)
 
 STAGES = ["invited", "assessing", "verified", "shortlisted", "contacted", "hired", "not_selected"]
@@ -415,6 +417,7 @@ def update_org():
         for key in ('name', 'city'):
             if key in data:
                 setattr(org, key, data[key].strip())
+        record_activity(session, org.id, g.user_id, 'company.updated', org.id, {'fields': sorted(data)})
         session.flush()
         out = org.to_dict()
         out['seatRole'] = _seat_role(session, g.user_id)
@@ -455,6 +458,81 @@ def get_team():
             canManage=_can(session, g.user_id, 'billing'),
             invitationAccess=team_access(org),
         ), 200
+
+
+@business_bp.route('/team/members/<member_id>', methods=['PATCH', 'DELETE'])
+@require_auth
+@require_verified_email
+@limiter.limit('30 per hour', key_func=lambda: g.user_id)
+def manage_team_member(member_id):
+    mid = _uuid(member_id)
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict) or (request.method == 'PATCH' and set(body) != {'seatRole'}):
+        return jsonify(error='Only the team role can be changed here'), 400
+    new_role = body.get('seatRole')
+    if request.method == 'PATCH' and (not isinstance(new_role, str) or new_role not in SEAT_ROLES):
+        return jsonify(error='Choose a valid team role'), 400
+    with db_session() as session:
+        if not _can(session, g.user_id, 'billing'):
+            return jsonify(error='Only a workspace admin can manage members'), 403
+        org = _org_for(session, g.user_id)
+        org_id = org.id
+        # All member changes take the same company lock as invitation acceptance.
+        # Re-read permissions after waiting: another admin may have removed us.
+        session.query(Org).filter_by(id=org_id).with_for_update().one()
+        session.expire_all()
+        if not _can(session, g.user_id, 'billing'):
+            return jsonify(error='Your workspace permissions changed. Reload and try again.'), 403
+        member = session.query(OrgMembership).filter_by(id=mid, org_id=org_id).one_or_none() if mid else None
+        if not member:
+            return jsonify(error='Member not found'), 404
+        previous = member.seat_role
+        removing_admin = previous == 'admin' and (request.method == 'DELETE' or new_role != 'admin')
+        if removing_admin and session.query(OrgMembership).filter_by(org_id=org_id, seat_role='admin').count() <= 1:
+            return jsonify(error='Keep at least one workspace admin. Assign another admin first.'), 409
+        if request.method == 'DELETE':
+            record_activity(session, org_id, g.user_id, 'member.removed', member.user_id, {'previousRole': previous})
+            session.delete(member)
+        elif previous != new_role:
+            member.seat_role = new_role
+            record_activity(session, org_id, g.user_id, 'member.role_changed', member.user_id,
+                            {'previousRole': previous, 'seatRole': new_role})
+        return jsonify(ok=True), 200
+
+
+@business_bp.route('/activity', methods=['GET'])
+@require_auth
+@require_verified_email
+def workspace_activity():
+    with db_session() as session:
+        if not _can(session, g.user_id, 'billing'):
+            return jsonify(error='Only a workspace admin can read activity'), 403
+        org = _org_for(session, g.user_id)
+        query = session.query(WorkspaceActivity).filter_by(org_id=org.id)
+        before = request.args.get('before')
+        if before:
+            marker = query.filter_by(id=_uuid(before)).one_or_none() if _uuid(before) else None
+            if not marker:
+                return jsonify(error='Invalid activity cursor'), 400
+            from sqlalchemy import tuple_
+            query = query.filter(tuple_(WorkspaceActivity.created_at, WorkspaceActivity.id) <
+                                 (marker.created_at, marker.id))
+        # Exact-match filters retain tenant scoping and bounded cursor pagination.
+        action = request.args.get('action', '').strip()
+        actor = request.args.get('actor', '').strip()
+        if len(action) > 100 or len(actor) > 128:
+            return jsonify(error='Invalid activity filter'), 400
+        if action:
+            query = query.filter(WorkspaceActivity.event_type == action)
+        if actor:
+            query = query.filter(WorkspaceActivity.actor_id == actor)
+        rows = query.order_by(WorkspaceActivity.created_at.desc(), WorkspaceActivity.id.desc()).limit(51).all()
+        names = dict(session.query(User.id, User.name).filter(User.id.in_({row.actor_id for row in rows})).all()) if rows else {}
+        return jsonify(events=[{
+            'id': str(row.id), 'actorId': row.actor_id, 'actorName': names.get(row.actor_id), 'action': row.event_type,
+            'targetId': row.target_id, 'detail': row.detail,
+            'createdAt': row.created_at.isoformat(),
+        } for row in rows[:50]], nextCursor=str(rows[49].id) if len(rows) > 50 else None), 200
 
 
 @business_bp.route('/team/invitations', methods=['POST'])
@@ -501,13 +579,14 @@ def invite_team_member():
                 OrgInvitation.org_id == org.id, OrgInvitation.status == 'pending',
                 OrgInvitation.expires_at > now).count()
             if members + reserved >= access['seatLimit']:
-                return jsonify(error='All five team seats are occupied or reserved. Revoke an unused invitation to free a seat.'), 409
+                return jsonify(error='All team seats are occupied or reserved. Remove an unused member or revoke an invitation to free a seat.'), 409
         invitation = OrgInvitation(
             org_id=org.id, invited_email=email, seat_role=seat_role,
             token_hash=token_hash, status='pending', invited_by=g.user_id,
             expires_at=now + timedelta(days=7))
         session.add(invitation)
         session.flush()
+        record_activity(session, org.id, g.user_id, 'invitation.created', invitation.id, {'seatRole': seat_role})
         from services.workspace_invitation_mail import enqueue_invitation
         enqueue_invitation(session, invitation, token)
         invitation_id, expires_at = str(invitation.id), invitation.expires_at
@@ -536,6 +615,7 @@ def revoke_team_invitation(invitation_id):
             return jsonify(error='Not found'), 404
         if item.status == 'pending':
             item.status = 'revoked'
+            record_activity(session, org.id, g.user_id, 'invitation.revoked', item.id)
         return jsonify(ok=True, status=item.status), 200
 
 
@@ -562,6 +642,11 @@ def accept_team_invitation():
             return jsonify(error='This invitation has expired'), 409
         if item.invited_email != str(g.email or '').casefold():
             return jsonify(error='Sign in with the email address that received this invitation'), 403
+        # This endpoint bypasses the individual employer gate, never company
+        # approval or explicit platform revocation. Check before granting a seat.
+        from services.hiring_access import enabled, access_blocked, workspace_access_allowed
+        if enabled() and (access_blocked(session, g.email) or not workspace_access_allowed(session, org)):
+            return jsonify(error='This invitation requires an active, approved workspace and account.', code='workspace_access_denied'), 403
         # A user can accept at most one workspace even across concurrent org invites.
         user = session.query(User).filter_by(id=g.user_id).with_for_update().one_or_none()
         if not user:
@@ -583,6 +668,7 @@ def accept_team_invitation():
         if 'business' not in (user.roles or []):
             user.roles = list(user.roles or []) + ['business']
         item.status = 'accepted'; item.accepted_by = g.user_id; item.accepted_at = now
+        record_activity(session, org.id, g.user_id, 'invitation.accepted', item.id, {'seatRole': item.seat_role})
         org = session.get(Org, item.org_id)
         return jsonify(ok=True, org=org.to_dict(), seatRole=item.seat_role), 200
 
@@ -612,6 +698,8 @@ def update_integrations():
         org.brand_color = color
         org.brand_logo_url = logo
         org.embed_allowed_origins = origins
+        record_activity(session, org.id, g.user_id, 'integrations.updated', org.id,
+                        {'fields': ['brandColor', 'logoUrl', 'allowedOrigins']})
         if not org.public_embed_key:
             org.public_embed_key = 'pk_' + secrets.token_urlsafe(24)
         session.flush()
@@ -649,6 +737,7 @@ def company_logo():
                 return jsonify(error='The logo could not be saved. Please try again.'), 503
             origin = os.environ.get('PUBLIC_API_URL', request.url_root).rstrip('/')
             org.brand_logo_url = f'{origin}/api/business/branding/{org.id}/{digest}.png'
+        record_activity(session, org.id, g.user_id, 'company.logo_changed', org.id, {'removed': request.method == 'DELETE'})
         session.flush()
         return jsonify(org=org.to_dict()), 200
 
@@ -773,6 +862,7 @@ def create_role():
                         requirements=requirements, created_by=g.user_id)
         session.add(r)
         session.flush()
+        record_activity(session, org.id, g.user_id, 'role.created', r.id, {'status': status})
         out = r.to_dict()
     return jsonify({"role": out}), 201
 
@@ -816,6 +906,8 @@ def change_role_status(rid):
             if limit is not None and opened >= limit:
                 return jsonify(error='Your open-role limit has been reached. Close another role first.',
                                code='open_role_limit_reached', openRoleLimit=limit), 409
+        if role.status != target:
+            record_activity(session, org.id, g.user_id, 'role.status_changed', role.id, {'previousStatus': role.status, 'status': target})
         role.status = target
         session.flush()
         result = role.to_dict()
@@ -855,6 +947,7 @@ def edit_role(rid):
             return jsonify(error='Work location required for an open role'), 400
         role.title = title
         role.requirements = {**(role.requirements or {}), **requirements}
+        record_activity(session, role.org_id, g.user_id, 'role.updated', role.id, {'fields': sorted(data)})
         # Existing application criteria and attempt contracts are immutable snapshots.
         session.flush()
         result = role.to_dict()

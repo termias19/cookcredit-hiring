@@ -30,20 +30,58 @@ def is_owner(email, verified=True):
     return verified is True and str(email or '').strip().casefold() == OWNER_EMAIL
 
 
-def access_allowed(email, *, legacy_setting='STAGING_ALLOWED_EMAILS'):
+def access_allowed(email, *, legacy_setting='STAGING_ALLOWED_EMAILS', session=None):
     email = str(email or '').strip().casefold()
     legacy = {x.strip().casefold() for x in os.getenv(legacy_setting, '').split(',') if x.strip()}
     if not enabled():
         return email in legacy
     if email == OWNER_EMAIL:
         return True  # Privileged operations separately require a verified owner token.
-    with db_session() as session:
+    def resolve(session):
         row = session.query(HiringAccessRequest).filter_by(email=email).one_or_none()
         # Anonymous requests must never revoke an existing tester's access.
         # Only an explicit owner decision overrides a legacy tester entry.
         if row and row.status != 'pending':
             return row.status == 'approved'
         return email in legacy
+    if session is not None:
+        return resolve(session)
+    with db_session() as session:
+        return resolve(session)
+
+
+def access_blocked(session, email):
+    """An explicit platform denial overrides invitations and workspace membership."""
+    row = session.query(HiringAccessRequest).filter_by(email=str(email or '').strip().casefold()).one_or_none()
+    return bool(row and row.status in ('declined', 'revoked'))
+
+
+def workspace_access_allowed(session, org):
+    """Use the original employer approval; invited admins cannot approve a company."""
+    from models import User
+    creator = session.get(User, org.created_by) if org.created_by else None
+    return bool(creator and access_allowed(creator.email, session=session))
+
+
+def employer_access_allowed(email, user_id):
+    """Resolve current membership on every request so removal takes effect immediately.
+
+    A seat grants access to its approved workspace, not independent employer approval.
+    Existing route-level tenant and permission checks remain mandatory.
+    """
+    if str(email or "").strip().casefold() == OWNER_EMAIL:
+        return True  # Verified owner routes retain platform administration access.
+    if not enabled():
+        return access_allowed(email)
+    from models import Org, OrgMembership
+    with db_session() as session:
+        if access_blocked(session, email):
+            return False
+        membership = session.query(OrgMembership).filter_by(user_id=user_id).first()
+        if membership:
+            org = session.get(Org, membership.org_id)
+            return bool(org and workspace_access_allowed(session, org))
+        return access_allowed(email, session=session)
 
 
 def enqueue_access_mail(session, row, kind):

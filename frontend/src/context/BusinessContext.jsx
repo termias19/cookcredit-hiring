@@ -76,9 +76,9 @@ export function BusinessProvider({ children }) {
         setCandidates(Array.isArray(candR.value?.candidates) ? candR.value.candidates : [])
         setScreeningPolicy(candR.value?.screeningPolicy || null)
       }
-      // The load-bearing reads BOTH failing means the workspace couldn't load at
-      // all — surface it so consumers don't render the failure as "empty".
-      if (orgR.status === 'rejected' || (needRoles && rolesR.status === 'rejected') || (needCandidates && candR.status === 'rejected')) setError('load')
+      // A failed required read is not an empty workspace. In particular, a
+      // shortlist outage must offer retry instead of saying nobody was saved.
+      if (orgR.status === 'rejected' || (needRoles && rolesR.status === 'rejected') || (needCandidates && candR.status === 'rejected') || (needShortlist && slR.status === 'rejected')) setError('load')
       setLoading(false)
     })()
     return () => { live = false }

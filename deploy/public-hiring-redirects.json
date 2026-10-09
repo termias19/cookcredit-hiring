@@ -1,0 +1,5 @@
+[
+  {"glob": "/hiring", "location": "https://hiring.cookcredit.com/", "statusCode": 301},
+  {"glob": "/hiring/", "location": "https://hiring.cookcredit.com/", "statusCode": 301},
+  {"glob": "/hiring/index.html", "location": "https://hiring.cookcredit.com/", "statusCode": 301}
+]

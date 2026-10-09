@@ -35,6 +35,17 @@ export function safeAuthDestination(value) {
   } catch { return null }
 }
 
+// A link's explicit destination wins over old router/session navigation.
+export function authEntryDestination(location) {
+  return safeAuthDestination(new URLSearchParams(location.search || '').get('next'))
+    || safeAuthDestination(location.state?.from) || pendingDest()
+}
+
+export function authEntryLink(page, destination) {
+  const dest = safeAuthDestination(destination)
+  return `${page}${dest ? `?next=${encodeURIComponent(dest)}` : ''}`
+}
+
 export function rememberDestination(value) {
   const dest = safeAuthDestination(value)
   try {
@@ -65,6 +76,7 @@ export function authDestination(profile, requested, uid = profile?.id) {
   // BusinessRoute shows the existing approval/setup flow without granting access.
   // Employer intent must never silently become an applicant dashboard.
   if (profile && destination === '/owner/access' && profile.isAccessOwner !== true) return '/applications'
+  if (destination?.split(/[?#]/)[0] === '/business/onboarding' && isBusinessProfile(profile)) return '/business/roles'
   return destination || homeFor(profile)
 }
 
@@ -73,6 +85,12 @@ export function signupDestination(role, requested) {
   if (dest?.startsWith('/business/invite/')) return dest
   if (role === 'eat') return dest?.startsWith('/business/') ? dest : '/business/onboarding'
   return dest && !dest.startsWith('/business/') && dest !== '/owner/access' ? dest : '/applications'
+}
+
+export function initialSignupRole(requested, selectedRole) {
+  const dest = safeAuthDestination(requested)
+  if (dest) return dest.startsWith('/business/') || dest === '/owner/access' ? 'eat' : 'cook'
+  return selectedRole === 'cook' ? 'cook' : 'eat'
 }
 
 export function rememberAccountDestination(uid, value) {

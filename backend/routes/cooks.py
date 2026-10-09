@@ -11,6 +11,7 @@ Rating/reviews and bookings/earnings are intentionally DEFERRED (no marketplace 
 served yet) — returned as null/0 so the UI shows a calm "new cook" state instead of fake data.
 """
 import logging
+import os
 
 from flask import Blueprint, jsonify, g, request
 from sqlalchemy import func, cast
@@ -31,6 +32,9 @@ log = logging.getLogger(__name__)
 @require_verified_email
 @limiter.limit('120 per hour;30 per minute', key_func=lambda: g.user_id)
 def nearby_cooks():
+    # Hiring consent is company-specific, not consent to a public directory.
+    if os.environ.get('PUBLIC_COOK_DIRECTORY_ENABLED') != '1':
+        return jsonify(error='not found'), 404
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify(error='Invalid search'), 400
@@ -163,6 +167,8 @@ def list_cooks():
     """Public, paginated list of discoverable cooks (approved AND skill_verified),
     newest-verified first. Lightweight cards (no dishes/video). Optional ?city= / ?cuisine=
     filters and ?page=/&perPage=."""
+    if os.environ.get('PUBLIC_COOK_DIRECTORY_ENABLED') != '1':
+        return jsonify(error='not found'), 404
     try:
         page = max(1, int(request.args.get("page", 1)))
         per_page = min(50, max(1, int(request.args.get("perPage", 24))))
@@ -205,6 +211,8 @@ def list_cooks():
 @limiter.limit("120 per hour")
 def get_cook(cook_id):
     """Public cook profile. 404 unless the cook is publicly visible (approved + skill_verified)."""
+    if os.environ.get('PUBLIC_COOK_DIRECTORY_ENABLED') != '1':
+        return jsonify(error='not found'), 404
     with db_session() as session:
         user = session.get(User, cook_id)
         if user is None:
