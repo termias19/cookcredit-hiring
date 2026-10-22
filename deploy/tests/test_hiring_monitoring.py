@@ -29,3 +29,18 @@ def test_no_implicit_environment_or_silent_disabled_policy():
     with pytest.raises(ValueError):module.application_error_filter('other')
     with pytest.raises(RuntimeError):module.desired_policy({'conditions': []}, 'staging')
     with pytest.raises(RuntimeError):module.desired_policy({'conditions': [{'conditionMatchedLog': {}}]}, 'production')
+
+
+def test_missing_staging_coverage_reuses_known_routing_without_production_identity():
+    production = {'displayName': 'CookCredit hiring production application and delivery failures',
+                  'enabled': True, 'combiner': 'OR', 'userLabels': {'environment': 'production'},
+                  'notificationChannels': ['production-owner'],
+                  'alertStrategy': {'notificationRateLimit': {'period': '3600s'}},
+                  'conditions': [{'name': 'production-condition', 'conditionMatchedLog': {'filter': 'old'}}]}
+    routing = {'displayName': 'CookCredit hiring staging background job failure',
+               'notificationChannels': ['staging-owner']}
+    result = module.missing_staging_policy([production, routing])
+    assert 'name' not in result and 'name' not in result['conditions'][0]
+    assert result['notificationChannels'] == ['staging-owner']
+    assert result['userLabels']['environment'] == 'staging'
+    assert 'cookcredit-hiring-staging' in result['conditions'][0]['conditionMatchedLog']['filter']

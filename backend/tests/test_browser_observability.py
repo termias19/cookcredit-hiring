@@ -1,8 +1,9 @@
+import importlib.util
 import json
+from pathlib import Path
 from flask import Flask
 import pytest
 from routes.observability import observability_bp
-from extensions import limiter
 
 
 @pytest.fixture
@@ -53,14 +54,22 @@ def test_untrusted_origin_cannot_report(client, capsys):
 
 
 def test_browser_reports_use_shared_rate_limits(monkeypatch):
+    import extensions
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    isolated = Limiter(get_remote_address, storage_uri='memory://')
+    monkeypatch.setattr(extensions, 'limiter', isolated)
+    # Route decorators bind at import time; load this test's route against its
+    # own limiter instead of mutating the singleton used by unrelated app tests.
+    spec = importlib.util.spec_from_file_location('isolated_browser_route',
+        Path(__file__).parents[1] / 'routes/observability.py')
+    module = importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     monkeypatch.setenv('FRONTEND_URL', 'https://hiring.cookcredit.com')
     app = Flask(__name__)
     app.config.update(RATELIMIT_STORAGE_URI='memory://', TESTING=True)
-    limiter.init_app(app)
-    app.register_blueprint(observability_bp, url_prefix='/api/observability')
+    isolated.init_app(app)
+    app.register_blueprint(module.observability_bp, url_prefix='/api/observability')
     with app.test_client() as client:
         results = [client.post('/api/observability/client-error', json=report(),
                    headers={'Origin': 'https://hiring.cookcredit.com'}).status_code for _ in range(11)]
     assert results[:10] == [204] * 10 and results[-1] == 429
-    # The limiter object is shared across test apps; do not leak its memory counters.
-    limiter.reset()
