@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { googleSignInFailure } from '../utils/googleSignInFailure'
+import { reportClientError } from '../utils/errorReporting'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authDestination, rememberDestination, rememberAccountDestination, safeAuthDestination, pendingDest, authEntryLink } from '../utils/homeFor'
@@ -24,6 +25,9 @@ export default function GoogleSignInButton({ destination, disabled = false }) {
       rememberAccountDestination(result.uid, dest)
       navigate(result.needsVerification ? '/verify' : dest, { state: { from: dest }, replace: true })
     } catch (err) {
+      if (!['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(err?.code)) {
+        reportClientError('google_signin_error')
+      }
       setError(googleSignInFailure(err))
     } finally { setBusy(false) }
   }

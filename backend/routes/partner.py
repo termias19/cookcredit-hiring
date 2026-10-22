@@ -757,4 +757,10 @@ def internal_expire_assessment_requests():
                 'externalJobId': item.external_job_id, 'status': 'expired',
                 'environment': item.environment,
             })
-        return jsonify(expired=len(rows)), 200
+        expired = len(rows)
+    # Commit expirations and release SQL before checking public Hosting. A retry is
+    # safe: only pending invitations are expired, and outbox events are durable.
+    from services.public_site_health import check_public_site
+    from services.runtime_config import deployment_environment
+    public_ok = check_public_site(deployment_environment())
+    return jsonify(expired=expired, publicSiteHealthy=public_ok), 200 if public_ok else 503

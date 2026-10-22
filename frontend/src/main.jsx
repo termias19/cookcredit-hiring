@@ -9,6 +9,13 @@ import AppUpdateNotice from './components/AppUpdateNotice'
 import "./index.css"
 import "./styles/business-theme.css"
 import './utils/pwaInstall'
+import { startErrorReporting } from './utils/errorReporting'
+
+startErrorReporting({
+  enabled: import.meta.env.PROD && import.meta.env.VITE_PREVIEW !== '1',
+  apiOrigin: import.meta.env.VITE_API_URL,
+  release: import.meta.env.VITE_RELEASE_COMMIT,
+})
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
