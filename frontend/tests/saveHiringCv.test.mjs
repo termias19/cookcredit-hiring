@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { saveHiringCv } from '../src/utils/saveHiringCv.js'
+import { saveHiringCv, saveHiringFile } from '../src/utils/saveHiringCv.js'
 
 test('CV save requests a destination before loading and confirms only after close', async () => {
   const order = []
@@ -34,4 +34,16 @@ for (const blocked of [false, true]) test(`download fallback is only a request, 
   assert.equal(timers[0].delay, 60000)
   timers[0].fn()
   assert.equal(calls.at(-1), 'blob:test')
+})
+
+
+test('activity JSON shares the confirmed-save path with explicit file metadata', async () => {
+  const options = { suggestedName: 'workspace-activity.json', types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] }
+  let written
+  const browser = { showSaveFilePicker: async received => {
+    assert.deepEqual(received, options)
+    return { createWritable: async () => ({ write: async blob => { written = blob }, close: async () => {} }) }
+  } }
+  assert.equal(await saveHiringFile(async () => 'activity', options, browser, {}, {}), 'saved')
+  assert.equal(written, 'activity')
 })

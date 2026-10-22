@@ -5,7 +5,7 @@ import { ArrowLeft, Copy, Mail, UserPlus, X } from 'lucide-react'
 import BusinessShell from '../components/BusinessShell'
 import { useBusiness } from '../context/BusinessContext'
 import {
-  getBusinessTeam, inviteBusinessTeamMember, revokeBusinessTeamInvitation,
+  getBusinessTeam, inviteBusinessTeamMember, revokeBusinessTeamInvitation, changeBusinessMember,
 } from '../utils/Api'
 
 const SERIF = "var(--cc-display)"
@@ -13,6 +13,28 @@ const ROLES = [
   ['recruiter', 'Recruiter'], ['hiring_manager', 'Hiring manager'],
   ['viewer', 'Viewer'], ['admin', 'Admin'],
 ]
+const ROLE_HELP = {
+  admin: 'Manage team, company, billing and integrations; review applicants and edit roles.',
+  hiring_manager: 'Edit roles and review applicants and shared assessment evidence. No team or billing control.',
+  recruiter: 'Edit roles and review applicants and shared assessment evidence. No team or billing control.',
+  viewer: 'View the workspace and role list. No applicant records, videos or editing.',
+}
+
+function MemberControls({ member, disabled, onSave }) {
+  const [role, setRole] = useState(member.seatRole)
+  return <div style={{ width: '100%' }}>
+    <label style={muted}>Team role for {member.name || member.email}
+      <select value={role} onChange={event => setRole(event.target.value)} disabled={disabled} style={input}>
+        {ROLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+    </label>
+    <p style={muted}>{ROLE_HELP[role]}</p>
+    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+      <button style={secondary} disabled={disabled || role === member.seatRole} onClick={() => onSave(member, role)}>Save role</button>
+      <button style={secondary} disabled={disabled} onClick={() => onSave(member, null)}>Remove access</button>
+    </div>
+  </div>
+}
 
 export default function BusinessTeamScreen({ embedded = false } = {}) {
   const navigate = useNavigate()
@@ -75,6 +97,19 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
     finally { setBusy(false) }
   }
 
+  async function saveMember(member, role) {
+    if (busy) return
+    const action = role ? `Change ${member.name || member.email} to ${role.replaceAll('_', ' ')}?` : `Remove ${member.name || member.email} from this workspace? They will need a new invitation to return.`
+    if (!window.confirm(action)) return
+    setBusy(true); setError('')
+    try {
+      await changeBusinessMember({ token: await getToken(), memberId: member.id, seatRole: role, remove: role === null })
+      await load()
+      biz.refresh()
+    } catch (err) { setError(err.message || 'Team access could not be changed') }
+    finally { setBusy(false) }
+  }
+
   const header = <div style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)', padding: '20px 28px' }}>
     <button onClick={() => navigate('/business/roles')} style={back}><ArrowLeft size={14} /><span>{biz?.org?.name || 'Workspace'}</span></button>
     <h1 style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--cc-ink)', margin: 0 }}>Team</h1>
@@ -91,6 +126,7 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
         <Mail size={16} color="#888" />
         <div style={{ flex: 1 }}><strong>{member.name || member.email}</strong><div style={muted}>{member.email}</div></div>
         <span style={badge}>{member.seatRole.replace('_', ' ')}</span>
+        {team.canManage && <MemberControls key={`${member.id}:${member.seatRole}`} member={member} disabled={busy} onSave={saveMember} />}
       </div>)}
       {team.invitations.filter(item => item.status === 'pending').map(item => <div className="cc-business-card" key={item.id} style={row}>
         <Mail size={16} color="#C9A227" />
@@ -106,6 +142,7 @@ export default function BusinessTeamScreen({ embedded = false } = {}) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '9px 0' }}>
           {ROLES.map(([value, name]) => <button key={value} onClick={() => setSeatRole(value)} style={{ ...choice, ...(seatRole === value ? choiceOn : {}) }}>{name}</button>)}
         </div>
+        <p style={{ ...muted, marginBottom: 12 }}>{ROLE_HELP[seatRole]}</p>
         <button onClick={invite} disabled={busy || !email.trim()} style={{ ...primary, opacity: busy || !email.trim() ? 0.5 : 1 }}><UserPlus size={15} />{busy ? 'Saving…' : 'Create invitation'}</button>
         <p style={muted}>{team.invitationAccess?.seatLimit ? `${team.invitationAccess.seatLimit} seats include members and pending invitations. ` : ''}Invitations expire after seven days. The invited email must be verified and approved by CookCredit before joining.</p>
       </div>}

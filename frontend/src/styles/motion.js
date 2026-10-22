@@ -31,9 +31,9 @@ export const scaleIn = {
   show: { opacity: 1, scale: 1, transition: { duration: DURATION.base, ease: EASE } },
 }
 
-/** Wrap a list/grid container with this + `fadeUp` (or `listItem`) on each child
- *  for a staggered reveal: <motion.div variants={staggerContainer()} initial="hidden" animate="show">. */
-export const staggerContainer = (stagger = 0.06, delayChildren = 0) => ({
+/** Reveal workspace rows together by default. A per-row delay grows with the
+ * list size and makes already-loaded applicants appear to be loading slowly. */
+export const staggerContainer = (stagger = 0, delayChildren = 0) => ({
   hidden: {},
   show: { transition: { staggerChildren: stagger, delayChildren } },
 })

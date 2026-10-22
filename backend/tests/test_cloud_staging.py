@@ -150,7 +150,7 @@ def test_disabled_assessment_bridge_does_not_create_session(monkeypatch):
 def test_public_applicant_boundary(monkeypatch, endpoint, method, verified, expected):
     from services import hiring_access
     monkeypatch.setattr(hiring_access, 'enabled', lambda: True)
-    monkeypatch.setattr(hiring_access, 'access_allowed', lambda email: False)
+    monkeypatch.setattr(hiring_access, 'employer_access_allowed', lambda *a, **kw: False)
     monkeypatch.setattr(auth, '_verify_token', lambda _: {
         'uid': 'applicant', 'email': 'applicant@example.test', 'email_verified': verified})
     app = Flask(__name__)

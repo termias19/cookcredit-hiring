@@ -56,7 +56,7 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
 def account_email_content(kind, link, *, custom=None):
     content = {
         'workspace_invite': ('Your CookCredit team invitation', 'You are invited to a CookCredit workspace',
-                    'A workspace administrator invited you to join their team. Sign in with this email address to review and accept the invitation. CookCredit employer approval is required before you can join. The invitation expires after seven days.',
+                    'A workspace administrator invited you to join their team. Sign in with this email address to review and accept the invitation. Your access is limited to the inviting workspace and your assigned role. The invitation expires after seven days.',
                     'Review invitation', 'If you did not expect this invitation, you can ignore it. Opening the link does not accept the invitation.'),
         'verify': ('Welcome to CookCredit — verify your email', 'Confirm your email address',
                    'Thank you for creating a CookCredit account. Confirm this email address to finish setting up your account.',

@@ -1,4 +1,5 @@
 import { workspaceDestination } from './utils/workspaceDestination'
+import { reportClientError } from './utils/errorReporting'
 import AssessmentSharingScreen from './screens/AssessmentSharingScreen'
 import { useState, useEffect, lazy, Suspense, Component } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -7,7 +8,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import SplashScreen from './components/SplashScreen'
 import OfflineBanner from './components/OfflineBanner'
 import ProtectedRoute from './components/ProtectedRoute'
-import { authDestination, clearPendingDestination, isBusinessProfile, safeAuthDestination } from './utils/homeFor'
+import { authDestination, clearPendingDestination, isBusinessProfile, authEntryDestination } from './utils/homeFor'
 
 // ── Auth screens (public) ────────────────────────────────────────────────────
 const SignupScreen        = lazy(() => import('./screens/SignupScreen'))
@@ -61,7 +62,7 @@ function AuthRedirect({ children }) {
   if (authActionPending || PREVIEW) return children
   if (loading) return null
   if (user) {
-    const dest = authDestination(profile, location.state?.from || safeAuthDestination(new URLSearchParams(location.search).get('next')), user.uid)
+    const dest = authDestination(profile, authEntryDestination(location), user.uid)
     if (!user.emailVerified) return <Navigate to="/verify" state={{ from: dest }} replace />
     return <ProtectedRoute><Navigate to={dest} replace /></ProtectedRoute>
   }
@@ -102,14 +103,15 @@ function RouteFocusReset() {
 class ScreenErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { failed: false } }
   static getDerivedStateFromError() { return { failed: true } }
-  componentDidCatch(err) { console.error('Screen render error:', err) }
+  componentDidCatch() { this.setState({ reference: reportClientError('render_error') }) }
   render() {
     if (this.state.failed) {
       return (
         <div style={{ minHeight: '100svh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 40, textAlign: 'center', background: '#FEFDFB' }}>
           <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 24, color: '#1a1a1a', margin: 0 }}>This page could not be loaded.</p>
           <p style={{ fontSize: 14, color: '#777', margin: 0 }}>Please reload the page or return to CookCredit.</p>
-          <a href="/business" style={{ color: '#1F6F5C', fontWeight: 600, marginTop: 8 }}>Back to CookCredit</a>
+          {this.state.reference && <p style={{ fontSize: 12, color: '#555' }}>Reference: {this.state.reference}</p>}
+          <a href="/" style={{ color: '#1F6F5C', fontWeight: 600, marginTop: 8 }}>Back to CookCredit</a>
         </div>
       )
     }

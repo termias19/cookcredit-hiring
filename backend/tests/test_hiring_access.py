@@ -41,7 +41,7 @@ def test_stale_decisions_do_not_change_access_or_enqueue_email():
 
 def test_nonowner_cannot_read_or_approve_requests(monkeypatch):
     monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
-    monkeypatch.setattr(access, 'access_allowed', lambda *args, **kwargs: True)
+    monkeypatch.setattr(access, 'employer_access_allowed', lambda *args, **kwargs: True)
     monkeypatch.setattr(auth, '_verify_token', lambda token: {'uid': 'someone', 'email': 'other@example.com', 'email_verified': True})
     app = Flask(__name__)
     app.register_blueprint(access_bp, url_prefix='/access')
@@ -80,6 +80,8 @@ def test_inbox_failure_cannot_block_account_email_dispatch(monkeypatch):
     monkeypatch.setattr(hiring_access_inbox, 'sync_hiring_inbox', importer)
     sender = Mock(return_value={'claimed': 1, 'sent': 1, 'failed': 0, 'skipped': 0})
     monkeypatch.setattr(account_email, 'dispatch_account_emails', sender)
+    from services import customer_mail
+    monkeypatch.setattr(customer_mail, 'expand_due_campaigns', lambda: 0)
     from services import operations
     observer = Mock(return_value=True)
     monkeypatch.setattr(operations, 'report_queue_health', observer)
@@ -104,7 +106,7 @@ def test_inbox_failure_cannot_block_account_email_dispatch(monkeypatch):
 def test_all_owner_endpoints_reject_other_admins_before_database(monkeypatch, identity, method, path, body):
     from routes import hiring_access as routes
     monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED','1')
-    monkeypatch.setattr(access,'access_allowed',lambda *a, **kw:True)
+    monkeypatch.setattr(access,'employer_access_allowed',lambda *a, **kw:True)
     monkeypatch.setattr(auth,'_verify_token',lambda _:identity)
     database = Mock(side_effect=AssertionError('Unauthorized identity reached the database'))
     monkeypatch.setattr(routes,'db_session',database)

@@ -131,10 +131,10 @@ def get_me():
         result['emailVerified'] = g.email_verified
         # Platform admin (cook-application reviewer) — from the verified-email allowlist.
         result["isAdmin"] = is_admin_email(g.email)
-        from services.hiring_access import enabled, is_owner, access_allowed
+        from services.hiring_access import enabled, is_owner, employer_access_allowed
         result['isAccessOwner'] = enabled() and is_owner(g.email, g.email_verified)
         gated = enabled() or os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging'
-        result['employerAccessAllowed'] = bool(g.email_verified and (not gated or access_allowed(g.email)))
+        result['employerAccessAllowed'] = bool(g.email_verified and (not gated or employer_access_allowed(g.email, g.user_id)))
 
         # Include sub-profiles if they exist
         if user.eater_profile:

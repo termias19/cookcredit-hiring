@@ -19,6 +19,7 @@ import { PREVIEW } from '../config'
 import { useLang } from './LangContext'
 import { createAccountEmail } from '../utils/accountEmail'
 import { completeSignup } from '../utils/completeSignup'
+import { loadAccountProfile } from '../utils/loadAccountProfile'
 
 const AuthContext = createContext()
 export const useAuth = () => useContext(AuthContext)
@@ -81,31 +82,12 @@ async function apiFetch(path, token, opts = {}) {
  * login). /api/auth/sync is idempotent create-or-update and never grants roles
  * beyond eater client-side, so recreate the row once and refetch.
  */
-async function fetchMeWithHeal(firebaseUser) {
-  const token = await firebaseUser.getIdToken()
-  // A transient signup API failure must not discard the customer's name or
-  // employer onboarding intent. Never replay another account's draft.
-  let draft
-  try { draft = JSON.parse(sessionStorage.getItem('cc_signup_profile') || 'null') } catch { /* unavailable storage */ }
-  if (draft?.uid === firebaseUser.uid && draft.profile) {
-    await apiFetch('/api/auth/sync', token, { method: 'POST', body: JSON.stringify(draft.profile) })
-    try { sessionStorage.removeItem('cc_signup_profile') } catch { /* unavailable storage */ }
-  }
-  try {
-    return await apiFetch('/api/auth/me', token)
-  } catch (err) {
-    if (err?.status !== 404) throw err
-    await apiFetch('/api/auth/sync', token, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: firebaseUser.displayName || (firebaseUser.email || '').split('@')[0] || 'User',
-        roles: ['eater'],
-        activeRole: 'eater',
-        createOnly: true,
-      }),
-    })
-    return apiFetch('/api/auth/me', token)
-  }
+async function fetchMeWithHeal(firebaseUser, suppliedProfile) {
+  return loadAccountProfile(firebaseUser, {
+    request: apiFetch, suppliedProfile,
+    readDraft: () => JSON.parse(sessionStorage.getItem('cc_signup_profile') || 'null'),
+    clearDraft: () => sessionStorage.removeItem('cc_signup_profile'),
+  })
 }
 
 export function AuthProvider({ children }) {
@@ -122,9 +104,9 @@ export function AuthProvider({ children }) {
   const [verificationNotice, setVerificationNotice] = useState(null)
   const authActionRef = useRef(false)
 
-  async function fetchProfile(firebaseUser) {
+  async function fetchProfile(firebaseUser, suppliedProfile) {
     try {
-      const data = await fetchMeWithHeal(firebaseUser)
+      const data = await fetchMeWithHeal(firebaseUser, suppliedProfile)
       if (auth.currentUser?.uid !== firebaseUser.uid) return null
       if (data.id !== firebaseUser.uid) throw new Error('Account response did not match your sign-in. Please retry.')
       setProfile(data)
@@ -235,7 +217,9 @@ export function AuthProvider({ children }) {
         await requestVerificationEmail(account).catch(() => {})
         return { needsVerification: true, uid: account.uid }
       }
-      const data = await fetchProfile(account)
+      // Browser storage is only retry recovery, never the transport for signup.
+      // Private/restricted browsers must preserve the same employer intent.
+      const data = await fetchProfile(account, values)
       if (!data) throw new Error('Signed in. Please retry loading your account.')
       if (auth.currentUser?.uid !== account.uid || data.id !== account.uid) throw new Error('Account changed')
       setProfile(data); setProfileError(false)

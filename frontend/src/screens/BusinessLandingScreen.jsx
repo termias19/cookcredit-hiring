@@ -76,7 +76,7 @@ export default function BusinessLandingScreen() {
       <nav aria-label="Main navigation">
         <a className="hiring-nav-detail" href="#how-it-works">How it works</a>
         <a className="hiring-nav-detail" href="#for-cooks">For cooks</a>
-        <Link className="hiring-signin" to={user ? '/profile' : '/login'}>{user ? 'My account' : 'Sign in'}<ArrowUpRight size={16} aria-hidden="true" /></Link>
+        <Link className="hiring-signin" to={user ? '/profile' : '/login?next=/business/roles'}>{user ? 'My account' : 'Sign in'}<ArrowUpRight size={16} aria-hidden="true" /></Link>
       </nav>
     </header>
     <main id="hiring-main" tabIndex={-1}>

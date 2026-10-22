@@ -58,7 +58,7 @@ def test_revoked_employer_cannot_use_applicant_cv_exemption(monkeypatch):
         yield SimpleNamespace(get=lambda *args: application)
     monkeypatch.setattr(hiring, 'db_session', db)
     monkeypatch.setattr(hiring_access, 'enabled', lambda: True)
-    monkeypatch.setattr(hiring_access, 'access_allowed', lambda email: False)
+    monkeypatch.setattr(hiring_access, 'employer_access_allowed', lambda *a, **kw: False)
     monkeypatch.setattr(auth, '_verify_token', lambda _: {
         'uid': 'revoked-employer', 'email': 'employer@example.test', 'email_verified': True})
     download = Mock()

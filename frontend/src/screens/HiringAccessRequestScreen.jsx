@@ -46,7 +46,7 @@ export default function HiringAccessRequestScreen() {
         <button className="cc-access-primary" disabled={busy}>{busy ? 'Sending…' : 'Request hiring access'}</button>
       </form>
       <p className="cc-access-note">Prefer email? Write to <a href="mailto:connectwithus@cookcredit.com?subject=CookCredit%20hiring%20access">connectwithus@cookcredit.com</a> with “hiring access” in the subject.</p>
-      <p className="cc-access-note" hidden={!!user}>Already approved? <Link to="/signup?next=/business/onboarding">Create your account</Link> or <Link to="/login" state={{ from: '/business/onboarding' }}>sign in</Link>.</p>
+      <p className="cc-access-note" hidden={!!user}>Already approved? <Link to="/signup?next=/business/onboarding">Create your account</Link> or <Link to="/login?next=/business/roles">sign in</Link>.</p>
     </>}
     <p className="cc-access-note">Employer access is reviewed by CookCredit. Your team makes every hiring decision. No payment is required to request access.</p>
     {user && <button className="cc-access-primary" disabled={busy} onClick={async () => {

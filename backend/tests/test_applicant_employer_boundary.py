@@ -17,7 +17,7 @@ def test_verified_applicant_is_rejected_before_any_employer_data_access(monkeypa
     monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
     monkeypatch.setenv('COOKCREDIT_ENVIRONMENT', 'staging')
     monkeypatch.setattr(auth, '_verify_token', lambda _: {'uid':'candidate','email':'candidate@example.test','email_verified':True})
-    monkeypatch.setattr(hiring_access, 'access_allowed', lambda *a, **kw: False)
+    monkeypatch.setattr(hiring_access, 'employer_access_allowed', lambda *a, **kw: False)
     monkeypatch.setattr(business, 'db_session', lambda: pytest.fail('Employer data must not be read'))
     app=Flask(__name__);app.config.update(TESTING=True,RATELIMIT_ENABLED=False)
     app.register_blueprint(business.business_bp,url_prefix='/api/business')
@@ -34,7 +34,7 @@ def test_account_profile_reports_actual_employer_approval(monkeypatch, approved,
     from routes import auth as auth_routes
     monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED','1')
     monkeypatch.setattr(auth,'_verify_token',lambda _: {'uid':'candidate','email':'candidate@example.test','email_verified':verified})
-    monkeypatch.setattr(hiring_access,'access_allowed',lambda *a,**kw: approved)
+    monkeypatch.setattr(hiring_access,'employer_access_allowed',lambda *a,**kw: approved)
     user=SimpleNamespace(to_dict=lambda: {'id':'candidate','roles':['eater']},eater_profile=None,cook_profile=None)
     @contextmanager
     def db(): yield SimpleNamespace(get=lambda *a: user)
