@@ -16,7 +16,8 @@
       {
         "source": "**",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
         ]
       },
       {
@@ -100,6 +101,18 @@
             "key": "Cache-Control",
             "value": "no-store"
           }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "index, follow" }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "index, follow" }
         ]
       }
     ]
