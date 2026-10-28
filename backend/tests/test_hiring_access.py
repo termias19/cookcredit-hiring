@@ -98,6 +98,7 @@ def test_inbox_failure_cannot_block_account_email_dispatch(monkeypatch):
     {'uid':'owner-unverified','email':'eassefa@cookcredit.com','email_verified':False},
 ])
 @pytest.mark.parametrize('method,path,body', [
+    ('GET','/owner/usage',None),
     ('GET','/owner/requests',None),
     ('POST','/owner/requests',{'email':'candidate@example.com'}),
     ('POST','/owner/requests/00000000-0000-0000-0000-000000000000/decision',{'action':'approve','revision':0}),
@@ -116,3 +117,28 @@ def test_all_owner_endpoints_reject_other_admins_before_database(monkeypatch, id
     response = app.test_client().open('/access'+path,method=method,json=body,headers={'Authorization':'Bearer test'})
     assert response.status_code == 403
     database.assert_not_called()
+
+
+def test_owner_usage_requires_auth_and_returns_private_aggregate(monkeypatch):
+    from contextlib import contextmanager
+    from routes import hiring_access as routes
+    from services import owner_usage
+    monkeypatch.setenv('HIRING_ACCESS_APPROVALS_ENABLED', '1')
+    monkeypatch.setattr(auth, '_verify_token', lambda _: {
+        'uid': 'owner', 'email': access.OWNER_EMAIL, 'email_verified': True})
+    @contextmanager
+    def database():
+        yield 'session'
+    monkeypatch.setattr(routes, 'db_session', database)
+    report = Mock(return_value={'weeks': []})
+    monkeypatch.setattr(owner_usage, 'snapshot', report)
+    app = Flask(__name__)
+    app.config.update(TESTING=True, RATELIMIT_ENABLED=False)
+    app.register_blueprint(access_bp, url_prefix='/access')
+    client = app.test_client()
+    assert client.get('/access/owner/usage').status_code == 401
+    report.assert_not_called()
+    result = client.get('/access/owner/usage', headers={'Authorization': 'Bearer owner'})
+    assert result.status_code == 200 and result.json == {'weeks': []}
+    assert result.headers['Cache-Control'] == 'private, no-store'
+    report.assert_called_once_with('session')

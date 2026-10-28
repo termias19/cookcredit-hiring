@@ -147,3 +147,22 @@ receiver 503/timeout, duplicate delivery, and enqueue outage before production
 enablement. Record first-attempt latency separately from receiver success latency.
 Leaving both new environment variables unset restores scheduler-only operation;
 already queued tasks remain safe. No schema migration is required for this path.
+# Owner usage reporting
+
+The verified access owner alone can read `GET /api/access/owner/usage`, shown on
+`/owner/access`. Existing Hiring records supply four rolling seven-day periods:
+distinct accounts with recorded actions, Hiring account creations, applications
+started, and completed Hiring assessment sessions. This is not visitor analytics
+or a total of shared Firebase registrations. Passive visits are not recorded;
+weekly unique-account counts must not be added to obtain monthly uniques.
+
+The owner is always in the test cohort. Set `HIRING_USAGE_TEST_EMAILS` to the
+comma-separated controlled acceptance identities in each environment. Reserved
+example.test/example.com identities also count as tests. Classification applies
+to historical results on refresh; changing it does not change source records.
+The other cohort may contain unidentified tests and must not be labelled paying
+customers. Keep private acceptance addresses out of public release records.
+
+The read-only query has a five-second statement limit and six requests/minute
+per owner. Responses are private/no-store and contain aggregates, never account
+identities. No new database, schema, worker, polling or tracking service is used.

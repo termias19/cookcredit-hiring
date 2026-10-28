@@ -23,6 +23,46 @@ from middleware import auth
 pytestmark = pytest.mark.skipif(not os.environ.get('HIRING_TEST_DATABASE_URL'), reason='explicit local test database required')
 
 
+def test_owner_usage_week_boundaries_deduplication_and_test_cohorts(db, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from models.business import WorkspaceActivity
+    from services.owner_usage import snapshot
+    end = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+    start = end - timedelta(days=28)
+    monkeypatch.setenv('HIRING_USAGE_TEST_EMAILS', ' acceptance@kitchen.org ')
+    with database.db_session() as session:
+        session.execute(text("UPDATE users SET created_at='2020-01-01'"))
+        session.add_all([
+            User(id='real', email='chef@kitchen.org', name='Cook', created_at=end-timedelta(days=8)),
+            User(id='owner', email='eassefa@cookcredit.com', name='Owner', created_at=start-timedelta(days=1)),
+            User(id='acceptance', email='acceptance@kitchen.org', name='Acceptance', created_at=start-timedelta(days=1)),
+            User(id='boundary', email='boundary@kitchen.org', name='Boundary', created_at=start),
+            User(id='outside', email='outside@kitchen.org', name='Outside', created_at=end),
+        ])
+        session.flush()
+        application = HiringApplication(role_posting_id=db.role, applicant_id='real', consent_version='v1',
+                                        submitted_at=end-timedelta(days=7))
+        session.add(application); session.flush()
+        session.add(HiringAssessmentSession(application_id=application.id, applicant_id='real', slot=1,
+            started_at=end-timedelta(days=2), expires_at=end+timedelta(days=1), completed_at=end-timedelta(days=1)))
+        for actor in ['real', 'real', 'owner', 'acceptance', 'cook', 'system:not-a-person']:
+            session.add(WorkspaceActivity(org_id=db.org, actor_id=actor, event_type='role.updated',
+                                          target_id=str(db.role), created_at=end-timedelta(days=1)))
+    with database.db_session() as session:
+        report = snapshot(session, now=end)
+        assert session.execute(text('SHOW transaction_read_only')).scalar() == 'on'
+    assert len(report['weeks']) == 4
+    assert report['weeks'][0]['other'] == dict(activeUsers=1, signups=0, applications=1, completedAssessments=1)
+    assert report['weeks'][0]['test'] == dict(activeUsers=3, signups=0, applications=0, completedAssessments=0)
+    assert report['weeks'][1]['other']['signups'] == 1
+    assert report['weeks'][-1]['other']['signups'] == 1  # Inclusive start.
+    assert sum(w['other']['signups'] for w in report['weeks']) == 2  # Exclusive end.
+    assert 'email' not in str(report)
+    with database.db_session() as session:
+        empty = snapshot(session, now=end+timedelta(days=1000))
+    assert all(all(value == 0 for value in w[c].values()) for w in empty['weeks'] for c in ['other', 'test'])
+
+
 @pytest.fixture
 def db(monkeypatch):
     url = os.environ['HIRING_TEST_DATABASE_URL']
