@@ -172,6 +172,19 @@ def owner_pricing():
                        billingEnabled=os.getenv('BUSINESS_BILLING_ENABLED') == '1')
 
 
+@access_bp.get('/owner/usage')
+@require_auth
+@require_verified_email
+@owner_only
+@limiter.limit('6 per minute', key_func=lambda: g.user_id)
+def owner_usage():
+    from services.owner_usage import snapshot
+    with db_session() as session:
+        response = jsonify(snapshot(session))
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
 @access_bp.post('/owner/pricing')
 @require_auth
 @require_verified_email

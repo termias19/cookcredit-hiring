@@ -20,6 +20,7 @@
  */
 
 import { errorReference } from './errorReference.js'
+import { reportClientError } from './errorReporting.js'
 import { PREVIEW } from '../config'
 import { previewBusinessRequest } from '../data/previewBusinessApi'
 
@@ -91,13 +92,18 @@ export async function http(path, opts = {}) {
     }
   } catch (e) {
     if (e?.name === 'AbortError') {
+      reportClientError('api_timeout')
       throw new Error('Request timed out — check your connection and try again.')
     }
+    reportClientError('api_network_error')
     throw e
   }
 
   if (res.ok && opts.responseType === 'blob') return res.blob()
-  const data = await res.json().catch(() => ({}))
+  const data = await res.json().catch(() => {
+    if (res.ok) reportClientError('api_response_invalid')
+    return {}
+  })
   const reference = errorReference(data, res)
   if (reference && data && typeof data === 'object') {
     data.requestId = reference

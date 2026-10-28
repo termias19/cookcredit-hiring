@@ -35,6 +35,9 @@ function BusinessAccess({ children }) {
   if (!isBusiness && location.pathname !== '/business/onboarding') {
     return <Navigate to="/business/onboarding" state={{ from: location }} replace />
   }
+  if (isBusiness && location.pathname === '/business/onboarding') {
+    return <Navigate to="/business/roles" replace />
+  }
   return <BusinessProvider key={user.uid}>{children}</BusinessProvider>
 }
 

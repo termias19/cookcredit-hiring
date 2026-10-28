@@ -30,4 +30,11 @@
 .cc-access-card summary {cursor:pointer;font-size:14px}
 .cc-access-card[open] summary {margin-bottom:20px}
 .cc-access-trap {position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+.cc-owner-usage-week {margin-top:24px}
+.cc-owner-usage-week h3 {font-size:14px;font-weight:600;line-height:1.6}
+.cc-owner-usage-scroll {overflow-x:auto}
+.cc-owner-usage-table {width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.cc-owner-usage-table caption {text-align:left}
+.cc-owner-usage-table th,.cc-owner-usage-table td {padding:12px 10px;border-bottom:1px solid var(--cc-border)}
+.cc-owner-usage-table td {font-variant-numeric:tabular-nums}
 @media(max-width:500px){.cc-access-page{padding:24px 16px 48px}.cc-access-card{padding:20px}.cc-access-actions button{flex:1 1 150px}}

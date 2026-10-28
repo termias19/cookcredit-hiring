@@ -126,5 +126,6 @@ def check_connection():
             session.execute(text("SELECT 1"))
         return True
     except Exception as e:
-        log.error("Database connection check failed: %s", e)
+        from services.operations import emit_event
+        emit_event('database_check_failed', severity='ERROR', exception=type(e).__name__)
         return False

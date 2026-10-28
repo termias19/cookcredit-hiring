@@ -33,12 +33,23 @@ authorized employer. A UUID alone never authorizes access. Platform-owner approv
 and pricing controls are separate from a company admin seat.
 
 Invitations are expiring, email-bound credentials stored as hashes. Seat capacity
-is checked under a company lock. **Current limitation:** with employer approvals
-enabled, an invited teammate also needs owner-approved employer access. An
-invitation alone does not bypass the platform approval gate. Existing memberships
-do not yet have a self-service role-change/removal UI; do not promise this capability.
+is checked under a company lock. An invited teammate inherits access from the
+approved originating employer, without receiving independent employer approval.
+Explicit platform denials still override invitations and membership. Admins can change a
+member's seat role or remove their membership in Settings > Team. The API scopes
+the target to the caller's company, serializes membership changes under the company
+lock, rechecks the acting admin after acquiring that lock, and protects the last
+admin. Removal blocks subsequent workspace requests; it does not erase the person's
+account or invalidate previously issued, short-lived media URLs.
 
 ## Applicant evidence
+
+Legacy public cook listing, public profile and nearby-directory endpoints are
+disabled by default. `PUBLIC_COOK_DIRECTORY_ENABLED=1` is an explicit opt-in for a
+separate public-directory deployment and must remain unset or `0` in Hiring.
+Employer approval and assessment completion are not permission to publish a cook.
+Private self-service profiles and company-consented evidence use their existing
+authenticated routes.
 
 Candidate recordings require an active applicant sharing grant for the caller's
 company and a terminal assessment attempt. Playback returns short-lived signed
@@ -64,10 +75,22 @@ Existing records are retained in their respective systems:
 - `CampaignEvent`: owner marketing campaign changes.
 - Durable email, Stripe-event and webhook delivery records: processing and retries.
 
-These are **not a complete, immutable company audit trail**. Company profile edits,
-role configuration edits, invitation revocation and integration configuration do
-not all have a common actor/time/change history. There is no company audit-log
-export or independently verified tamper-evident archive. The public
+`WorkspaceActivity` adds transactionally recorded member changes, invitation
+creation/acceptance/revocation, company edits, role creation/edits/status changes,
+company branding/embed configuration changes, API key creation/revocation, webhook
+creation/status changes and manual delivery replay requests. Credentials, webhook
+URLs and delivery payloads are excluded from activity details. Settings > Activity log is
+admin-only and company-scoped with bounded cursor pagination. Activity writes fail
+the associated transaction if they cannot be saved. There is no edit/delete API.
+Existing applicant and evidence events are not copied into a second event store.
+
+Admins can filter by event type and export the latest 50 matching records as JSON.
+The export rechecks current server authorization and includes a continuation cursor
+when more records exist; it is not a full-history archive. The API also supports an
+exact actor-ID filter.
+
+These are **not a complete, immutable company audit trail**. Authentication failures
+and billing are not yet unified in this view. Historical administrative actions are not reconstructed. There is no independently verified tamper-evident archive. The public
 `/business/audit` page explains assessment evidence; it is not an activity log.
 Do not describe these controls as SOC 2 certification or a completed security audit.
 
@@ -93,3 +116,14 @@ email receipt and verification, correct workspace/application return, consented
 recording and submission, employer retrieval/playback, CV save, teammate acceptance,
 customer webhook receipt, and subscription payment plus confirmation email.
 Automated tests and SMTP acceptance cannot establish these real customer outcomes.
+
+
+### Employer approval and invited teammates
+
+The existing workspace creator (`orgs.created_by`) anchors CookCredit employer approval. Invited administrators cannot approve another company. A missing creator fails closed and requires operational review. Explicit platform denial of a recipient overrides invitations and membership; revocation of the originating employer blocks inherited workspace access.
+
+A workspace administrator may invite teammates within the subscription seat allowance. Joining requires a verified email matching the unexpired invitation, an approved originating employer, and no membership in a different workspace. Acceptance checks capacity under the existing company lock and records membership plus an activity event transactionally. An accepted invitation cannot restore a removed member.
+
+Membership grants access only to that workspace and its assigned permissions, not independent employer approval. The API resolves current membership on requests and retains its resource-level tenant checks. The verified platform owner retains the separate owner administration path. Shared Firebase identities, applicant consent, recording access, and CV retention are unchanged.
+
+Coverage: `backend/tests/test_workspace_access.py` and `backend/tests/test_workspace_security.py`. Live acceptance still requires the invited recipient to complete sign-in and acceptance; automated coverage does not establish that browser outcome.

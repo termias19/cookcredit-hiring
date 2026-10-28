@@ -44,7 +44,8 @@ function CandidateReport({ id, roleId }) {
   const { user } = useAuth()
   const biz = useBusiness()
   const rosterCandidate = biz?.candidateById?.(id) || null
-  const role = biz?.roleById?.(roleId) || null
+  // The report carries its authorized role; the workspace list may not be loaded.
+  const role = report?.role || biz?.roleById?.(roleId) || null
   const c = report?.candidate ? {
     ...rosterCandidate, ...report.candidate,
     verifiedScore: report.assessment?.score,
@@ -187,7 +188,7 @@ function CandidateReport({ id, roleId }) {
       {m && (
         <motion.div variants={fadeUp} style={{ padding: '18px 0 4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-            <p style={{ ...overline, margin: 0 }}>Match · {role.title}</p>
+            <p style={{ ...overline, margin: 0 }}>Match · {role?.title || 'Role'}</p>
             <span style={{ fontSize: 13, fontWeight: 600, color: m.band === 'Gated' ? TERRA : m.total >= 0.6 ? GREEN : GOLD }}>{m.band === 'Gated' ? 'Not eligible' : m.band}</span>
           </div>
           {!m.gates.passed && (

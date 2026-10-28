@@ -10,7 +10,9 @@ const env = import.meta.env || {}
 
 export const firebaseConfig = {
   apiKey:            env.VITE_FIREBASE_API_KEY             || 'AIzaSyAHVJ-y1JkGTWUA-ONEpPWQ0KWQ08YHyX8',
-  authDomain:        env.VITE_FIREBASE_AUTH_DOMAIN         || 'foodnlit-1123e.firebaseapp.com',
+  // Hiring's branded popup host is separate from the pinned assessment config.
+  // Both use the same Firebase project and existing identities.
+  authDomain:        env.VITE_HIRING_AUTH_DOMAIN || env.VITE_FIREBASE_AUTH_DOMAIN || 'foodnlit-1123e.firebaseapp.com',
   projectId:         env.VITE_FIREBASE_PROJECT_ID          || US_PROJECT_ID,
   storageBucket:     env.VITE_FIREBASE_STORAGE_BUCKET      || 'foodnlit-1123e.firebasestorage.app',
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '319305393408',

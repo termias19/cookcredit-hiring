@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import OwnerPricing from '../components/OwnerPricing'
 import OwnerCampaigns from '../components/OwnerCampaigns'
+import OwnerUsage from '../components/OwnerUsage'
 import CookCreditBrand from '../components/CookCreditBrand'
 import http from '../utils/http'
 import '../styles/access.css'
@@ -65,6 +66,7 @@ export default function OwnerAccessScreen() {
   return <main className="cc-access-page"><div className="cc-access-wrap cc-access-owner">
     <CookCreditBrand /><p className="cc-access-eyebrow">Owner / Hiring access</p><h1>You choose who comes in.</h1>
     {!allowed ? <p role="alert">Only the verified owner account can manage hiring access. For help, contact connectwithus@cookcredit.com.</p> : <>
+      <OwnerUsage call={call} />
       <OwnerPricing call={call} />
       <OwnerCampaigns />
       <p className="cc-access-intro">Website and email requests wait here for your decision. Approvals give people access to set up their own workspace; they do not join yours.</p>

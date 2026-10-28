@@ -27,6 +27,66 @@ severity>=ERROR
 
 Queue events contain only queue name, counts, oldest age and release identity. Terminal failures or pending messages older than ten minutes remain visible even after dispatch batches become empty. Monitoring alerts route to the existing owner notification channel. Scheduler HTTP200 alone is not proof that an email or webhook was delivered.
 
+Browser failures use the same API and Cloud Logging. The `client_error` event contains
+only an allowlisted failure category, a coarse screen category, release commit and
+random support reference. Reports are untrusted diagnostics, never authorization or
+audit evidence. No messages, stacks, URLs, answers, CVs, email addresses or tokens
+are accepted. The client deduplicates reports and sends at most five per page
+lifetime; the API enforces shared IP limits. Reports never block a customer action
+or retry a failed action. Offline delivery and failures before the app loads cannot
+be guaranteed by browser reports; the external readiness check remains necessary.
+
+The existing expiry maintenance job also checks the public Hiring homepage,
+canonical URL, robots/sitemap and login exclusion after releasing its database
+transaction. Production permits indexing only on the public homepage. Staging
+and account/assessment routes remain excluded. A failed check emits
+`public_site_health` with fixed failure codes and returns 503 so the existing
+Scheduler retry and alert apply. No additional service or paid capacity is required.
+
+`public_site_health.failureDetails` identifies the fixed probe (`home`, `login`,
+`robots`, or `sitemap`), phase (`fetch`, `read`, `decode`, or `validate`), elapsed
+milliseconds, and HTTP status when one was received. Allowlisted categories
+distinguish DNS, connect/read timeout, TLS, connection/reset, incomplete/encoded
+response, oversized body, invalid UTF-8/XML, and metadata-policy failures. Wrapped
+transport errors are inspected by type with a bounded traversal; unknown errors
+remain `unexpected_error`. Exception messages/classes supplied by unknown code,
+response bodies, URLs, headers, certificates and credentials are never included.
+The existing `failures` codes, ERROR severity, HTTP 503 and Scheduler retry policy
+remain unchanged. HTTP-context operational events also carry the server-generated
+request ID, so the probe result can be joined to `request_failed` and the response.
+This does not recover exception details absent from older logs.
+
+## Mandatory release and incident procedure
+
+1. Review recent production API, browser, queue and Scheduler failures before changing code.
+   Correlate timestamps, request references, revision and source commit. Distinguish a
+   transport failure followed by a successful retry from an ongoing application outage.
+2. Run CI and the relevant local regressions. Build from the clean public checkout;
+   retain immutable image/source and rollback identifiers privately.
+3. Deploy to staging first. Run `python deploy/check_hiring_release.py --environment staging --logs --commit FULL_BACKEND_COMMIT`.
+   Missing log access, recent unexplained errors, public metadata regressions or a failed
+   readiness/access-boundary check block acceptance. Test intended access with real
+   authorized accounts separately; an expected unauthenticated 401 is only a boundary check.
+4. Deploy the production candidate with no default traffic. Verify its request IDs,
+   release header and readiness; compare environment, secrets, access and capacity
+   with the recorded baseline before shifting traffic.
+5. After promotion, run `python deploy/check_hiring_release.py --environment production --logs --commit FULL_BACKEND_COMMIT`.
+   Recheck after at least one five-minute maintenance cycle and allow for Cloud Logging
+   ingestion delay. Inspect all four Scheduler jobs and queue ages. Store the check's
+   output outside the public source checkout; never commit real operational/user records.
+6. Verify the changed customer behavior, not just HTTP navigation. Recording, inbox
+   delivery, payment receipt and employer playback need their respective acceptance evidence.
+   Record untested steps explicitly. Search Console validation is separate from completed indexing.
+7. If a regression remains, stop promotion or roll back the compatible release; keep
+   evidence and alerts. Never disable origin validation, access checks, retries or
+   monitoring to make a check pass, and never blindly resend messages or payment events.
+
+Every incident records: impact, first failure, recovery, affected release, evidence,
+confirmed cause or remaining uncertainty, repair, regression check and follow-up.
+Review the existing owner notification channel and enabled alert policies during
+each release. Test alert routing in staging with clearly labelled synthetic events;
+do not represent API acceptance as proof of email notification receipt.
+
 Do not blindly resend terminal messages: confirm recipient/destination, why retries failed, deduplication state and whether a provider accepted the prior send. Keep event IDs and signed webhook payloads stable. Webhooks are at-least-once delivery; receivers must deduplicate event IDs.
 
 ## Capacity and rate limits
@@ -55,7 +115,7 @@ Record current backend revision and Hosting versions before promotion. Shift tra
 
 ## Intentional product boundaries
 
-Employer access requires owner approval. Approved trial workspaces can open five roles. Payments, automatic hiring decisions and automatic mailbox imports remain disabled. Applicants follow a role invitation without employer approval. Preview/sample banners must remain on deliberate development fixtures; production builds set VITE_PREVIEW=0 and VITE_DEPLOYMENT_ENVIRONMENT=production.
+Independent employer access requires owner approval; verified invitees join an approved workspace under its existing permission and seat checks. Approved trial workspaces can open five roles. Billing follows explicit server-side feature flags and the existing Stripe integration; inspect current flags before payment acceptance. Automatic hiring decisions remain deferred, and mailbox imports require explicit opt-in. Applicants follow a role invitation without employer approval. Preview/sample banners must remain on deliberate development fixtures; production builds set VITE_PREVIEW=0 and VITE_DEPLOYMENT_ENVIRONMENT=production.
 # Immediate webhook dispatch
 
 Partner webhook deliveries remain durable in PostgreSQL. Optional Cloud Tasks
@@ -87,3 +147,22 @@ receiver 503/timeout, duplicate delivery, and enqueue outage before production
 enablement. Record first-attempt latency separately from receiver success latency.
 Leaving both new environment variables unset restores scheduler-only operation;
 already queued tasks remain safe. No schema migration is required for this path.
+# Owner usage reporting
+
+The verified access owner alone can read `GET /api/access/owner/usage`, shown on
+`/owner/access`. Existing Hiring records supply four rolling seven-day periods:
+distinct accounts with recorded actions, Hiring account creations, applications
+started, and completed Hiring assessment sessions. This is not visitor analytics
+or a total of shared Firebase registrations. Passive visits are not recorded;
+weekly unique-account counts must not be added to obtain monthly uniques.
+
+The owner is always in the test cohort. Set `HIRING_USAGE_TEST_EMAILS` to the
+comma-separated controlled acceptance identities in each environment. Reserved
+example.test/example.com identities also count as tests. Classification applies
+to historical results on refresh; changing it does not change source records.
+The other cohort may contain unidentified tests and must not be labelled paying
+customers. Keep private acceptance addresses out of public release records.
+
+The read-only query has a five-second statement limit and six requests/minute
+per owner. Responses are private/no-store and contain aggregates, never account
+identities. No new database, schema, worker, polling or tracking service is used.
