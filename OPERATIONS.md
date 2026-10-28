@@ -43,6 +43,19 @@ and account/assessment routes remain excluded. A failed check emits
 `public_site_health` with fixed failure codes and returns 503 so the existing
 Scheduler retry and alert apply. No additional service or paid capacity is required.
 
+`public_site_health.failureDetails` identifies the fixed probe (`home`, `login`,
+`robots`, or `sitemap`), phase (`fetch`, `read`, `decode`, or `validate`), elapsed
+milliseconds, and HTTP status when one was received. Allowlisted categories
+distinguish DNS, connect/read timeout, TLS, connection/reset, incomplete/encoded
+response, oversized body, invalid UTF-8/XML, and metadata-policy failures. Wrapped
+transport errors are inspected by type with a bounded traversal; unknown errors
+remain `unexpected_error`. Exception messages/classes supplied by unknown code,
+response bodies, URLs, headers, certificates and credentials are never included.
+The existing `failures` codes, ERROR severity, HTTP 503 and Scheduler retry policy
+remain unchanged. HTTP-context operational events also carry the server-generated
+request ID, so the probe result can be joined to `request_failed` and the response.
+This does not recover exception details absent from older logs.
+
 ## Mandatory release and incident procedure
 
 1. Review recent production API, browser, queue and Scheduler failures before changing code.

@@ -1,12 +1,20 @@
 """Privacy-safe operational events; never include tokens, addresses or payloads."""
 import json
 import os
+import re
 from datetime import datetime, timezone
+from flask import g, has_request_context
 from sqlalchemy import func
 from services.database import db_session
 
 
 def emit_event(event, *, severity='INFO', **fields):
+    # Correlate maintenance/probe events with the API response using only the
+    # server-generated ID. Background jobs and local checks need no HTTP context.
+    if has_request_context():
+        reference = getattr(g, 'request_id', None)
+        if isinstance(reference, str) and re.fullmatch(r'[a-f0-9]{32}', reference):
+            fields.setdefault('requestId', reference)
     print(json.dumps({'severity': severity, 'event': event,
         'service': os.getenv('K_SERVICE', 'local'),
         'revision': os.getenv('K_REVISION', 'local'),
