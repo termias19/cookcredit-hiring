@@ -1,0 +1,137 @@
+"""Home API. It is intentionally absent from the Hiring blueprint registry."""
+import os
+from functools import wraps
+from flask import Blueprint, g, jsonify, request
+from extensions import limiter
+from middleware.auth import require_identity, require_verified_email
+from services.database import db_session
+from services import home_visits as visits
+from models.home_service import HomeEvent
+from sqlalchemy import select
+
+home_bp = Blueprint('home_visits', __name__)
+
+
+def emails(setting):
+    return {e.strip().casefold() for e in os.getenv(setting, '').split(',') if e.strip()}
+
+
+def is_owner():
+    return g.email.casefold() in emails('HOME_OWNER_EMAILS')
+
+
+def is_operator():
+    return is_owner() or g.email.casefold() in emails('HOME_OPERATOR_EMAILS')
+
+
+def home_auth(f):
+    # Identity is shared; company approval, Hiring seats and self-selected User
+    # roles confer no Home operator or helper privileges.
+    @wraps(f)
+    @require_identity
+    @require_verified_email
+    def decorated(*args, **kwargs):
+        if not g.email:
+            visits.fail('email_required', 'A verified email is required.', 403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def principal():
+    return {'uid': g.user_id, 'email': g.email, 'name': g.name}
+
+
+def json_body():
+    body = request.get_json()
+    if not isinstance(body, dict):
+        visits.fail('invalid_json', 'Please check the request fields.')
+    return body
+
+
+@home_bp.get('/me')
+@home_auth
+@limiter.limit('60 per minute', key_func=lambda: g.user_id)
+def me():
+    # Cook onboarding/approval is separate from creating an inert customer identity.
+    with db_session() as session:
+        visits.sync_identity(session, principal())
+    return jsonify(userId=g.user_id, operator=is_operator(), owner=is_owner(),
+                   consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT, paymentsAvailable=False)
+
+
+@home_bp.post('/visits')
+@home_auth
+@limiter.limit('10 per minute', key_func=lambda: g.user_id)
+def create():
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'create', body,
+            lambda: visits.create_visit(session, actor, body))
+    return jsonify(result), 201
+
+
+@home_bp.get('/visits')
+@home_auth
+@limiter.limit('60 per minute', key_func=lambda: g.user_id)
+def listing():
+    with db_session() as session:
+        result = visits.list_visits(session, g.user_id, is_operator(), request.args.get('cursor'))
+    return jsonify(result)
+
+
+@home_bp.get('/visits/<booking_id>')
+@home_auth
+@limiter.limit('60 per minute', key_func=lambda: g.user_id)
+def detail(booking_id):
+    with db_session() as session:
+        booking, visit = visits.load_visit(session, booking_id, g.user_id, is_operator())
+        result = visits.serialize(booking, visit, detail=True)
+    return jsonify(result)
+
+
+@home_bp.post('/visits/<booking_id>/actions')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def action(booking_id):
+    body, actor, operator = json_body(), principal(), is_operator()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'action:' + booking_id,
+            body, lambda: visits.transition(session, actor, booking_id, body, operator))
+    return jsonify(result)
+
+
+@home_bp.put('/helpers/<helper_id>/permission')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def helper_permission(helper_id):
+    if not is_owner():
+        visits.fail('forbidden', 'Only the Home owner can change helper permissions.', 403)
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'permission:' + helper_id,
+            body, lambda: visits.set_helper_permission(session, actor, helper_id, body))
+    return jsonify(result)
+
+
+@home_bp.get('/visits/<booking_id>/activity')
+@home_auth
+@limiter.limit('60 per minute', key_func=lambda: g.user_id)
+def activity(booking_id):
+    if not is_operator():
+        visits.fail('forbidden', 'CookCredit operator access is required.', 403)
+    with db_session() as session:
+        booking, _ = visits.load_visit(session, booking_id, g.user_id, True)
+        # Bounded page using a monotone booking version (each accepted command
+        # emits exactly one event). No note, email, token or address is serialized.
+        after = request.args.get('afterVersion', '-1')
+        try:
+            after = int(after)
+            if after < -1:
+                raise ValueError()
+        except ValueError:
+            visits.fail('invalid_cursor', 'Please refresh the activity list.')
+        events = session.execute(select(HomeEvent).where(HomeEvent.booking_id == booking['id'],
+            HomeEvent.version > after).order_by(HomeEvent.version).limit(100)).scalars().all()
+        result = [{'action': e.action, 'version': e.version, 'at': e.created_at.isoformat(),
+                   'actorId': e.actor_id, 'details': e.details} for e in events]
+    return jsonify(events=result, nextAfterVersion=result[-1]['version'] if len(result) == 100 else None)

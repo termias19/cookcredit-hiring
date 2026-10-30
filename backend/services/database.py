@@ -50,10 +50,10 @@ engine = None
 SessionLocal = None
 
 
-def init_db():
+def init_db(*, url=None):
     """Initialize the database engine and session factory. Call once at app startup."""
     global engine, SessionLocal
-    url = _build_url()
+    url = url or _build_url()
     pool_size = max(1, min(20, int(os.environ.get('DB_POOL_SIZE', '5'))))
     max_overflow = max(0, min(40, int(os.environ.get('DB_MAX_OVERFLOW', '10'))))
     engine = create_engine(

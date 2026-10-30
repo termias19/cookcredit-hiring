@@ -233,7 +233,9 @@ class Booking(Base):
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     eater_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    cook_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Home requests precede assignment. Only the separate Home migration relaxes
+    # this constraint; the Hiring/legacy database is not migrated by this change.
+    cook_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     status = Column(Text, default="requested")
     scheduled_date = Column(Date, nullable=False)
     scheduled_start_time = Column(Time, nullable=False)
