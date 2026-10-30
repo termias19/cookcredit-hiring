@@ -93,7 +93,9 @@ export default function RequestVisit({ profile }) {
     <section className="narrow">
       <a href="#home">← Home</a>
       <p className="eyebrow">Step {step + 1} of 3</p>
-      <h1 ref={heading} tabIndex="-1">{["What would help?", "Make it yours.", "Where and when?"][step]}</h1>
+      <h1 ref={heading} tabIndex="-1">
+        {["What would help?", "Make it yours.", "Where and when?"][step]}
+      </h1>
       <p>
         Sending a request is free. We’ll review availability and send you a full
         quote before you pay.
@@ -124,7 +126,7 @@ export default function RequestVisit({ profile }) {
               <select name="cooking" defaultValue="120">
                 {[60, 90, 120, 150, 180, 210, 240].map((v) => (
                   <option key={v} value={v}>
-                    {v / 60} hours
+                    {v / 60} {v === 60 ? "hour" : "hours"}
                   </option>
                 ))}
               </select>
@@ -136,7 +138,7 @@ export default function RequestVisit({ profile }) {
               <select name="cleaning" defaultValue="60">
                 {[60, 90, 120, 150, 180, 210, 240].map((v) => (
                   <option key={v} value={v}>
-                    {v / 60} hours
+                    {v / 60} {v === 60 ? "hour" : "hours"}
                   </option>
                 ))}
               </select>

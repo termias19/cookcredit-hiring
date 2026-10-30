@@ -7,6 +7,7 @@ No allergy, address, telephone, medical note or payment URL appears in email.
 import hashlib
 import os
 import uuid
+from urllib.parse import urlencode
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -105,6 +106,8 @@ def deliver(item):
             return 'skipped'
     if item.kind in ('verify','reset'):
         link=_action_link(item.kind,item.recipient)
+        from services.home_customers import return_route
+        link+='&'+urlencode({'next':return_route((item.content or {}).get('homeReturn'))})
         content=account_email_content(item.kind,link)
     else:
         action=(item.content or {}).get('action','home_account_created')

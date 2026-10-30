@@ -13,13 +13,13 @@ import {
 import { auth } from "../../src/firebase";
 import { verifyAccountLink } from "../../src/utils/verifyAccountLink";
 import { api } from "../api";
+import {
+  safeHomeRoute,
+  readReturnRoute,
+  rememberReturnRoute,
+  forgetReturnRoute,
+} from "../navigation";
 
-const safeNext = (value) =>
-  /^(request|visits|payout|team|helping|visit\/[a-f0-9-]{36})$/.test(
-    value || "",
-  )
-    ? value
-    : "visits";
 const friendly = (error) =>
   ({
     "auth/popup-blocked":
@@ -55,14 +55,20 @@ export default function Account({ user, refresh, next }) {
     params = new URLSearchParams(location.hash.split("?")[1] || "");
   const code = params.get("oobCode"),
     kind = params.get("mode");
+  const returnRoute = useRef(
+    safeHomeRoute(params.get("next") || readReturnRoute() || next),
+  );
   const continueTo = () => {
-    const target = safeNext(sessionStorage.getItem("homeReturn") || next);
-    sessionStorage.removeItem("homeReturn");
+    const target = returnRoute.current;
+    forgetReturnRoute();
     location.hash = target;
   };
   useEffect(() => {
-    if (!action) sessionStorage.setItem("homeReturn", safeNext(next));
-  }, [next, action]);
+    returnRoute.current = safeHomeRoute(
+      action ? params.get("next") || readReturnRoute() : next,
+    );
+    rememberReturnRoute(returnRoute.current);
+  }, [next]);
   useEffect(() => {
     if (!cooldown) return;
     const timer = setTimeout(
@@ -122,7 +128,7 @@ export default function Account({ user, refresh, next }) {
   const resend = async () => {
     const value = await api("/account/verification", {
       method: "POST",
-      body: {},
+      body: { returnTo: returnRoute.current },
       protectedAccount: true,
     });
     setCooldown(value.retryAfterSeconds || 60);
@@ -155,7 +161,7 @@ export default function Account({ user, refresh, next }) {
       if (mode === "reset") {
         await api("/account/reset", {
           method: "POST",
-          body: { email: f.get("email") },
+          body: { email: f.get("email"), returnTo: returnRoute.current },
           protectedAccount: true,
         });
         setNotice(

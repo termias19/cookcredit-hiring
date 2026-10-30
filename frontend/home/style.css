@@ -1,3 +1,11 @@
+.local-note {
+  padding: 8px 24px;
+  background: #eceee4;
+  border-bottom: 1px solid #d4d6cd;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+}
 @font-face {
   font-family: Inter;
   src: url("/fonts/cookcredit-font-5.woff") format("woff");

@@ -8,14 +8,14 @@ const serviceNames = {
   both: "Cooking & cleaning",
 };
 const statusCopy = {
-  requested: "CookCredit is reviewing your request and availability.",
+  requested: "CookCredit is reviewing this request and availability.",
   accepted:
-    "Your helper has accepted the visit. Review the full quote when it is ready.",
-  confirmed: "Your payment is confirmed. Your visit is arranged.",
-  in_progress: "Your helper has started the visit.",
+    "The helper has accepted this visit. The full quote must be approved before payment.",
+  confirmed: "Payment is confirmed. This visit is arranged.",
+  in_progress: "The helper has started this visit.",
   pending_confirmation:
-    "Your helper has finished. Please review the work before confirming.",
-  completed: "Your visit is completed. Materials and funds are shown below.",
+    "The work is finished and awaiting customer confirmation.",
+  completed: "This visit is completed. Materials and funds are shown below.",
   cancelled: "This visit is cancelled. Any verified refund appears below.",
 };
 export default function Visit({ id, profile }) {
@@ -196,7 +196,10 @@ export default function Visit({ id, profile }) {
               </div>
               <div>
                 <dt>Time arranged</dt>
-                <dd>{visit.durationMinutes / 60} hours</dd>
+                <dd>
+                  {visit.durationMinutes / 60}{" "}
+                  {visit.durationMinutes === 60 ? "hour" : "hours"}
+                </dd>
               </div>
               <div>
                 <dt>Address</dt>
@@ -233,7 +236,8 @@ export default function Visit({ id, profile }) {
                 {q.labor.map((line) => (
                   <div key={line.service}>
                     <dt>
-                      {serviceNames[line.service]} · {line.minutes / 60} hours
+                      {serviceNames[line.service]} · {line.minutes / 60}{" "}
+                      {line.minutes === 60 ? "hour" : "hours"}
                       <small>{money(line.rateCentsPerHour)} per hour</small>
                     </dt>
                     <dd>{money(line.amountCents)}</dd>
@@ -264,18 +268,18 @@ export default function Visit({ id, profile }) {
                 </div>
               </dl>
               <p>
-                You pay this approved maximum through Stripe. Unused material
-                and tax allowance is refunded after the visit and receipt
-                review.
+                The customer pays this approved maximum through Stripe. Unused
+                material and tax allowance is refunded after the visit and
+                receipt review.
               </p>
               <p className="quiet">
                 {q.approved
-                  ? "You approved this quote."
+                  ? "The customer approved this quote."
                   : q.expired
                     ? "This quote has expired. CookCredit needs to update it."
                     : `Quote valid until ${new Date(q.expiresAt).toLocaleString()}.`}{" "}
                 {q.helperAcceptedQuote
-                  ? "Your helper accepted the work and earnings."
+                  ? "The helper accepted the work and earnings."
                   : "Awaiting helper review."}
               </p>
               {!closed && !held && !q.expired && (

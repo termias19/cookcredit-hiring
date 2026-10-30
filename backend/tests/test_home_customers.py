@@ -129,3 +129,26 @@ def test_unverified_account_resend_is_protected_and_has_cooldown(app,monkeypatch
     assert first.status_code==202 and first.json['queued']
     retry=c.post('/api/home/account/verification',json={},headers=headers('unverified'))
     assert retry.json['queued'] is False and retry.json['retryAfterSeconds']>0
+
+
+def test_email_return_is_preserved_and_cannot_be_an_external_redirect(app,monkeypatch):
+    monkeypatch.setenv('COOKCREDIT_ENVIRONMENT','development')
+    monkeypatch.setenv('HOME_EMAILS_ENABLED','1')
+    c=app.test_client()
+    for target in ('https://evil.example','//evil.example','team?next=https://evil.example',{'route':'team'}):
+        assert c.post('/api/home/account/verification',json={'returnTo':target},headers=headers('unverified')).status_code==400
+    result=c.post('/api/home/account/verification',json={'returnTo':'request'},headers=headers('unverified'))
+    assert result.status_code==202
+    with database.db_session()as session:
+        item=session.execute(select(AccountEmail).where(AccountEmail.kind=='verify')).scalar_one()
+        assert item.content=={'homeReturn':'request'}
+
+
+def test_home_diagnostics_use_the_existing_bounded_private_report_contract(app,monkeypatch):
+    monkeypatch.setenv('COOKCREDIT_PRODUCT','home-services')
+    monkeypatch.setenv('HOME_FRONTEND_ORIGINS','https://home.example.test')
+    c=app.test_client();path='/api/home/observability/client-error'
+    report={'code':'render_error','screen':'home_operator','release':'unrecorded','reference':'a'*32}
+    assert c.post(path,json=report,headers={'Origin':'https://evil.example'}).status_code==403
+    assert c.post(path,json={**report,'message':'private household detail'},headers={'Origin':'https://home.example.test'}).status_code==400
+    assert c.post(path,json=report,headers={'Origin':'https://home.example.test'}).status_code==204

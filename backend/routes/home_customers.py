@@ -21,7 +21,8 @@ customer_bp=Blueprint('home_customers',__name__)
 @require_app_check
 @limiter.limit('6 per hour',key_func=lambda:g.user_id)
 def verification():
-    visits.strict_object(json_body(),())
+    body=json_body();visits.strict_object(body,(),('returnTo',))
+    target=customers.return_route(body.get('returnTo'))
     if g.email_verified:
         return jsonify(alreadyVerified=True)
     if os.getenv('HOME_EMAILS_ENABLED')!='1':
@@ -30,7 +31,7 @@ def verification():
         visits.fail('private_acceptance','Use an account enabled for private Home acceptance.',403)
     from services.account_email import enqueue_account_email
     with db_session() as session:
-        result=enqueue_account_email(session,kind='verify',recipient=g.email,user_id=g.user_id)
+        result=enqueue_account_email(session,kind='verify',recipient=g.email,user_id=g.user_id,content={'homeReturn':target})
     return jsonify(result),202
 
 
@@ -40,7 +41,8 @@ def verification():
 def password_reset():
     from services.hiring_access import normalize_email
     from services.account_email import enqueue_account_email
-    body=json_body();visits.strict_object(body,('email',))
+    body=json_body();visits.strict_object(body,('email',),('returnTo',))
+    target=customers.return_route(body.get('returnTo'))
     try:
         email=normalize_email(body['email'])
     except ValueError:
@@ -48,7 +50,7 @@ def password_reset():
     if os.getenv('COOKCREDIT_ENVIRONMENT')!='staging' or email in emails('HOME_ACCEPTANCE_EMAILS'):
         if os.getenv('HOME_EMAILS_ENABLED')=='1':
             with db_session() as session:
-                enqueue_account_email(session,kind='reset',recipient=email)
+                enqueue_account_email(session,kind='reset',recipient=email,content={'homeReturn':target})
     return jsonify(queued=True),202
 
 

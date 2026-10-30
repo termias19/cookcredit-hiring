@@ -3,10 +3,19 @@ import React, { useEffect, useState } from "react";
 import { api, dollars, label, money } from "../api";
 
 export default function Team({ profile }) {
-  const [tab, setTab] = useState("visits"),
-    [data, setData] = useState(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+  // Change the tab and its payload together. A response from a previous tab
+  // cannot render against another tab's data shape or overwrite its result.
+  const [screen, setScreen] = useState({ tab: "visits", data: null });
+  const { tab, data } = screen;
+  const setTab = (tab) => setScreen({ tab, data: null });
+  const setData = (data) =>
+    setScreen((current) =>
+      current.tab === tab ? { ...current, data } : current,
+    );
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState("");
+  useEffect(() => setNotice(""), [tab]);
 
   const [version, setVersion] = useState(0);
 
@@ -29,8 +38,10 @@ export default function Team({ profile }) {
   const run = async (task) => {
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await task();
+      setNotice("Change saved.");
       setVersion((v) => v + 1);
     } catch (e) {
       setError(e.message);
@@ -113,6 +124,11 @@ export default function Team({ profile }) {
           </button>
         ))}
       </nav>
+      {notice && (
+        <p role="status" className="notice">
+          {notice}
+        </p>
+      )}
       {error && (
         <p role="alert" className="error">
           {error}

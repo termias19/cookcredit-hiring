@@ -24,7 +24,7 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
-def enqueue_account_email(session, *, kind, recipient, user_id=None):
+def enqueue_account_email(session, *, kind, recipient, user_id=None, content=None):
     if kind not in {'verify', 'reset', 'welcome'}:
         raise ValueError('Unsupported account email')
     identity = user_id if kind == 'welcome' else recipient.strip().casefold()
@@ -46,7 +46,7 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
         return
     session.execute(insert(AccountEmail).values(
         id=uuid.uuid4(), dedupe_key=key, kind=kind, recipient=recipient,
-        user_id=user_id, status='pending', attempts=0,
+        user_id=user_id, content=content, status='pending', attempts=0,
         created_at=utcnow(), available_at=utcnow()).on_conflict_do_nothing(index_elements=['dedupe_key']))
     if os.getenv('COOKCREDIT_PRODUCT') == 'home-services':
         session.info['home_dispatch_due'] = now

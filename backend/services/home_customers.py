@@ -9,6 +9,14 @@ from models.home_service import HomeHousehold, HomeCallback, HomeHelperPermissio
 from services import home_visits as visits
 
 
+def return_route(value=None):
+    if value is None:
+        return 'visits'
+    if not isinstance(value,str) or not re.fullmatch(r'(request|visits|payout|team|helping|visit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',value):
+        visits.fail('invalid_return','Please reopen the account form from your visit.')
+    return value
+
+
 def audit(session,principal,action,subject):
     visits.sync_identity(session,principal,refresh=False)
     session.add(HomeAccessAudit(actor_id=principal['uid'],action=action,subject_id=str(subject)))

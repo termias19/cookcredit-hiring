@@ -146,4 +146,6 @@ def create_app(config=None):
         app.register_blueprint(home_bp, url_prefix='/api/home')
         from routes.home_customers import customer_bp
         app.register_blueprint(customer_bp,url_prefix='/api/home')
+        from routes.observability import observability_bp
+        app.register_blueprint(observability_bp,url_prefix='/api/home/observability')
     return app

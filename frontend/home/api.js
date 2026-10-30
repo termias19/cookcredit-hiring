@@ -1,4 +1,5 @@
 import { auth, getAppCheckHeaders } from "../src/firebase";
+import { reportClientError } from "../src/utils/errorReporting";
 
 const pending = new Map();
 export async function api(
@@ -35,7 +36,21 @@ export async function api(
       credentials: "omit",
       redirect: "error",
     });
-    const value = await response.json().catch(() => ({}));
+    let value;
+    try {
+      value = await response.json();
+    } catch {
+      reportClientError("api_response_invalid");
+      throw new Error(
+        "We could not read the response. Refresh and retry safely.",
+      );
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      reportClientError("api_response_invalid");
+      throw new Error(
+        "We could not read the response. Refresh and retry safely.",
+      );
+    }
     if (!response.ok) {
       const error = new Error(
         value.error || "We could not finish. Please retry.",
@@ -48,10 +63,13 @@ export async function api(
     pending.delete(fingerprint);
     return value;
   } catch (error) {
-    if (error.name === "AbortError")
+    if (error.name === "AbortError") {
+      reportClientError("api_timeout");
       throw new Error(
         "This is taking longer than expected. Retry to check the same request safely.",
       );
+    }
+    if (error instanceof TypeError) reportClientError("api_network_error");
     throw error;
   } finally {
     clearTimeout(timer);
