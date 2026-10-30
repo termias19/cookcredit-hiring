@@ -163,6 +163,10 @@ def test_rate_change_does_not_mutate_approved_quote_requote_requires_new_approva
     result = post(client, f"/visits/{row['id']}/quotes/{old['id']}/approve",
         {'version': row['version'], 'digest': old['digest']}, 'customer')
     assert result.json['code'] == 'quote_changed'
+    historical = client.get(f"/api/home/visits/{row['id']}/quotes/{old['id']}", headers=headers()).json['quote']
+    assert historical['approved'] and not historical['current'] and historical['digest'] == old['digest']
+    assert historical['maximumTotalCents'] == old['maximumTotalCents']
+    assert client.get(f"/api/home/visits/{row['id']}/quotes/{old['id']}", headers=headers('stranger')).status_code == 404
     with database.db_session() as session:
         assert session.query(HomeQuote).count() == 2 and session.query(HomeQuoteApproval).count() == 1
 
@@ -418,6 +422,7 @@ def test_quote_cannot_be_attached_to_another_households_visit(app):
     result = post(client, f"/visits/{another['id']}/quotes/{own_quote['id']}/approve",
         {'version': another['version'], 'digest': own_quote['digest']}, 'another-customer')
     assert result.json['code'] == 'quote_changed'
+    assert client.get(f"/api/home/visits/{another['id']}/quotes/{own_quote['id']}", headers=headers('another-customer')).status_code == 404
     with pytest.raises(IntegrityError):
         with database.db_session() as session:
             session.execute(update(HomeVisit).where(HomeVisit.booking_id == uuid.UUID(another['id'])).values(quote_id=uuid.UUID(own_quote['id'])))

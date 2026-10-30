@@ -247,15 +247,20 @@ def accept_quote(session, principal, booking_id, quote_id, body, operator, *, he
             'status': booking['status'], 'paymentAvailable': False}
 
 
-def quote_for_visit(session, booking, visit, uid, operator):
-    if not visit.quote_id:
+def quote_for_visit(session, booking, visit, uid, operator, quote_id=None):
+    key = identifier(quote_id) if quote_id is not None else visit.quote_id
+    if not key:
         return None
     row = session.execute(select(HomeQuote, HomeQuoteHelperAcceptance, HomeQuoteApproval, HomeMaterialReconciliation)
         .outerjoin(HomeQuoteHelperAcceptance, HomeQuoteHelperAcceptance.quote_id == HomeQuote.id)
         .outerjoin(HomeQuoteApproval, HomeQuoteApproval.quote_id == HomeQuote.id)
         .outerjoin(HomeMaterialReconciliation, HomeMaterialReconciliation.quote_id == HomeQuote.id)
-        .where(HomeQuote.id == visit.quote_id)).one()
+        .where(HomeQuote.id == key, HomeQuote.booking_id == booking['id'])).one_or_none()
+    if not row:
+        visits.fail('not_found', 'Quote not found.', 404)
     quote, helper_acceptance, approval, reconciliation = row
+    if not operator and uid != booking['eater_id'] and uid != quote.helper_id:
+        visits.fail('not_found', 'Quote not found.', 404)
     s = quote.snapshot
     result = {key: s[key] for key in ('currency', 'labor', 'materials', 'laborCents', 'materialsCapCents',
         'serviceFeeCents', 'taxCapCents', 'maximumTotalCents')}
@@ -263,14 +268,14 @@ def quote_for_visit(session, booking, visit, uid, operator):
         expiresAt=quote.expires_at.isoformat(), expired=now() >= quote.expires_at,
         helperAcceptedQuote=helper_acceptance is not None, approved=approval is not None,
         approvedAt=approval.created_at.isoformat() if approval else None,
-        paymentsAvailable=False)
-    if operator or uid == booking['cook_id']:
+        current=quote.id == visit.quote_id, paymentsAvailable=False)
+    if operator or uid == quote.helper_id:
         result['helperEarnings'] = {'laborNetCents': s['helperLaborNetCents'], 'commissionCents': s['helperCommissionCents'],
             'materialsMaximumCents': s['materialsCapCents'], 'maximumPayCents': s['helperLaborNetCents'] + s['materialsCapCents']}
     if reconciliation:
         result['reconciliation'] = {key: reconciliation.snapshot[key] for key in (
             'materialsActualCents', 'taxActualCents', 'customerFinalCents', 'unusedAllowanceCents')}
-        if operator or uid == booking['cook_id']:
+        if operator or uid == quote.helper_id:
             result['reconciliation']['helperActualPayCents'] = reconciliation.snapshot['helperActualPayCents']
     return result
 

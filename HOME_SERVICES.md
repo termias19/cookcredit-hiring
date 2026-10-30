@@ -68,6 +68,7 @@ Phone help in the design must not imply those authentication paths already exist
 | `POST /pricing` | Home owner only; saves an immutable draft with its expected predecessor. |
 | `POST /pricing/{id}/activate` | Home owner only; atomically activates the draft if its predecessor is still current. Body `{}`. |
 | `POST /visits/{id}/quotes` | Home operator; issues an immutable, itemized quote for an accepted visit and active rate card. |
+| `GET /visits/{id}/quotes/{quoteId}` | Scoped current or historical offer, with its original approvals and a `current` flag. Other households receive 404. |
 | `POST /visits/{id}/quotes/{quoteId}/accept` | Assigned helper accepts the quoted work and earnings. |
 | `POST /visits/{id}/quotes/{quoteId}/approve` | Customer only, after helper quote acceptance; records the reviewed quote digest. |
 | `POST /visits/{id}/materials/reconcile` | Home operator; manually records reviewed receipt allocations and final tax after work completion. Does not refund or transfer money. |
@@ -206,6 +207,9 @@ Expiration is the earlier of the rate card's validity period and visit start.
 The helper then accepts the itemized quote and earnings; only the customer can
 approve it afterward. Both routes use `{ "version": 4, "digest": "quoted-digest" }`
 with the current visit version. A quote approval is not payment confirmation.
+Refresh after each action: helper acceptance increments the visit version before
+customer approval. The historical offer route preserves access to earlier agreed
+amounts; an old offer cannot be reapproved after replacement.
 
 An issue hold, revoked helper permission, changed scope, expired quote, wrong
 digest or stale visit version blocks acceptance. Reissuing an offer selects a

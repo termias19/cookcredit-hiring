@@ -189,6 +189,17 @@ def issue_quote(booking_id):
     return jsonify(result), 201
 
 
+@home_bp.get('/visits/<booking_id>/quotes/<quote_id>')
+@home_auth
+@limiter.limit('60 per minute', key_func=lambda: g.user_id)
+def historical_quote(booking_id, quote_id):
+    operator = is_operator()
+    with db_session() as session:
+        booking, visit = visits.load_visit(session, booking_id, g.user_id, operator)
+        result = quotes.quote_for_visit(session, booking, visit, g.user_id, operator, quote_id)
+    return jsonify(quote=result)
+
+
 @home_bp.post('/visits/<booking_id>/quotes/<quote_id>/<any(accept,approve):decision>')
 @home_auth
 @limiter.limit('20 per minute', key_func=lambda: g.user_id)
