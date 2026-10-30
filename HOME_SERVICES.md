@@ -186,8 +186,8 @@ determine taxability, validate a jurisdiction, certify the review or assume tax
 is zero. Applicable tax policy needs approval before real quoting.
 
 Service minutes must match the original service type and total duration, using
-half-hour steps. Only cooking visits can quote ingredients and only cleaning
-visits can quote cleaning supplies. A request with `customer_supplies` cannot
+half-hour steps. Ingredients require cooking; supplies can include cleaning
+products or cooking consumables such as containers and labels. A request with `customer_supplies` cannot
 silently acquire a shopping allowance. At most 20 allowances are accepted, each
 with a nonempty label, a positive cap and an eligible category. Their sum cannot
 exceed the active rate card's material limit.

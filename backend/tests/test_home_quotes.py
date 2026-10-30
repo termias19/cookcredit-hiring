@@ -89,6 +89,16 @@ def test_integer_money_rounding_and_conservation():
             assert all(type(result[key]) is int for key in ('laborCents', 'serviceFeeCents', 'maximumTotalCents'))
 
 
+def test_cooking_can_include_storage_supplies_but_cleaning_cannot_add_food():
+    settings, _ = quotes.validate_rates(rates())
+    line = {'category': 'supplies', 'label': 'Food storage containers', 'capCents': 500}
+    result = quotes.calculate(settings, 'cooking', 90, 90, 0, [line], {'amountCents': 0})
+    assert result['materialsCapCents'] == 500
+    line['category'] = 'ingredients'
+    with pytest.raises(visits.HomeError, match='Materials must match'):
+        quotes.calculate(settings, 'cleaning', 90, 0, 90, [line], {'amountCents': 0})
+
+
 def test_owner_only_versioned_rates_and_stale_activation(app):
     client = app.test_client()
     assert client.get('/api/home/pricing', headers=headers('customer')).status_code == 403

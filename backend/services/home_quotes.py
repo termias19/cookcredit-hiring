@@ -142,9 +142,10 @@ def calculate(settings, service, duration, cooking_minutes, cleaning_minutes, ma
     material_lines = []
     for item in materials:
         visits.strict_object(item, ('category', 'label', 'capCents'))
+        # Cooking can need non-food supplies too (containers, labels or foil).
+        # Ingredients still require a cooking scope; every allowance is approved.
         if item['category'] not in ('ingredients', 'supplies') or (
-            item['category'] == 'ingredients' and service == 'cleaning' or
-            item['category'] == 'supplies' and service == 'cooking'):
+            item['category'] == 'ingredients' and service == 'cleaning'):
             visits.fail('scope_mismatch', 'Materials must match the requested services.')
         material_lines.append({'lineId': str(uuid.uuid4()), 'category': item['category'],
             'label': visits.bounded_text(item['label'], 'the material label', 120, required=True),
