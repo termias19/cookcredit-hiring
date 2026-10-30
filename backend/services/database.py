@@ -83,12 +83,14 @@ def db_session():
     webhook_dispatch_due = None
     billing_dispatch_due = None
     email_dispatch_due = None
+    home_dispatch_due = None
     try:
         yield session
         session.commit()
         webhook_dispatch_due = session.info.pop('webhook_dispatch_due', None)
         billing_dispatch_due = session.info.pop('billing_dispatch_due', None)
         email_dispatch_due = session.info.pop('email_dispatch_due', None)
+        home_dispatch_due = session.info.pop('home_dispatch_due', None)
     except Exception:
         session.rollback()
         raise
@@ -96,6 +98,13 @@ def db_session():
         session.close()
     # Never hold a connection while contacting the task service. A failed wakeup
     # cannot roll back committed work; the scheduler recovers pending deliveries.
+    if home_dispatch_due is not None:
+        try:
+            from services.home_dispatch import enqueue
+            enqueue(home_dispatch_due)
+        except Exception:
+            from services.operations import emit_event
+            emit_event('home_enqueue_failed', severity='ERROR')
     if webhook_dispatch_due is not None:
         try:
             from services.webhook_dispatch import enqueue_dispatch

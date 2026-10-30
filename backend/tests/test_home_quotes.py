@@ -389,7 +389,7 @@ def test_health_refuses_a_database_missing_the_required_home_migration(app):
     client = app.test_client()
     assert client.get('/api/home/health').status_code == 200
     with database.db_session() as session:
-        session.execute(text("DELETE FROM home_schema_migrations WHERE filename='002_quotes.sql'"))
+        session.execute(text("DELETE FROM home_schema_migrations WHERE filename='003_payments.sql'"))
     response = client.get('/api/home/health')
     assert response.status_code == 503 and response.json['code'] == 'temporary_error'
     assert response.headers['X-Request-ID'] == response.json['reference']

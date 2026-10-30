@@ -27,6 +27,7 @@ class HomeVisit(Base):
     helper_accepted_at = Column(DateTime(timezone=True))
     issue_open = Column(Boolean, nullable=False, default=False)
     quote_id = Column(UUID(as_uuid=True))
+    customer_confirmed_at = Column(DateTime(timezone=True))
     __table_args__ = (ForeignKeyConstraint(['booking_id', 'quote_id'], ['home_quotes.booking_id', 'home_quotes.id'],
         name='home_visit_current_quote_fk', use_alter=True),)
 
@@ -99,6 +100,7 @@ class HomeQuoteHelperAcceptance(Base):
     helper_id = Column(Text, ForeignKey('users.id'), nullable=False)
     digest = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (UniqueConstraint('quote_id', 'helper_id'),)
 
 
 class HomeQuoteApproval(Base):
@@ -107,6 +109,7 @@ class HomeQuoteApproval(Base):
     customer_id = Column(Text, ForeignKey('users.id'), nullable=False)
     digest = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (UniqueConstraint('quote_id', 'customer_id'),)
 
 
 class HomeMaterialReconciliation(Base):
@@ -119,3 +122,66 @@ class HomeMaterialReconciliation(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
     __table_args__ = (ForeignKeyConstraint(['booking_id', 'quote_id'], ['home_quotes.booking_id', 'home_quotes.id'],
         name='home_reconciliation_booking_quote_fk'),)
+
+
+class HomePayment(Base):
+    __tablename__ = 'home_payments'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    booking_id = Column(UUID(as_uuid=True), ForeignKey('home_visits.booking_id'), nullable=False)
+    quote_id = Column(UUID(as_uuid=True), ForeignKey('home_quote_approvals.quote_id'), nullable=False, unique=True)
+    customer_id = Column(Text, ForeignKey('users.id'), nullable=False)
+    helper_id = Column(Text, ForeignKey('users.id'), nullable=False)
+    amount_cents = Column(Integer, nullable=False)
+    refunded_cents = Column(Integer, nullable=False, default=0)
+    status = Column(Text, nullable=False, default='creating')
+    livemode = Column(Boolean, nullable=False)
+    checkout_attempt = Column(Integer, nullable=False, default=1)
+    checkout_id = Column(Text, unique=True)
+    checkout_url = Column(Text)
+    payment_intent_id = Column(Text, unique=True)
+    charge_id = Column(Text)
+    paid_at = Column(DateTime(timezone=True))
+    disputed = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (
+        ForeignKeyConstraint(['booking_id','quote_id'],['home_quotes.booking_id','home_quotes.id']),
+        ForeignKeyConstraint(['quote_id','customer_id'],['home_quote_approvals.quote_id','home_quote_approvals.customer_id']),
+        ForeignKeyConstraint(['quote_id','helper_id'],['home_quote_helper_acceptances.quote_id','home_quote_helper_acceptances.helper_id']),
+    )
+
+
+class HomeFinancialOperation(Base):
+    __tablename__ = 'home_financial_operations'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    booking_id = Column(UUID(as_uuid=True), ForeignKey('home_visits.booking_id'))
+    payment_id = Column(UUID(as_uuid=True), ForeignKey('home_payments.id'))
+    actor_id = Column(Text, ForeignKey('users.id'), nullable=False)
+    kind = Column(Text, nullable=False)
+    dedupe_key = Column(Text, nullable=False, unique=True)
+    payload = Column(JSONB, nullable=False)
+    status = Column(Text, nullable=False, default='pending')
+    provider_id = Column(Text)
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    first_started_at = Column(DateTime(timezone=True))
+    lease_until = Column(DateTime(timezone=True))
+    lease_token = Column(UUID(as_uuid=True))
+    last_error = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class HomeStripeEvent(Base):
+    __tablename__ = 'home_stripe_events'
+    id = Column(Text, primary_key=True)
+    kind = Column(Text, nullable=False)
+    object_id = Column(Text, nullable=False)
+    payment_id = Column(UUID(as_uuid=True), ForeignKey('home_payments.id'))
+    helper_id = Column(Text, ForeignKey('users.id'))
+    livemode = Column(Boolean, nullable=False)
+    status = Column(Text, nullable=False, default='pending')
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    lease_until = Column(DateTime(timezone=True))
+    lease_token = Column(UUID(as_uuid=True))
+    last_error = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)

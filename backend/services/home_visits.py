@@ -254,7 +254,7 @@ def transition(session, principal, booking_id, body, operator):
     elif action == 'cancel':
         if uid != booking['eater_id'] and not operator:
             fail('forbidden', 'Ask CookCredit to cancel this visit.', 403)
-        if status not in ('requested', 'accepted'):
+        if status not in ('requested', 'accepted', 'confirmed'):
             fail('cancellation_review_required', 'CookCredit must review this cancellation.', 409)
         changes.update(status='cancelled', cancelled_by='system' if operator else 'eater')
     elif action == 'report_issue':
@@ -266,6 +266,9 @@ def transition(session, principal, booking_id, body, operator):
         if not visit.issue_open:
             fail('invalid_transition', 'There is no open issue.', 409)
         visit.issue_open = False
+    elif action in ('start', 'finish', 'confirm'):
+        from services.home_payments import service_action
+        changes.update(service_action(session, principal, booking, visit, action))
     else:
         fail('unsupported_action', 'This action is not available.')
     visit.version += 1
@@ -275,6 +278,8 @@ def transition(session, principal, booking_id, body, operator):
     event(session, uid, action, booking['id'], visit.version,
           **({'helperId': changes['cook_id']} if action == 'assign' else {}))
     session.flush()
+    from services.home_payments import on_visit_change
+    on_visit_change(session, booking, visit, action)
     return {'id': str(booking['id']), 'version': visit.version, 'status': booking['status']}
 
 

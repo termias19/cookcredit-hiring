@@ -20,7 +20,7 @@ from services import database
 from services.home_visits import HomeError
 from services.operations import emit_event
 
-REQUIRED_HOME_MIGRATION = '002_quotes.sql'
+REQUIRED_HOME_MIGRATION = '003_payments.sql'
 
 
 def check_home_schema(session):
@@ -91,16 +91,22 @@ def create_app(config=None):
 
     @app.get('/api/home/health')
     def health():
+        from services.home_stripe import checkout_allowed
         if not app.config['HOME_ENABLED']:
             return jsonify(status='disabled', paymentsAvailable=False)
         with database.db_session() as session:
             check_home_schema(session)
-        return jsonify(status='ok', paymentsAvailable=False)
+        return jsonify(status='ok', paymentsAvailable=checkout_allowed())
 
     if app.config['HOME_ENABLED']:
         origins = [v.strip() for v in os.getenv('HOME_FRONTEND_ORIGINS', '').split(',') if v.strip()]
         if not app.testing:
             raw = database_url()
+            if os.getenv('K_SERVICE') and os.getenv('FIREBASE_AUTH_EMULATOR_HOST'):
+                raise RuntimeError('Auth emulator is forbidden in a deployed Home service')
+            from services.home_stripe import mode, client
+            if mode() != 'off':
+                client()  # Validate key mode only; no provider network request.
             ZoneInfo(os.getenv('HOME_SERVICE_TIMEZONE', 'America/New_York'))
             if make_url(raw).username != 'cookcredit_home_app':
                 raise RuntimeError('Home runtime cannot use the migration role')

@@ -108,6 +108,10 @@ def offer_ready(session, booking, visit):
         # Stage 4 must provide an explicit void/refund/requote lifecycle. Never
         # silently replace the price after a payment attempt has been created.
         visits.fail('payment_in_progress', 'Review the existing payment before changing this quote.', 409)
+    from models.home_service import HomePayment
+    if session.execute(select(HomePayment.id).where(HomePayment.booking_id == booking['id'],
+        HomePayment.status.not_in(('expired', 'cancelled'))).limit(1)).scalar():
+        visits.fail('payment_in_progress', 'Review the existing payment before changing this quote.', 409)
 
 
 def scope_digest(booking, visit):
@@ -325,5 +329,7 @@ def reconcile_materials(session, principal, booking_id, body, operator):
     visit.version += 1
     visits.event(session, principal['uid'], 'materials_reconciled', booking['id'], visit.version, quoteId=str(quote.id))
     session.flush()
+    from services.home_payments import ensure_settlement
+    ensure_settlement(session, booking, visit)
     return {'id': str(booking['id']), 'quoteId': str(quote.id), 'version': visit.version,
             'status': booking['status'], 'paymentAvailable': False}

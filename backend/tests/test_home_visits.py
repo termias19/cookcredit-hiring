@@ -174,8 +174,11 @@ def test_review_assignment_capability_accept_and_audit(app):
     accepted = change(client, row, 'accept', uid='helper')
     assert accepted.status_code == 200 and accepted.json['status'] == 'accepted'
     # No backdoor to mark an uncharged visit paid, started, completed or paid out.
-    for action in ('pay', 'start', 'finish', 'confirm', 'payout'):
+    for action in ('pay', 'payout'):
         assert change(client, accepted.json, action).status_code == 400
+    for action in ('start', 'finish', 'confirm'):
+        actor = 'customer' if action == 'confirm' else 'helper'
+        assert change(client, accepted.json, action, uid=actor).status_code == 409
     events = client.get('/api/home/visits/' + row['id'] + '/activity', headers=headers('operator')).json['events']
     assert [e['action'] for e in events] == ['visit_requested', 'review', 'assign', 'accept']
     assert payload()['instructions']['visitNotes'] not in str(events)

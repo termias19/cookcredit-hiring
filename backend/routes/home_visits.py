@@ -7,6 +7,7 @@ from middleware.auth import require_identity, require_verified_email
 from services.database import db_session
 from services import home_visits as visits
 from services import home_quotes as quotes
+from services import home_payments as payments, home_stripe
 from models.home_service import HomeEvent
 from sqlalchemy import select
 
@@ -56,8 +57,12 @@ def me():
     # Cook onboarding/approval is separate from creating an inert customer identity.
     with db_session() as session:
         visits.sync_identity(session, principal())
-    return jsonify(userId=g.user_id, operator=is_operator(), owner=is_owner(),
-                   consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT, paymentsAvailable=False)
+        from models.home_service import HomeHelperPermission
+        helper = session.get(HomeHelperPermission, g.user_id)
+    return jsonify(userId=g.user_id, name=g.name, email=g.email, operator=is_operator(), owner=is_owner(),
+                   helper=bool(helper and helper.enabled),
+                   consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT,
+                   paymentsAvailable=home_stripe.checkout_allowed())
 
 
 @home_bp.post('/visits')
@@ -88,6 +93,7 @@ def detail(booking_id):
         booking, visit = visits.load_visit(session, booking_id, g.user_id, is_operator())
         result = visits.serialize(booking, visit, detail=True)
         result['quote'] = quotes.quote_for_visit(session, booking, visit, g.user_id, is_operator())
+        result['payment'] = payments.dto(session, booking, visit, payments.payment_for_visit(session, booking['id']), g.user_id, is_operator())
     return jsonify(result)
 
 
@@ -223,3 +229,66 @@ def reconcile_materials(booking_id):
         result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'materials:reconcile:' + booking_id,
             body, lambda: quotes.reconcile_materials(session, actor, booking_id, body, True))
     return jsonify(result)
+
+
+@home_bp.post('/visits/<booking_id>/checkout')
+@home_auth
+@limiter.limit('10 per minute', key_func=lambda: g.user_id)
+def checkout(booking_id):
+    body, actor, operator = json_body(), principal(), is_operator()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'checkout:' + booking_id,
+            body, lambda: payments.prepare_checkout(session, actor, booking_id, body, operator))
+    return jsonify(result), 202
+
+
+@home_bp.post('/visits/<booking_id>/payment/refresh')
+@home_auth
+@limiter.limit('4 per minute', key_func=lambda: g.user_id)
+def refresh_payment(booking_id):
+    body, actor = json_body(), principal()
+    visits.strict_object(body, ())
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'payment-refresh:' + booking_id,
+            body, lambda: payments.refresh_payment(session, actor, booking_id, is_operator()))
+    return jsonify(result), 202
+
+
+@home_bp.post('/stripe/webhook')
+@limiter.exempt
+def stripe_webhook():
+    from services.home_finance_worker import receive_event
+    request.max_content_length = 256 * 1024
+    try:
+        event = home_stripe.StripeHome().verify(request.get_data(cache=False), request.headers.get('Stripe-Signature', ''))
+    except Exception:
+        return jsonify(error='Invalid webhook signature'), 400
+    with db_session() as session:
+        result = receive_event(session, event)
+    return jsonify(result)
+
+
+@home_bp.post('/internal/dispatch')
+@limiter.exempt
+def internal_dispatch():
+    from services.internal_auth import internal_request_authorized
+    from services.home_finance_worker import dispatch_events, dispatch_operations
+    if not internal_request_authorized(request):
+        return jsonify(error='Forbidden'), 403
+    events = dispatch_events(limit=5)
+    operations = dispatch_operations(limit=5)
+    return jsonify(events=events, operations=operations)
+
+
+@home_bp.get('/operations')
+@home_auth
+@limiter.limit('12 per minute', key_func=lambda: g.user_id)
+def financial_operations():
+    if not is_owner():
+        visits.fail('forbidden', 'Home owner access is required.', 403)
+    from models.home_service import HomeFinancialOperation
+    with db_session() as session:
+        rows = session.execute(select(HomeFinancialOperation).order_by(HomeFinancialOperation.created_at.desc()).limit(100)).scalars().all()
+        result = [{'id': str(row.id), 'kind': row.kind, 'status': row.status, 'lastError': row.last_error,
+                   'bookingId': str(row.booking_id) if row.booking_id else None, 'createdAt': row.created_at.isoformat()} for row in rows]
+    return jsonify(operations=result)
