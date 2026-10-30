@@ -333,3 +333,44 @@ staging acceptance.
 Do not create a second generic email provider or scheduler. Mutation commands
 ensure the actor exists without rewriting their profile. `/me` handles explicit
 profile refresh; this avoids unnecessary writes and cross-participant FK locks.
+
+### Release acceptance procedure
+
+CI runs the full backend/deployment and frontend regressions, builds the Home
+entry, scans public Git history for secrets and audits installed Python and npm
+dependencies. Production npm advisories fail at every severity; build tooling
+fails at moderate or higher. Review the reported low-severity tooling findings
+as well. The current upstream `deepmerge` chain belongs to the existing Workbox
+build tooling, not the shipped Home browser bundle. Do not force npm's proposed
+downgrade to an obsolete PWA plugin to hide that finding.
+
+Home reuses the existing bounded browser error reporter and confirmed file-save
+utility. Diagnostics contain categories and references, never account action
+codes, visit URLs, household details or raw error text. A download fallback is
+reported as requested; only a completed file write is reported as saved.
+
+Before enabling public Home access, record these results privately against the
+exact deployed revision:
+
+1. Check every customer/helper/operator screen and action in a supported desktop
+   and mobile browser, including keyboard focus, back/refresh, expired links,
+   retries, cancellation and issue holds. Verify an email link opened in another
+   tab returns to the intended request or visit after sign-in.
+2. Verify actual welcome, verification/reset and visit-message receipt through
+   the existing sender, without leaking household instructions in messages.
+3. Complete a controlled visit from request, manual helper approval/assignment
+   and itemized quote through both approvals, work completion, customer
+   confirmation and receipt reconciliation. Confirm the browser saved a receipt.
+   A local fake provider verifies state transitions, not live money movement.
+4. Verify deployed identity/App Check settings, cross-household access denial,
+   helper revocation, database grants, private object access, immutable audit,
+   exact origins, shared rate limits and secret scope. Local tests do not certify
+   actual cloud IAM or prove absence of compromise.
+5. Verify signed webhook handling, retry/recovery, queue age alerts and rollback.
+   Keep payments unpaid unless a real transaction is separately authorized.
+   Checkout redirect, payment confirmation, refund, transfer and bank payout are
+   separate acceptance outcomes; never infer one from another.
+
+Keep Home disabled or private while any required deployed acceptance is open.
+Do not publish household records, test identities, tokens or operational evidence
+in the source repository.

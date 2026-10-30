@@ -7,7 +7,7 @@ test("Home email continuation accepts only internal task routes", () => {
     "request",
     "helping",
     "payout",
-    "visit/0bcec02d-ae12-4932-8421-afe2310f50ba",
+    "visit/11111111-1111-4111-8111-111111111111",
   ])
     assert.equal(safeHomeRoute(route), route);
   for (const route of [
@@ -24,7 +24,7 @@ test("Home email continuation accepts only internal task routes", () => {
 });
 test("Home diagnostics categorize routes without sending private identifiers or codes", () => {
   assert.equal(
-    homeScreenCategory("#visit/8ca079ad-1693-4d09-a80c-0a4e3a9e7dd0"),
+    homeScreenCategory("#visit/11111111-1111-4111-8111-111111111111"),
     "home_customer",
   );
   assert.equal(homeScreenCategory("#account/action?oobCode=private"), "auth");
