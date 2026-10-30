@@ -56,6 +56,9 @@ jobs:
       - name: Audit production frontend dependencies
         run: npm audit --omit=dev --audit-level=low
         working-directory: frontend
+      - name: Audit build tooling for moderate and higher advisories
+        run: npm audit --audit-level=moderate
+        working-directory: frontend
   secrets:
     runs-on: ubuntu-latest
     steps:

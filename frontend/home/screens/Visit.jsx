@@ -39,7 +39,9 @@ export default function Visit({ id, profile }) {
     load().catch((e) => setError(e.message));
     api(`/visits/${id}/receipts`)
       .then((v) => setReceipts(v.receipts))
-      .catch(() => setError('Receipt photos could not be loaded. Use Refresh to retry.'));
+      .catch(() =>
+        setError("Receipt photos could not be loaded. Use Refresh to retry."),
+      );
     return () => {
       mounted.current = false;
       clearTimeout(timer.current);
@@ -379,10 +381,18 @@ export default function Visit({ id, profile }) {
                   key={r.id}
                   className="text receipt"
                   disabled={busy}
-                  onClick={() => run(async () => {
-                    const result = await downloadReceipt(id, r.id);
-                    setNotice(result === 'saved' ? 'Receipt saved to your chosen file.' : result === 'cancelled' ? 'Save cancelled. No receipt was downloaded.' : 'Download requested. Check your browser downloads to confirm the file was saved.');
-                  })}
+                  onClick={() =>
+                    run(async () => {
+                      const result = await downloadReceipt(id, r.id);
+                      setNotice(
+                        result === "saved"
+                          ? "Receipt saved to your chosen file."
+                          : result === "cancelled"
+                            ? "Save cancelled. No receipt was downloaded."
+                            : "Download requested. Check your browser downloads to confirm the file was saved.",
+                      );
+                    })
+                  }
                 >
                   Download receipt ·{" "}
                   {new Date(r.createdAt).toLocaleDateString()}

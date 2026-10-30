@@ -94,7 +94,7 @@ export default function App() {
   else if (route === "request") content = <RequestVisit profile={profile} />;
   else if (route === "visits") content = <Visits />;
   else if (/^visit\/[a-f0-9-]{36}$/.test(route))
-    content = <Visit id={route.split("/")[1]} profile={profile} />;
+    content = <Visit key={route} id={route.split("/")[1]} profile={profile} />;
   else if (route === "team" && profile.operator)
     content = <Team profile={profile} />;
   else if (route === "payout" && profile.helper) content = <Payout />;
