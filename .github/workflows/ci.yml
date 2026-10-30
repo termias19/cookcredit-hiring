@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r backend/requirements.txt pytest==8.3.5 PyYAML==6.0.2
+      - run: pip install -r backend/requirements.txt pytest==9.0.3 PyYAML==6.0.2
       - name: Migrations and regression tests
         working-directory: backend
         env:
