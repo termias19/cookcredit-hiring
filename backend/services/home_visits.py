@@ -97,12 +97,18 @@ def validate_request(body):
                     visitNotes=bounded_text(instructions['visitNotes'], 'visit instructions', 1000)))
 
 
-def sync_identity(session, principal):
+def sync_identity(session, principal, *, refresh=True):
     # The verified identity supplies these fields, never a client-selected UID or role.
     statement = pg_insert(User.__table__).values(id=principal['uid'], email=principal['email'],
         name=principal.get('name') or principal['email'], roles=['eater'], active_role='eater')
-    session.execute(statement.on_conflict_do_update(index_elements=[User.id],
-        set_={'name': statement.excluded.name, 'email': statement.excluded.email}))
+    if refresh:
+        session.execute(statement.on_conflict_do_update(index_elements=[User.id],
+            set_={'name': statement.excluded.name, 'email': statement.excluded.email}))
+    else:
+        # Mutations need only an existing actor FK. Updating the indexed email
+        # on every command both amplifies writes and can deadlock with another
+        # participant's booking FK lock. /me explicitly refreshes profile data.
+        session.execute(statement.on_conflict_do_nothing(index_elements=[User.id]))
 
 
 def fingerprint(value):
@@ -112,7 +118,7 @@ def fingerprint(value):
 def command(session, principal, key, operation, body, execute):
     if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,128}', key):
         fail('idempotency_key_required', 'A request reference is required. Please retry from the page.')
-    sync_identity(session, principal)
+    sync_identity(session, principal, refresh=False)
     uid, digest = principal['uid'], hashlib.sha256(key.encode()).hexdigest()
     # Cross-process transaction lock; no external side effect can escape a rollback.
     session.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
@@ -153,7 +159,7 @@ def create_visit(session, principal, body):
 
 BOOKING_FIELDS = (Booking.id, Booking.eater_id, Booking.cook_id, Booking.status,
     Booking.scheduled_date, Booking.scheduled_start_time, Booking.estimated_duration,
-    Booking.eater_address, Booking.created_at)
+    Booking.eater_address, Booking.created_at, Booking.stripe_payment_intent_id)
 
 
 def helper_allowed(session, uid, service, *, lock=False):
@@ -198,6 +204,7 @@ def serialize(booking, visit, *, detail=False):
         'durationMinutes': int(booking['estimated_duration'] * 60),
         'reviewed': visit.reviewed_at is not None, 'assigned': booking['cook_id'] is not None,
         'helperAccepted': visit.helper_accepted_at is not None, 'issueOpen': visit.issue_open,
+        'quoteId': str(visit.quote_id) if visit.quote_id else None,
         'quote': None, 'paymentAvailable': False}
     if detail:
         result.update(address=booking['eater_address'], instructions=visit.instructions,
@@ -213,7 +220,7 @@ def transition(session, principal, booking_id, body, operator):
     if body['version'] != visit.version:
         fail('stale_version', 'This visit changed. Refresh it before continuing.', 409)
     action, status, uid = body['action'], booking['status'], principal['uid']
-    if status in ('cancelled', 'completed'):
+    if status == 'cancelled' or status == 'completed' and action not in ('report_issue', 'resolve_issue'):
         fail('visit_closed', 'This visit is already closed.', 409)
     if visit.issue_open and action not in ('cancel', 'resolve_issue'):
         fail('issue_open', 'CookCredit needs to resolve the reported issue first.', 409)

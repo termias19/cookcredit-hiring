@@ -1,7 +1,7 @@
 # CookCredit Home service delivery
 
-Home services let customers request cooking, cleaning or both. The first backend
-stage stores requests, consent, review, assignment and helper acceptance. It is
+Home services let customers request cooking, cleaning or both. The backend
+stores requests, consent, review, assignment, versioned quotes and approvals. It is
 disabled by default and is not a public booking or payment service yet.
 
 ## Stages and acceptance gates
@@ -10,7 +10,7 @@ disabled by default and is not a public booking or payment service yet.
 | --- | --- | --- |
 | 1. Architecture and contract | Reuse Firebase identity and the existing User, CookProfile and Booking models in a separate Home runtime/database. Contract below. | Hiring never registers Home routes or runs Home migrations. |
 | 2. Durable requests | Customer ownership, explicit visit consent, operator review, service-specific helper permissions, assignment, acceptance, cancellation, issue hold, audit and idempotency. Implemented in this branch. | PostgreSQL/API tests pass, including concurrent retries, stale writes, permission revocation and rollback. Provisioned runtime permissions still need staging acceptance. |
-| 3. Quotes | Owner-controlled, versioned rates; labor, cleaning, materials, customer fees, helper commission and applicable taxes in integer cents. | Customer approves an immutable itemized quote; materials have caps and receipt reconciliation. Current preview figures are examples, not published rates. |
+| 3. Quotes | Implemented: owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and manual receipt-review accounting. All money uses integer cents. | Tax requires explicit operator review. Actual receipt attachments and deployed SQL grants remain staging/interface gates. Preview figures are examples, not published rates. |
 | 4. Payments and settlement | Separate Home booking payment references using the existing Stripe account; signed durable webhooks, refunds, issue holds, provider idempotency and connected-account transfers. | Test-mode payment/refund/transfer reconciliation passes. A success redirect alone never marks a booking paid. Live charges and transfers remain off. |
 | 5. Connected interfaces | Existing customer design, authenticated helper work and owner operations screens use this API. | Refresh, email/text return links and role navigation recover the same durable visit. Account creation and cook onboarding reuse existing identity mechanisms. |
 | 6. Communications and accessibility | Existing branded delivery transport/outbox patterns, appointment receipts, callback help, large controls and keyboard/screen-reader support. | Actual deliveries, consent preferences, expired links and accessible task completion pass. Marketing consent is separate from service messages. |
@@ -64,6 +64,13 @@ Phone help in the design must not imply those authentication paths already exist
 | `POST /visits/{id}/actions` | Versioned command with an `Idempotency-Key`. Actions below. |
 | `PUT /helpers/{uid}/permission` | Home owner only, with an `Idempotency-Key`. Explicit boolean `enabled`, `cooking`, `cleaning`. Helper must first have a Home identity. |
 | `GET /visits/{id}/activity?afterVersion=-1` | Home operator only; at most 100 events, pagination by version. Includes actor/action/time, not household notes or contact details. |
+| `GET /pricing` | Home operator; current rate-card ID and latest 50 immutable versions. No public price catalog or automatically seeded rates. |
+| `POST /pricing` | Home owner only; saves an immutable draft with its expected predecessor. |
+| `POST /pricing/{id}/activate` | Home owner only; atomically activates the draft if its predecessor is still current. Body `{}`. |
+| `POST /visits/{id}/quotes` | Home operator; issues an immutable, itemized quote for an accepted visit and active rate card. |
+| `POST /visits/{id}/quotes/{quoteId}/accept` | Assigned helper accepts the quoted work and earnings. |
+| `POST /visits/{id}/quotes/{quoteId}/approve` | Customer only, after helper quote acceptance; records the reviewed quote digest. |
+| `POST /visits/{id}/materials/reconcile` | Home operator; manually records reviewed receipt allocations and final tax after work completion. Does not refund or transfer money. |
 
 Create request:
 
@@ -111,10 +118,12 @@ Commands use `{ "action": "review", "version": 0 }`. Supported actions:
 - `report_issue`: authorized visit participant; holds further progress.
 - `resolve_issue`: operator only; recorded as a separate audited change.
 
-No action marks a visit quoted, paid, started, finished or transferred yet. Detail
-responses return `quote: null` and `paymentAvailable: false`. The legacy required
-price fields are zero while unpriced; they are neither a quote nor free service.
-Stages 3–4 must introduce authoritative quote/payment records before allowing work.
+Completed visits can still report and resolve an issue; cancellation and service
+edits remain closed. No action marks a visit paid, started, finished or transferred
+yet. The quote routes below add offers to the same visit. Lists return `quoteId`
+without fetching financial detail; the detail route expands the current `quote`.
+Legacy required price fields are zero while unpriced; a quoted visit's estimate
+mirrors its maximum quoted offer. These fields never authorize a payment.
 
 `Idempotency-Key` is 16–128 URL-safe alphanumeric/underscore/hyphen characters.
 Keep one key for retries of the same command and use a fresh key for a new action.
@@ -122,6 +131,102 @@ A repeated key returns the committed result; a changed payload returns 409.
 The response contains no instructions or address. Expected versions reject stale
 writes with 409. Refresh the visit before offering a new command. A 503 means
 retry the same key after the indicated delay, not create a second request.
+
+## Rates and quotes
+
+All mutation routes above require an `Idempotency-Key`. Home's rate cards use the
+same immutable-version approach as Hiring's billing catalog, but do not change
+subscription plans or create Stripe products. No rate is active at startup.
+Only the configured Home owner can save and activate pricing. Initial example
+request (illustrative values, not published prices):
+
+```json
+{
+  "previousId": null,
+  "currency": "usd",
+  "rates": {"cookingHourlyCents": 4500, "cleaningHourlyCents": 4000},
+  "customerFeeBps": 1000,
+  "helperCommissionBps": 1500,
+  "materialsCapCents": 10000,
+  "quoteValidMinutes": 1440
+}
+```
+
+Hourly rates support 100–100,000 cents; fee/commission basis points support
+0–10,000; the overall material allowance supports 0–1,000,000 cents; validity
+supports 30–10,080 minutes. These are input bounds, not price or legal guidance.
+Use `previousId` from the current active rate card for a replacement. Two drafts
+can share a predecessor, but only one can activate against it. To roll back a
+rate, save another version using the old settings and the current predecessor.
+Changing rates never rewrites an existing quote or approval.
+
+Quote request for a 150-minute cooking/cleaning visit:
+
+```json
+{
+  "version": 3,
+  "rateCardId": "the-current-rate-card-uuid",
+  "cookingMinutes": 90,
+  "cleaningMinutes": 60,
+  "materials": [
+    {"category": "ingredients", "label": "Agreed grocery allowance", "capCents": 2500},
+    {"category": "supplies", "label": "Agreed cleaning supplies", "capCents": 500}
+  ],
+  "tax": {
+    "amountCents": 0,
+    "reviewConfirmed": true,
+    "reviewReference": "operator-review-reference"
+  }
+}
+```
+
+Replace the reference placeholders with real IDs. Tax review is mandatory even
+when its result is zero. The API records the operator's review; it does not
+determine taxability, validate a jurisdiction, certify the review or assume tax
+is zero. Applicable tax policy needs approval before real quoting.
+
+Service minutes must match the original service type and total duration, using
+half-hour steps. Only cooking visits can quote ingredients and only cleaning
+visits can quote cleaning supplies. A request with `customer_supplies` cannot
+silently acquire a shopping allowance. At most 20 allowances are accepted, each
+with a nonempty label, a positive cap and an eligible category. Their sum cannot
+exceed the active rate card's material limit.
+
+Each labor line rounds rate × minutes / 60 half up in integer arithmetic. The
+customer fee and helper commission apply to labor only, with half-up rounding.
+The offer records labor, material caps, customer fee, tax cap and maximum total.
+The helper's view separately shows labor after commission and the maximum
+material reimbursement. Materials are reimbursed at reviewed cost, not profit.
+Customers do not receive internal commission or tax/receipt review references.
+
+Issuing a quote requires operator review, an eligible assigned helper and that
+helper's visit acceptance. The offer binds the immutable rate card, helper,
+agreed instructions/address/schedule, amounts and expiration to its digest.
+Expiration is the earlier of the rate card's validity period and visit start.
+The helper then accepts the itemized quote and earnings; only the customer can
+approve it afterward. Both routes use `{ "version": 4, "digest": "quoted-digest" }`
+with the current visit version. A quote approval is not payment confirmation.
+
+An issue hold, revoked helper permission, changed scope, expired quote, wrong
+digest or stale visit version blocks acceptance. Reissuing an offer selects a
+new current quote and requires fresh helper/customer approvals. Previous offers
+and approvals remain immutable. If a payment reference exists, reissuing is
+blocked until stage 4 provides an explicit void/refund workflow.
+
+After service reaches `pending_confirmation` or `completed`, the operator can
+record actual materials by quote `lineId`, `actualCents` and an opaque UUID
+`receiptReference`, with `receiptsReviewed: true`, the current `version`,
+`quoteId` and another reviewed `tax` object. Every quoted line must appear once;
+actual cost cannot exceed its cap and a positive cost needs a receipt reference.
+Final reviewed tax cannot exceed its quoted cap. An open issue blocks this step.
+The result records the customer final total, unused allowance and actual helper
+allocation. It does not mark money refunded, available or paid out.
+
+Receipt references currently record a human operator's review of evidence held
+outside this API. The backend does not yet upload or verify attachment existence
+or parse receipts. Private evidence storage/access and real service completion
+are stage 5 gates. Accounting tests seed a completed status solely to exercise
+reconciliation; they are not evidence of a completed customer journey.
 
 ## Runtime and migration controls
 
@@ -147,8 +252,11 @@ Default: `HOME_SERVICES_ENABLED` unset. To prepare isolated staging:
    capacity or deploy a service. Validate IAM, SQL grants, TLS/private access and
    quotas before exposing staging.
 
-The app role receives SELECT/INSERT/UPDATE only on operational tables; events
-and command history receive SELECT/INSERT only. It must not own those tables or
+The app role receives SELECT/INSERT/UPDATE only on operational tables and
+SELECT/UPDATE on the pricing pointer. Events, command history, rate cards, quotes,
+helper acceptances, customer approvals and reconciliations receive SELECT/INSERT
+only. Startup and health verify the required Home migration marker, not merely
+database connectivity. The app role must not own append-only tables or
 have inherited UPDATE/DELETE privileges. Use the migrator for reviewed retention
 operations. Stage 7 must verify these actual deployed privileges.
 
@@ -164,7 +272,8 @@ Run from the repository root:
 python -m pytest backend/tests/test_home_visits.py -q
 ```
 
-Coverage includes concurrent retries, stale concurrent updates, customer/helper
+`tests/test_home_quotes.py` also covers pricing and financial concurrency. Run
+both files for Home acceptance. Coverage includes concurrent retries, stale concurrent updates, customer/helper
 scope, live helper permission revocation, cooking/cleaning capabilities, consent,
 rollback, safe errors and default-off isolation. On a local PostgreSQL install
 without PostGIS the fixture omits only unused spatial columns; spatial behavior
@@ -175,4 +284,6 @@ endpoint, status, duration and exception class, never exception messages, tokens
 request bodies or SQL parameters. The durable audit event commits with the state
 change. Events are not a message-delivery acknowledgement: stage 6 will connect
 them to the existing durable delivery patterns and add retry/age monitoring.
-Do not create a second generic email provider or scheduler.
+Do not create a second generic email provider or scheduler. Mutation commands
+ensure the actor exists without rewriting their profile. `/me` handles explicit
+profile refresh; this avoids unnecessary writes and cross-participant FK locks.

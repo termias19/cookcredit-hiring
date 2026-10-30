@@ -20,6 +20,15 @@ from services import database
 from services.home_visits import HomeError
 from services.operations import emit_event
 
+REQUIRED_HOME_MIGRATION = '002_quotes.sql'
+
+
+def check_home_schema(session):
+    # A live database connection alone does not mean the new API can serve it.
+    session.execute(text("SELECT product FROM home_runtime_guard WHERE product = 'home-services' "
+        "AND EXISTS (SELECT 1 FROM home_schema_migrations WHERE filename=:migration)"),
+        {'migration': REQUIRED_HOME_MIGRATION}).scalar_one()
+
 
 def database_url():
     if os.getenv('COOKCREDIT_PRODUCT') != 'home-services':
@@ -85,7 +94,7 @@ def create_app(config=None):
         if not app.config['HOME_ENABLED']:
             return jsonify(status='disabled', paymentsAvailable=False)
         with database.db_session() as session:
-            session.execute(text("SELECT product FROM home_runtime_guard WHERE product = 'home-services'")).scalar_one()
+            check_home_schema(session)
         return jsonify(status='ok', paymentsAvailable=False)
 
     if app.config['HOME_ENABLED']:
@@ -110,7 +119,7 @@ def create_app(config=None):
             # runs no Hiring app and imports none of its blueprints.
             database.init_db(url=raw)
             with database.db_session() as session:
-                session.execute(text("SELECT product FROM home_runtime_guard WHERE product = 'home-services'")).scalar_one()
+                check_home_schema(session)
             limiter.init_app(app)
         else:
             from extensions import limiter

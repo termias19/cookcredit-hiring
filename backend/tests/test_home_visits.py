@@ -24,6 +24,7 @@ from models.home_service import HomeVisit, HomeEvent, HomeCommand, HomeHelperPer
 from services import database, home_visits as visits
 from services import hiring_access
 from home_app import create_app, database_url
+from migrations.run_migrations import transaction_body
 
 
 @pytest.fixture
@@ -48,9 +49,12 @@ def home_db(monkeypatch):
                 if not spatial:
                     ddl = re.sub(r'^\s*(?:base_location|eater_location)\s+geography\([^\n]+\),\s*\n', '', ddl, flags=re.I | re.M)
                 conn.exec_driver_sql(ddl)
-            sql = (Path(__file__).parents[1] / 'home/migrations/001_booking_workflow.sql').read_text()
-            conn.exec_driver_sql(sql)
-            conn.exec_driver_sql(sql)  # Replay is safe; it never applies in Hiring migrations.
+            conn.exec_driver_sql('CREATE TABLE home_schema_migrations (filename TEXT PRIMARY KEY)')
+            for path in sorted((Path(__file__).parents[1] / 'home/migrations').glob('[0-9][0-9][0-9]_*.sql')):
+                sql = transaction_body(path.read_text())
+                conn.exec_driver_sql(sql)
+                conn.exec_driver_sql(sql)  # Replay is safe; never applies in Hiring migrations.
+                conn.execute(text('INSERT INTO home_schema_migrations VALUES (:name)'), {'name': path.name})
         monkeypatch.setattr(database, 'engine', engine)
         monkeypatch.setattr(database, 'SessionLocal', sessionmaker(bind=engine, expire_on_commit=False))
         yield engine

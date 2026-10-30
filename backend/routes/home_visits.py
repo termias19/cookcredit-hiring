@@ -6,6 +6,7 @@ from extensions import limiter
 from middleware.auth import require_identity, require_verified_email
 from services.database import db_session
 from services import home_visits as visits
+from services import home_quotes as quotes
 from models.home_service import HomeEvent
 from sqlalchemy import select
 
@@ -86,6 +87,7 @@ def detail(booking_id):
     with db_session() as session:
         booking, visit = visits.load_visit(session, booking_id, g.user_id, is_operator())
         result = visits.serialize(booking, visit, detail=True)
+        result['quote'] = quotes.quote_for_visit(session, booking, visit, g.user_id, is_operator())
     return jsonify(result)
 
 
@@ -135,3 +137,78 @@ def activity(booking_id):
         result = [{'action': e.action, 'version': e.version, 'at': e.created_at.isoformat(),
                    'actorId': e.actor_id, 'details': e.details} for e in events]
     return jsonify(events=result, nextAfterVersion=result[-1]['version'] if len(result) == 100 else None)
+
+
+@home_bp.get('/pricing')
+@home_auth
+@limiter.limit('30 per minute', key_func=lambda: g.user_id)
+def pricing():
+    if not is_operator():
+        visits.fail('forbidden', 'CookCredit operator access is required.', 403)
+    with db_session() as session:
+        result = quotes.pricing(session)
+    return jsonify(result)
+
+
+@home_bp.post('/pricing')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def save_pricing():
+    if not is_owner():
+        visits.fail('forbidden', 'Only the Home owner can set prices.', 403)
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'pricing:create',
+            body, lambda: quotes.save_rates(session, actor, body))
+    return jsonify(result), 201
+
+
+@home_bp.post('/pricing/<rate_card_id>/activate')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def activate_pricing(rate_card_id):
+    if not is_owner():
+        visits.fail('forbidden', 'Only the Home owner can activate prices.', 403)
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'pricing:activate:' + rate_card_id,
+            body, lambda: quotes.activate_rates(session, actor, rate_card_id, body))
+    return jsonify(result)
+
+
+@home_bp.post('/visits/<booking_id>/quotes')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def issue_quote(booking_id):
+    if not is_operator():
+        visits.fail('forbidden', 'Only CookCredit can issue quotes.', 403)
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'quote:create:' + booking_id,
+            body, lambda: quotes.issue_quote(session, actor, booking_id, body, True))
+    return jsonify(result), 201
+
+
+@home_bp.post('/visits/<booking_id>/quotes/<quote_id>/<any(accept,approve):decision>')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def approve_quote(booking_id, quote_id, decision):
+    body, actor, operator = json_body(), principal(), is_operator()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'),
+            'quote:' + decision + ':' + booking_id + ':' + quote_id, body,
+            lambda: quotes.accept_quote(session, actor, booking_id, quote_id, body, operator, helper=decision == 'accept'))
+    return jsonify(result)
+
+
+@home_bp.post('/visits/<booking_id>/materials/reconcile')
+@home_auth
+@limiter.limit('20 per minute', key_func=lambda: g.user_id)
+def reconcile_materials(booking_id):
+    if not is_operator():
+        visits.fail('forbidden', 'Only CookCredit can reconcile receipts.', 403)
+    body, actor = json_body(), principal()
+    with db_session() as session:
+        result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'materials:reconcile:' + booking_id,
+            body, lambda: quotes.reconcile_materials(session, actor, booking_id, body, True))
+    return jsonify(result)
