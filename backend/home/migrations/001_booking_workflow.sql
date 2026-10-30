@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS home_events (
   action TEXT NOT NULL,
   version INTEGER,
   details JSONB NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((booking_id IS NULL) = (version IS NULL))
 );
 CREATE INDEX IF NOT EXISTS home_events_booking_time ON home_events(booking_id, created_at, id);
+CREATE UNIQUE INDEX IF NOT EXISTS home_events_booking_version ON home_events(booking_id, version) WHERE booking_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS home_events_time ON home_events(created_at, id);
 CREATE TABLE IF NOT EXISTS home_commands (
   actor_id TEXT NOT NULL REFERENCES users(id),
@@ -55,4 +57,5 @@ CREATE TABLE IF NOT EXISTS home_commands (
 );
 CREATE INDEX IF NOT EXISTS home_bookings_customer_page ON bookings(eater_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS home_bookings_helper_page ON bookings(cook_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS home_bookings_queue_page ON bookings(created_at DESC, id DESC);
 COMMIT;

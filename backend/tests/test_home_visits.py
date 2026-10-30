@@ -299,4 +299,5 @@ def test_cleaning_permission_does_not_require_cooking_approval(app):
 
 def test_migration_not_discovered_by_hiring_runner():
     from migrations.run_migrations import discover
-    assert all('/home/' not in path.replace('\\', '/') for _, path in discover())
+    backend = Path(__file__).parents[1].resolve()
+    assert all(Path(path).resolve().parent == backend / 'migrations' for _, path in discover())
