@@ -165,8 +165,15 @@ def ensure_settlement(session, booking, visit):
     if not reconciled:
         return
     unused = reconciled.snapshot['unusedAllowanceCents']
-    if payment.refunded_cents > unused:
-        return  # A dispute/manual adjustment needs an explicit operator review.
+    existing_refund=session.execute(select(HomeFinancialOperation).where(HomeFinancialOperation.payment_id==payment.id,
+        HomeFinancialOperation.kind=='refund_unused')).scalar_one_or_none()
+    if payment.refunded_cents and (payment.refunded_cents!=unused or not existing_refund or not existing_refund.mutation_started_at):
+        payment.status='review_required'
+        if not visit.issue_open:
+            visit.issue_open=True;visit.version+=1
+            visits.event(session,SYSTEM,'payment_review_required',booking['id'],visit.version,
+                paymentId=str(payment.id),reason='external_refund_mismatch')
+        return
     if unused:
         refund = operation(session, payment=payment, actor=SYSTEM, kind='refund_unused',
             payload={'paymentIntentId': payment.payment_intent_id, 'paymentId': str(payment.id), 'amountCents': unused})

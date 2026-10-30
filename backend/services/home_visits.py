@@ -18,9 +18,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from models import User, CookProfile, Booking
 from models.home_service import HomeVisit, HomeHelperPermission, HomeEvent, HomeCommand
 
-CONSENT_VERSION = 'home-visit-v1'
+CONSENT_VERSION = 'home-visit-v2'
 CONSENT_TEXT = ('I agree to share these visit instructions and my service address with CookCredit '
-                'and the helper assigned to this visit, so they can review and carry out my request.')
+                'and the helper assigned to this visit, so they can review and carry out my request. '
+                'If I am arranging this for someone else, I have their permission to arrange it and share these details.')
 PREFERENCES = {'allergies', 'provided_meal_instructions', 'easy_to_chew', 'label_meals',
                'storage_help', 'fragrance_free', 'customer_supplies', 'phone_help'}
 CLEANING_TASKS = {'kitchen', 'dishes', 'bathroom', 'floors', 'laundry', 'general_tidy'}
@@ -57,7 +58,8 @@ def choices(values, allowed, name):
 
 
 def validate_request(body):
-    strict_object(body, ('service', 'date', 'time', 'durationMinutes', 'address', 'instructions', 'consent'))
+    strict_object(body, ('service', 'date', 'time', 'durationMinutes', 'address', 'instructions', 'consent'),
+                  ('serviceMinutes','arrangingFor'))
     if body['service'] not in ('cooking', 'cleaning', 'both'):
         fail('invalid_service', 'Choose cooking, cleaning or both.')
     try:
@@ -81,6 +83,22 @@ def validate_request(body):
     minutes = body['durationMinutes']
     if type(minutes) is not int or not 60 <= minutes <= 480 or minutes % 30:
         fail('invalid_duration', 'Choose one to eight hours in half-hour steps.')
+    service_minutes = body.get('serviceMinutes')
+    if service_minutes is not None:
+        strict_object(service_minutes, ('cooking','cleaning'))
+        if any(type(value) is not int or value < 0 or value > 480 or value % 30 for value in service_minutes.values()):
+            fail('invalid_duration', 'Use half-hour steps for each service.')
+        if (sum(service_minutes.values()) != minutes
+            or bool(service_minutes['cooking']) != (body['service'] in ('cooking','both'))
+            or bool(service_minutes['cleaning']) != (body['service'] in ('cleaning','both'))):
+            fail('scope_mismatch', 'Check the cooking and cleaning time.')
+    recipient = body.get('arrangingFor')
+    if recipient is not None:
+        strict_object(recipient, ('name','permissionConfirmed'))
+        if recipient['permissionConfirmed'] is not True:
+            fail('recipient_permission_required', 'Confirm that you have permission to arrange this visit and share its details.')
+        recipient = {'name': bounded_text(recipient['name'], 'the visit recipient', 120, required=True),
+                     'permissionRecordedAt': datetime.now(timezone.utc).isoformat()}
     instructions = body['instructions']
     strict_object(instructions, ('preferences', 'cleaningTasks', 'visitNotes'))
     preferences = choices(instructions['preferences'], PREFERENCES, 'preferences')
@@ -92,6 +110,7 @@ def validate_request(body):
     if consent['version'] != CONSENT_VERSION or consent['shareWithAssignedHelper'] is not True:
         fail('consent_required', 'Please confirm sharing these visit details with CookCredit and your assigned helper.')
     return dict(service=body['service'], day=day, start=start, minutes=minutes, time_zone=zone.key,
+                service_minutes=service_minutes, recipient=recipient,
                 address=bounded_text(body['address'], 'your address', 400, required=True),
                 instructions=dict(preferences=preferences, cleaningTasks=tasks,
                     visitNotes=bounded_text(instructions['visitNotes'], 'visit instructions', 1000)))
@@ -115,18 +134,35 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
-def command(session, principal, key, operation, body, execute):
+def command_reference(key, operation, body):
     if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,128}', key):
         fail('idempotency_key_required', 'A request reference is required. Please retry from the page.')
+    try:
+        return hashlib.sha256(key.encode()).hexdigest(), fingerprint({'operation': operation, 'body': body})
+    except (TypeError, ValueError):
+        fail('invalid_json', 'Please check the request fields.')
+
+
+def replay(session, principal, key, operation, body):
+    """Read an already committed result before optional external evidence reads.
+
+    This is an optimization, never the concurrency boundary. command() repeats
+    this check under its transaction lock before executing a new mutation.
+    """
+    digest, request_hash = command_reference(key, operation, body)
+    prior = session.get(HomeCommand, (principal['uid'], digest))
+    if prior and prior.request_hash != request_hash:
+        fail('idempotency_conflict', 'This request reference was already used for a different change.', 409)
+    return prior.result if prior else None
+
+
+def command(session, principal, key, operation, body, execute):
+    digest, request_hash = command_reference(key, operation, body)
     sync_identity(session, principal, refresh=False)
-    uid, digest = principal['uid'], hashlib.sha256(key.encode()).hexdigest()
+    uid = principal['uid']
     # Cross-process transaction lock; no external side effect can escape a rollback.
     session.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
                     {'key': 'home-command:' + uid + ':' + digest})
-    try:
-        request_hash = fingerprint({'operation': operation, 'body': body})
-    except (TypeError, ValueError):
-        fail('invalid_json', 'Please check the request fields.')
     prior = session.get(HomeCommand, (uid, digest))
     if prior:
         if prior.request_hash != request_hash:
@@ -140,6 +176,7 @@ def command(session, principal, key, operation, body, execute):
 
 def event(session, uid, action, booking_id=None, version=None, **details):
     session.add(HomeEvent(actor_id=uid, action=action, booking_id=booking_id, version=version, details=details))
+    session.info['home_dispatch_due'] = datetime.now(timezone.utc)
 
 
 def create_visit(session, principal, body):
@@ -152,7 +189,8 @@ def create_visit(session, principal, body):
         estimated_duration=Decimal(data['minutes']) / 60, eater_address=data['address'],
         price_per_hour=0, estimated_total=0))
     session.add(HomeVisit(booking_id=booking_id, service=data['service'], version=0,
-        instructions=data['instructions'], time_zone=data['time_zone'], consent_version=CONSENT_VERSION))
+        instructions=data['instructions'], time_zone=data['time_zone'], consent_version=CONSENT_VERSION,
+        service_minutes=data['service_minutes'], recipient=data['recipient']))
     event(session, principal['uid'], 'visit_requested', booking_id, 0)
     return {'id': str(booking_id), 'version': 0, 'status': 'requested'}
 
@@ -208,6 +246,7 @@ def serialize(booking, visit, *, detail=False):
         'quote': None, 'paymentAvailable': False}
     if detail:
         result.update(address=booking['eater_address'], instructions=visit.instructions,
+            serviceMinutes=visit.service_minutes, arrangingFor=visit.recipient,
             consent={'version': visit.consent_version, 'recordedAt': visit.consented_at.isoformat()})
     return result
 

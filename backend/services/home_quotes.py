@@ -115,11 +115,16 @@ def offer_ready(session, booking, visit):
 
 
 def scope_digest(booking, visit):
-    return visits.fingerprint({'bookingId': str(booking['id']), 'helperId': booking['cook_id'],
+    scope = {'bookingId': str(booking['id']), 'helperId': booking['cook_id'],
         'service': visit.service, 'date': booking['scheduled_date'].isoformat(),
         'time': booking['scheduled_start_time'].isoformat(), 'timeZone': visit.time_zone,
         'durationMinutes': int(booking['estimated_duration'] * 60), 'address': booking['eater_address'],
-        'instructions': visit.instructions, 'consentVersion': visit.consent_version})
+        'instructions': visit.instructions, 'consentVersion': visit.consent_version}
+    if visit.service_minutes is not None:
+        scope['serviceMinutes'] = visit.service_minutes
+    if visit.recipient is not None:
+        scope['arrangingFor'] = visit.recipient
+    return visits.fingerprint(scope)
 
 
 def review_tax(body):
@@ -187,6 +192,9 @@ def issue_quote(session, principal, booking_id, body, operator):
         visits.fail('pricing_changed', 'Refresh the active pricing before issuing a quote.', 409)
     card = session.get(HomeRateCard, card_id)
     tax = review_tax(body['tax'])
+    if visit.service_minutes is not None and visit.service_minutes != {
+        'cooking': body['cookingMinutes'], 'cleaning': body['cleaningMinutes']}:
+        visits.fail('scope_mismatch', 'The quoted time must match the requested cooking and cleaning time.')
     if 'customer_supplies' in visit.instructions['preferences'] and body['materials']:
         visits.fail('customer_supplies', 'This customer chose to supply the materials. Resolve that scope before quoting purchases.')
     snapshot = calculate(card.settings, visit.service, int(booking['estimated_duration'] * 60),
@@ -284,7 +292,7 @@ def quote_for_visit(session, booking, visit, uid, operator, quote_id=None):
     return result
 
 
-def reconcile_materials(session, principal, booking_id, body, operator):
+def reconcile_materials(session, principal, booking_id, body, operator, *, evidence=None):
     visits.strict_object(body, ('version', 'quoteId', 'lines', 'tax', 'receiptsReviewed'))
     if not operator:
         visits.fail('forbidden', 'Only CookCredit can reconcile material receipts.', 403)
@@ -311,6 +319,8 @@ def reconcile_materials(session, principal, booking_id, body, operator):
         seen.add(key)
         actual = integer(line['actualCents'], 'the actual material cost', 0, quoted[key]['capCents'])
         reference = str(identifier(line['receiptReference'])) if actual else None
+        if actual and (not evidence or reference not in evidence):
+            visits.fail('receipt_evidence_required','Upload and review the receipt photo for each purchase before reconciling.')
         if not actual and line['receiptReference'] is not None:
             reference = str(identifier(line['receiptReference']))
         recorded.append({'lineId': key, 'actualCents': actual, 'receiptReference': reference})
@@ -320,7 +330,7 @@ def reconcile_materials(session, principal, booking_id, body, operator):
     s = quote.snapshot
     materials = sum(line['actualCents'] for line in recorded)
     total = s['laborCents'] + s['serviceFeeCents'] + materials + tax['amountCents']
-    result = {'lines': recorded, 'taxReview': tax, 'materialsActualCents': materials,
+    result = {'lines': recorded, 'receiptProofs':evidence or {},'taxReview': tax, 'materialsActualCents': materials,
         'taxActualCents': tax['amountCents'], 'customerFinalCents': total,
         'unusedAllowanceCents': s['maximumTotalCents'] - total,
         'helperActualPayCents': s['helperLaborNetCents'] + materials}

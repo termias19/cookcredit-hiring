@@ -1,5 +1,7 @@
 """Authoritative Home quotes and pricing; no payments or cloud requests."""
 import uuid
+import io
+from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
@@ -286,9 +288,15 @@ def test_quote_failure_rolls_back_offer_pointer_version_and_estimate(app, monkey
 
 def reconciliation_body(client, row):
     quote = detail(client, row)['quote']
+    photo = io.BytesIO()
+    Image.new('RGB',(64,64),'white').save(photo,'PNG')
+    response = client.post(f"/api/home/visits/{row['id']}/receipts",
+        headers=headers('helper',uuid.uuid4().hex),data={'file':(io.BytesIO(photo.getvalue()),'receipt.png')})
+    assert response.status_code == 201, response.json
+    receipt_id = response.json['receipt']['id']
     return {'version': row['version'], 'quoteId': quote['id'], 'receiptsReviewed': True,
         'lines': [{'lineId': line['lineId'], 'actualCents': line['capCents'] - 100,
-                   'receiptReference': str(uuid.uuid4())} for line in quote['materials']],
+                   'receiptReference': receipt_id} for line in quote['materials']],
         'tax': {'amountCents': 700, 'reviewConfirmed': True, 'reviewReference': 'synthetic-final-tax-review'}}
 
 
@@ -389,7 +397,7 @@ def test_health_refuses_a_database_missing_the_required_home_migration(app):
     client = app.test_client()
     assert client.get('/api/home/health').status_code == 200
     with database.db_session() as session:
-        session.execute(text("DELETE FROM home_schema_migrations WHERE filename='003_payments.sql'"))
+        session.execute(text("DELETE FROM home_schema_migrations WHERE filename='004_customer_service.sql'"))
     response = client.get('/api/home/health')
     assert response.status_code == 503 and response.json['code'] == 'temporary_error'
     assert response.headers['X-Request-ID'] == response.json['reference']

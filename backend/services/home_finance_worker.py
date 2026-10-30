@@ -137,7 +137,7 @@ def _execute(row, provider):
         current = session.get(Op, row.id)
         if current.lease_token != row.lease_token:
             raise Deferred('lease_lost', held=True)
-        if row.first_started_at < money.now() - timedelta(hours=23) and not row.provider_id:
+        if row.mutation_started_at and row.mutation_started_at < money.now() - timedelta(hours=23) and not row.provider_id:
             raise Deferred('ambiguous_provider_result', held=True)
         if row.kind == 'connect':
             if row.payload['livemode'] != bool(provider.livemode):
@@ -162,17 +162,25 @@ def _execute(row, provider):
                 reversed_ids = {op.payload['transferId'] for op in reversals}
                 if any(op.status == 'running' or op.provider_id not in reversed_ids for op in transfers):
                     raise Deferred('reversal_pending')
+            if row.kind=='refund_unused' and (visit.issue_open or payment.status=='review_required'
+                or row.attempts==1 and not row.provider_id and payment.refunded_cents>0):
+                raise Deferred('external_refund_review',held=True)
     operation_id = str(row.id)
     if row.kind == 'checkout':
+        _mark_mutation(row)
         return provider.checkout(operation_id, row.payload)
     if row.kind == 'expire':
         return provider.expire(operation_id, row.payload)
     if row.kind.startswith('refund_'):
+        if not row.provider_id:
+            _mark_mutation(row)
         value = provider.refund_status(row.provider_id) if row.provider_id else provider.refund(operation_id, row.payload)
         return {**dict(value), '_verified_checkout': provider.payment(payment.checkout_id)}
     if row.kind == 'connect':
+        _mark_mutation(row)
         return provider.connect(operation_id, row.payload)
     if row.kind == 'reverse':
+        _mark_mutation(row)
         return provider.reverse(operation_id, row.payload)
     if row.kind == 'transfer':
         account = provider.account(row.payload['destination'])
@@ -191,8 +199,20 @@ def _execute(row, provider):
             raise Deferred('funds_pending')
         if charge.get('amount', 0) - charge.get('amount_refunded', 0) < row.payload['amountCents']:
             raise Deferred('insufficient_source', held=True)
+        _mark_mutation(row)
         return provider.transfer(operation_id, row.payload)
     raise RuntimeError('unknown_operation')
+
+
+def _mark_mutation(row):
+    # Record possible external mutation before I/O. Read-only fund/bank probes
+    # must not start the provider idempotency clock while funds settle for days.
+    with db_session() as session:
+        current=session.get(Op,row.id,with_for_update=True)
+        if current.lease_token!=row.lease_token:
+            raise Deferred('lease_lost',held=True)
+        if current.mutation_started_at is None:
+            current.mutation_started_at=money.now()
 
 
 def _apply(session, row, value):

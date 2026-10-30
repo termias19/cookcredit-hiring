@@ -19,7 +19,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
 
 from middleware import auth
-from models import User, CookProfile, Booking
+from models import User, EaterProfile, CookProfile, Booking
+from models.account_email import AccountEmail
 from models.home_service import HomeVisit, HomeEvent, HomeCommand, HomeHelperPermission
 from services import database, home_visits as visits
 from services import hiring_access
@@ -44,10 +45,10 @@ def home_db(monkeypatch):
     try:
         with engine.begin() as conn:
             spatial = conn.execute(text("SELECT to_regtype('geography') IS NOT NULL")).scalar()
-            for table in (User.__table__, CookProfile.__table__, Booking.__table__):
+            for table in (User.__table__, EaterProfile.__table__, CookProfile.__table__, Booking.__table__, AccountEmail.__table__):
                 ddl = str(CreateTable(table).compile(engine))
                 if not spatial:
-                    ddl = re.sub(r'^\s*(?:base_location|eater_location)\s+geography\([^\n]+\),\s*\n', '', ddl, flags=re.I | re.M)
+                    ddl = re.sub(r'^\s*(?:base_location|eater_location|location)\s+geography\([^\n]+\),\s*\n', '', ddl, flags=re.I | re.M)
                 conn.exec_driver_sql(ddl)
             conn.exec_driver_sql('CREATE TABLE home_schema_migrations (filename TEXT PRIMARY KEY)')
             for path in sorted((Path(__file__).parents[1] / 'home/migrations').glob('[0-9][0-9][0-9]_*.sql')):
@@ -57,6 +58,10 @@ def home_db(monkeypatch):
                 conn.execute(text('INSERT INTO home_schema_migrations VALUES (:name)'), {'name': path.name})
         monkeypatch.setattr(database, 'engine', engine)
         monkeypatch.setattr(database, 'SessionLocal', sessionmaker(bind=engine, expire_on_commit=False))
+        from services import home_receipts
+        from tests.home_storage_fixture import Bucket
+        bucket = Bucket()
+        monkeypatch.setattr(home_receipts, 'get_storage_bucket', lambda: bucket)
         yield engine
     finally:
         engine.dispose()

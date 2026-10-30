@@ -6,7 +6,8 @@ database first. No database creation, cloud activation or external calls occur.
 from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
-from models import User, CookProfile, Booking
+from models import User, EaterProfile, CookProfile, Booking
+from models.account_email import AccountEmail
 from home_app import database_url
 from migrations.run_migrations import transaction_body
 
@@ -25,7 +26,7 @@ def main():
             if not conn.execute(text("SELECT to_regtype('geography') IS NOT NULL")).scalar():
                 raise RuntimeError('Provision PostGIS in the Home database before migrating')
             # Reuse the actual core models, not copies of a legacy schema dump.
-            for table in (User.__table__, CookProfile.__table__, Booking.__table__):
+            for table in (User.__table__, EaterProfile.__table__, CookProfile.__table__, Booking.__table__, AccountEmail.__table__):
                 table.create(conn, checkfirst=True)
             conn.exec_driver_sql('CREATE TABLE IF NOT EXISTS home_schema_migrations (filename TEXT PRIMARY KEY)')
             for path in sorted((Path(__file__).parent / 'migrations').glob('[0-9][0-9][0-9]_*.sql')):
@@ -41,6 +42,12 @@ def main():
             conn.exec_driver_sql('GRANT SELECT, INSERT ON home_rate_cards, home_quotes, home_quote_helper_acceptances, home_quote_approvals, home_material_reconciliations TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT, INSERT, UPDATE ON home_payments, home_financial_operations, home_stripe_events TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT UPDATE (stripe_account_id,stripe_onboarded) ON cook_profiles TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT INSERT,UPDATE ON cook_profiles TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE ON eater_profiles,home_households,home_callbacks,account_emails TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT DELETE ON home_households TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE ON home_receipts TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT SELECT,INSERT ON home_notification_cursors,home_access_audit TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT UPDATE (status) ON home_notification_cursors TO cookcredit_home_app')
     finally:
         engine.dispose()
 

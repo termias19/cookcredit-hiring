@@ -20,7 +20,7 @@ from services import database
 from services.home_visits import HomeError
 from services.operations import emit_event
 
-REQUIRED_HOME_MIGRATION = '003_payments.sql'
+REQUIRED_HOME_MIGRATION = '004_customer_service.sql'
 
 
 def check_home_schema(session):
@@ -53,7 +53,7 @@ def create_app(config=None):
     # Do not trust forwarded Host, and do not expose this container directly.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     app.config.update(MAX_CONTENT_LENGTH=16 * 1024, HOME_ENABLED=os.getenv('HOME_SERVICES_ENABLED') == '1',
-                      RATELIMIT_DEFAULT='60 per minute')
+                      RATELIMIT_DEFAULT='60 per minute',RATELIMIT_KEY_PREFIX='cookcredit-home',RATELIMIT_HEADERS_ENABLED=True)
     if config:
         app.config.update(config)
 
@@ -112,6 +112,15 @@ def create_app(config=None):
                 raise RuntimeError('Home runtime cannot use the migration role')
             if not os.getenv('HOME_OWNER_EMAILS', '').strip():
                 raise RuntimeError('Home owner is not configured')
+            if os.getenv('COOKCREDIT_ENVIRONMENT')=='staging' and not os.getenv('HOME_ACCEPTANCE_EMAILS','').strip():
+                raise RuntimeError('Private Home staging requires an acceptance email allowlist')
+            if os.getenv('HOME_EMAILS_ENABLED')=='1':
+                sender=os.getenv('GOOGLE_SMTP_USER','').strip()
+                if (os.getenv('AUTH_EMAIL_PROVIDER')!='google_smtp' or not sender.endswith('@cookcredit.com')
+                    or sender.count('@')!=1 or any(c.isspace()for c in sender) or not os.getenv('GOOGLE_SMTP_APP_PASSWORD')):
+                    raise RuntimeError('Home mail requires the existing CookCredit Workspace transport')
+                if os.getenv('AUTH_APP_CHECK_REQUIRED')!='1' or not os.getenv('FIREBASE_APP_CHECK_APP_IDS'):
+                    raise RuntimeError('Home account email requires App Check')
             if not origins or any(urlsplit(o).scheme != 'https' or urlsplit(o).path not in ('', '/')
                                   or urlsplit(o).query or urlsplit(o).fragment or not urlsplit(o).hostname
                                   or urlsplit(o).username or '*' in o for o in origins):
@@ -131,8 +140,10 @@ def create_app(config=None):
             from extensions import limiter
             limiter.init_app(app)
         CORS(app, resources={r'/api/home/*': {'origins': origins}},
-             allow_headers=['Authorization', 'Content-Type', 'Idempotency-Key'],
-             methods=['GET', 'POST', 'PUT', 'OPTIONS'], expose_headers=['X-Request-ID'])
+             allow_headers=['Authorization', 'Content-Type', 'Idempotency-Key', 'X-Firebase-AppCheck'],
+             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], expose_headers=['X-Request-ID'])
         from routes.home_visits import home_bp
         app.register_blueprint(home_bp, url_prefix='/api/home')
+        from routes.home_customers import customer_bp
+        app.register_blueprint(customer_bp,url_prefix='/api/home')
     return app

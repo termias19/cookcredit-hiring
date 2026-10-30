@@ -70,7 +70,7 @@ class StripeHome:
             'metadata': meta, 'payment_intent_data': {'metadata': meta,
                 'transfer_group': 'home:' + payload['paymentId']},
             'expires_at': payload['expiresAt'],
-            'success_url': base_url() + '/#visit/' + payload['bookingId'] + '?checkout=returned',
+            'success_url': base_url() + '/#visit/' + payload['bookingId'],
             'cancel_url': base_url() + '/#visit/' + payload['bookingId'],
             'custom_text': {'submit': {'message': 'This is the approved maximum. Unused materials and tax allowance are refunded after review. Helper funds are released after completion.'}},
         }, options={'idempotency_key': 'home:' + operation})
@@ -123,7 +123,7 @@ class StripeHome:
 
     def onboarding(self, account_id):
         return client().account_links.create({'account': account_id, 'type': 'account_onboarding',
-            'return_url': base_url() + '/#payouts', 'refresh_url': base_url() + '/#payouts'})
+            'return_url': base_url() + '/#payout', 'refresh_url': base_url() + '/#payout'})
 
     def dashboard(self, account_id):
         return client().accounts.login_links.create(account_id, {})

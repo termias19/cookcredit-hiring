@@ -48,8 +48,11 @@ def enqueue_account_email(session, *, kind, recipient, user_id=None):
         id=uuid.uuid4(), dedupe_key=key, kind=kind, recipient=recipient,
         user_id=user_id, status='pending', attempts=0,
         created_at=utcnow(), available_at=utcnow()).on_conflict_do_nothing(index_elements=['dedupe_key']))
-    from services.webhook_dispatch import request_dispatch
-    request_dispatch(session, now, kind='email')
+    if os.getenv('COOKCREDIT_PRODUCT') == 'home-services':
+        session.info['home_dispatch_due'] = now
+    else:
+        from services.webhook_dispatch import request_dispatch
+        request_dispatch(session, now, kind='email')
     return {'queued': True, 'retryAfterSeconds': 60 if kind == 'verify' else 300}
 
 
@@ -101,7 +104,8 @@ def account_email_content(kind, link, *, custom=None):
 def _action_link(kind, recipient):
     base = os.environ['FRONTEND_URL'].split(',')[0].rstrip('/')
     provider = get_auth()
-    settings = provider.ActionCodeSettings(url=f'{base}/login')
+    is_home = os.getenv('COOKCREDIT_PRODUCT') == 'home-services'
+    settings = provider.ActionCodeSettings(url=f'{base}/#sign-in' if is_home else f'{base}/login')
     raw = (provider.generate_email_verification_link(recipient, settings) if kind == 'verify'
            else provider.generate_password_reset_link(recipient, settings))
     params = parse_qs(urlsplit(raw).query)
@@ -114,6 +118,8 @@ def _action_link(kind, recipient):
     # Its handler checks the code's email against the current session before
     # continuing. Password reset retains the existing Google-managed handler.
     handler = base + '/account/action' if kind == 'verify' else 'https://cookcredit.com/__/auth/action'
+    if is_home:
+        handler = base + '/#account/action'  # Fragment keeps action codes out of Hosting request URLs.
     return handler + '?' + urlencode({
         key: params[key][0] for key in ('mode', 'oobCode', 'apiKey', 'continueUrl', 'lang') if key in params
     })
@@ -123,6 +129,9 @@ from services.mail_transport import send_google_smtp as _send_google_smtp
 
 
 def deliver_account_email(item):
+    if os.getenv('COOKCREDIT_PRODUCT') == 'home-services':
+        from services.home_mail import deliver
+        return deliver(item)
     if item.kind in ('billing_paid', 'billing_failed', 'campaign'):
         from services.customer_mail import deliver_customer_email
         return deliver_customer_email(item)
@@ -227,7 +236,7 @@ def dispatch_account_emails(limit=50):
         rows = (session.query(AccountEmail).filter(
             AccountEmail.attempts < 8, AccountEmail.available_at <= now,
             or_(AccountEmail.status == 'pending', and_(AccountEmail.status == 'sending', AccountEmail.lease_until < now)))
-            .order_by(AccountEmail.kind == 'campaign', AccountEmail.available_at)
+            .order_by(AccountEmail.kind.notin_(('verify','reset')), AccountEmail.kind == 'campaign', AccountEmail.available_at)
             .with_for_update(skip_locked=True).limit(limit).all())
         for item in rows:
             item.status = 'sending'; item.attempts += 1

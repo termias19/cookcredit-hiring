@@ -35,6 +35,8 @@ def home_auth(f):
     def decorated(*args, **kwargs):
         if not g.email:
             visits.fail('email_required', 'A verified email is required.', 403)
+        if os.getenv('COOKCREDIT_ENVIRONMENT')=='staging' and os.getenv('HOME_ACCEPTANCE_EMAILS','') and g.email.casefold() not in emails('HOME_ACCEPTANCE_EMAILS'):
+            visits.fail('private_acceptance','This account is not enabled for private Home acceptance.',403)
         return f(*args, **kwargs)
     return decorated
 
@@ -59,10 +61,12 @@ def me():
         visits.sync_identity(session, principal())
         from models.home_service import HomeHelperPermission
         helper = session.get(HomeHelperPermission, g.user_id)
+        from services.home_mail import ensure_welcome
+        ensure_welcome(session,principal())
     return jsonify(userId=g.user_id, name=g.name, email=g.email, operator=is_operator(), owner=is_owner(),
                    helper=bool(helper and helper.enabled),
                    consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT,
-                   paymentsAvailable=home_stripe.checkout_allowed())
+                   paymentsAvailable=home_stripe.checkout_allowed(),environment=os.getenv('COOKCREDIT_ENVIRONMENT','development'))
 
 
 @home_bp.post('/visits')
@@ -94,6 +98,14 @@ def detail(booking_id):
         result = visits.serialize(booking, visit, detail=True)
         result['quote'] = quotes.quote_for_visit(session, booking, visit, g.user_id, is_operator())
         result['payment'] = payments.dto(session, booking, visit, payments.payment_for_visit(session, booking['id']), g.user_id, is_operator())
+        from models import User
+        from services.home_customers import audit
+        helper_name=session.execute(select(User.name).where(User.id==booking['cook_id'])).scalar() if booking['cook_id'] else None
+        result['helperName']=helper_name
+        result['isCustomer']=booking['eater_id']==g.user_id
+        result['isAssignedHelper']=booking['cook_id']==g.user_id
+        if is_operator() or (booking['cook_id']==g.user_id and booking['eater_id']!=g.user_id):
+            audit(session,principal(),'visit_viewed',booking['id'])
     return jsonify(result)
 
 
@@ -225,9 +237,15 @@ def reconcile_materials(booking_id):
     if not is_operator():
         visits.fail('forbidden', 'Only CookCredit can reconcile receipts.', 403)
     body, actor = json_body(), principal()
+    from services.home_receipts import verified_references
+    with db_session() as session:
+        prior = visits.replay(session, actor, request.headers.get('Idempotency-Key'), 'materials:reconcile:' + booking_id, body)
+    if prior is not None:
+        return jsonify(prior)
+    proof=verified_references(booking_id,body.get('quoteId'),body.get('lines',[]))
     with db_session() as session:
         result = visits.command(session, actor, request.headers.get('Idempotency-Key'), 'materials:reconcile:' + booking_id,
-            body, lambda: quotes.reconcile_materials(session, actor, booking_id, body, True))
+            body, lambda: quotes.reconcile_materials(session, actor, booking_id, body, True, evidence=proof))
     return jsonify(result)
 
 
@@ -277,7 +295,11 @@ def internal_dispatch():
         return jsonify(error='Forbidden'), 403
     events = dispatch_events(limit=5)
     operations = dispatch_operations(limit=5)
-    return jsonify(events=events, operations=operations)
+    from services.home_mail import convert_events
+    from services.account_email import dispatch_account_emails
+    notifications=convert_events()
+    mail=dispatch_account_emails(limit=5) if os.getenv('HOME_EMAILS_ENABLED')=='1' else {'paused':True}
+    return jsonify(events=events, operations=operations,notifications=notifications,mail=mail)
 
 
 @home_bp.get('/operations')

@@ -240,12 +240,40 @@ def test_unknown_mutation_older_than_provider_idempotency_window_is_held(app, pr
     quote = detail(client, row)['quote']
     post(client, f"/visits/{row['id']}/checkout", {'version': row['version'], 'quoteId':quote['id'], 'digest':quote['digest']}, 'customer')
     with database.db_session() as session:
-        session.execute(update(Op).values(first_started_at=money.now()-timedelta(hours=24)))
+        session.execute(update(Op).values(first_started_at=money.now()-timedelta(hours=24),mutation_started_at=money.now()-timedelta(hours=24)))
     worker.dispatch_operations(provider)
     with database.db_session() as session:
         op = session.execute(select(Op).where(Op.kind=='checkout')).scalar_one()
         assert op.status == 'review_required' and op.last_error == 'ambiguous_provider_result'
     assert provider.calls == []
+
+
+def test_waiting_days_for_funds_does_not_expire_a_never_started_transfer(app, provider):
+    client=app.test_client()
+    row,_,checkout_id=completed(client,provider)
+    provider.sessions[checkout_id]['payment_intent']['latest_charge']['balance_transaction']['status']='pending'
+    worker.dispatch_operations(provider)
+    with database.db_session() as session:
+        transfer=session.execute(select(Op).where(Op.kind=='transfer')).scalar_one()
+        assert transfer.last_error=='funds_pending' and transfer.mutation_started_at is None
+        transfer.first_started_at=money.now()-timedelta(days=5)
+        transfer.available_at=money.now()-timedelta(seconds=1)
+    provider.sessions[checkout_id]['payment_intent']['latest_charge']['balance_transaction']['status']='available'
+    assert worker.dispatch_operations(provider)['processed']==1
+    assert [kind for kind,_ in provider.calls].count('transfer')==1
+    assert detail(client,row)['payment']['helperFunds']=='transferred_to_stripe'
+
+
+def test_manual_refund_holds_settlement_instead_of_refunding_twice(app,provider):
+    client=app.test_client()
+    row,_,checkout_id=completed(client,provider)
+    provider.sessions[checkout_id]['payment_intent']['latest_charge']['amount_refunded']=100
+    notify(client,provider,checkout_id)
+    worker.dispatch_events(provider)
+    worker.dispatch_operations(provider)
+    value=detail(client,row)
+    assert value['issueOpen'] and value['payment']['status']=='review_required'
+    assert not any(kind in ('refund','transfer')for kind,_ in provider.calls)
 
 
 def test_financial_operation_payload_is_immutable_in_database(app, provider):

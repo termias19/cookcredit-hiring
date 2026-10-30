@@ -12,8 +12,8 @@ disabled by default and is not a public booking or payment service yet.
 | 2. Durable requests | Customer ownership, explicit visit consent, operator review, service-specific helper permissions, assignment, acceptance, cancellation, issue hold, audit and idempotency. Implemented in this branch. | PostgreSQL/API tests pass, including concurrent retries, stale writes, permission revocation and rollback. Provisioned runtime permissions still need staging acceptance. |
 | 3. Quotes | Implemented: owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and manual receipt-review accounting. All money uses integer cents. | Tax requires explicit operator review. Actual receipt attachments and deployed SQL grants remain staging/interface gates. Preview figures are examples, not published rates. |
 | 4. Payments and settlement | Implemented core: namespaced hosted checkout, signed durable inbox, canonical payment verification, leased financial operations, refunds, issue holds and transfer/reversal handling. | Deterministic provider/real SQL lifecycle passes. Actual live provider acceptance remains unpaid; checkout/refund/transfer/Connect have separate explicit gates. A return URL cannot mark paid. |
-| 5. Connected interfaces | Existing customer design, authenticated helper work and owner operations screens use this API. | Refresh, email/text return links and role navigation recover the same durable visit. Account creation and cook onboarding reuse existing identity mechanisms. |
-| 6. Communications and accessibility | Existing branded delivery transport/outbox patterns, appointment receipts, callback help, large controls and keyboard/screen-reader support. | Actual deliveries, consent preferences, expired links and accessible task completion pass. Marketing consent is separate from service messages. |
+| 5. Connected interfaces | Implemented first pass in `frontend/home`: customer request/quote/receipts, helper work and Stripe account setup, owner pricing/review and private service desk. Separate Vite output; no Hiring PWA changes. | Browser task completion and staging acceptance remain open. Account creation reuses Firebase; self-submitted helper experience never grants access. |
+| 6. Communications and accessibility | Implemented event pointers into the existing AccountEmail outbox/Google transport, private receipt photos, explicit household opt-in, family permission and no-account callback intake. Large controls and semantic forms. | Actual public-sender delivery, expired links and keyboard/screen-reader task completion remain open. No SMS provider exists; no SMS delivery is promised. Marketing is not enabled by service consent. |
 | 7. Release | Separate staging deployment, security/retention review, bounded capacity test and production rollback plan. | Customer, helper and operator complete the real journey; payment acceptance requires a separate authorized handoff. |
 
 Advance through these gates in order. Local API tests do not establish email
@@ -71,7 +71,16 @@ Phone help in the design must not imply those authentication paths already exist
 | `GET /visits/{id}/quotes/{quoteId}` | Scoped current or historical offer, with its original approvals and a `current` flag. Other households receive 404. |
 | `POST /visits/{id}/quotes/{quoteId}/accept` | Assigned helper accepts the quoted work and earnings. |
 | `POST /visits/{id}/quotes/{quoteId}/approve` | Customer only, after helper quote acceptance; records the reviewed quote digest. |
-| `POST /visits/{id}/materials/reconcile` | Home operator; manually records reviewed receipt allocations and final tax after work completion. Does not refund or transfer money. |
+| `POST /visits/{id}/materials/reconcile` | Home operator; verifies receipt ownership/generation and records reviewed costs/final tax. Eligible settlement is queued, never sent inside the SQL transaction. |
+| `GET/PUT/DELETE /household` | Customer's own saved address/preferences; explicit opt-in and idempotent changes. Existing visit records are independent. |
+| `POST /callbacks` | App Check and rate-limited callback intake. In private staging, an acceptance identity is also required. No visit or charge is created. |
+| `POST /helpers/apply`, `POST /helpers/{uid}/review` | Home helper application and owner-confirmed capability review. No self-approval. |
+| `POST/GET /visits/{id}/receipts` | Private JPEG/PNG evidence, scoped to visit/quote. Only assigned helpers/operators upload. Maximum twenty photos, 8 MB each. |
+| `GET /visits/{id}/receipts/{receiptId}` | Authenticated attachment download; no public Firebase bearer token. |
+| `POST /account/verification`, `POST /account/reset` | Existing durable account mail with App Check, rate limits and verification resend cooldown. Action codes remain in URL fragments. |
+| `GET /callbacks`, `POST /callbacks/{id}`, `GET /helpers` | Private operator queues and versioned callback follow-up. |
+| `GET /audit`, `GET /operations` | Home owner only: bounded access/financial records; no private household notes in audit events. |
+| `POST/GET /payout-account`, `POST /payout-account/link` | Approved helper's own namespaced Stripe account; separate explicit Connect gate. A transfer is not a confirmed bank payout. |
 
 Create request:
 
@@ -88,7 +97,7 @@ Create request:
     "visitNotes": "Only the instructions agreed for this visit"
   },
   "consent": {
-    "version": "home-visit-v1",
+    "version": "home-visit-v2",
     "shareWithAssignedHelper": true
   }
 }
@@ -226,11 +235,43 @@ Final reviewed tax cannot exceed its quoted cap. An open issue blocks this step.
 The result records the customer final total, unused allowance and actual helper
 allocation. It does not mark money refunded, available or paid out.
 
-Receipt references currently record a human operator's review of evidence held
-outside this API. The backend does not yet upload or verify attachment existence
-or parse receipts. Private evidence storage/access and real service completion
-are stage 5 gates. Accounting tests seed a completed status solely to exercise
-reconciliation; they are not evidence of a completed customer journey.
+Receipt photos are normalized to JPEG, stripped of EXIF/GPS and stored under a
+private Home prefix with create-only generation preconditions. SQL reserves the
+object identity before upload and freezes finalized evidence. Reconciliation
+checks quote/visit ownership and exact storage generation with bounded parallel
+metadata reads outside SQL. Actual purchase amounts and tax require human review;
+there is no automatic receipt parsing. An idempotent replay returns its already
+committed result without requiring storage to remain available. Isolated quote
+accounting tests seed completion; financial tests exercise the full state machine
+with a deterministic provider. Neither is evidence of actual live settlement.
+
+## Connected Home frontend
+
+From `frontend`, run `npm run dev:home` or `npm run build:home`. The independent
+entry is `home/` and output is `dist-home/`; neither command overwrites Hiring's
+frontend output or registers another service worker. Operator, pricing and helper
+payout screens load in separate chunks. Hosting should use a separate controlled
+origin: an older Hiring service worker may intercept a new `/home/` prefix.
+
+The frontend uses the existing Firebase module and branded `cookcredit.com` auth
+domain. API requests stay on `/api/home`; no runtime-selected API address is
+accepted. A loopback Auth emulator is supported only in Vite development, with
+an explicit `VITE_HOME_AUTH_EMULATOR_URL`. Cloud startup rejects emulator config.
+No private address, allergy notes or form draft is put in browser storage.
+Only a validated return route is kept in session storage. Local previews and
+staging are `noindex`; this is not an authentication boundary.
+
+Home notices reuse the existing branded AccountEmail transport and durable
+retry implementation. A transactional event pointer prevents notification gaps;
+mail conversion leaves queue space for verification/reset messages. Messages link
+to private records and contain no address, allergy instruction, phone number,
+receipt image or hosted payment URL. Verification/reset links are generated at
+delivery, never persisted. `HOME_EMAILS_ENABLED=1` requires App Check and the
+existing authenticated CookCredit Workspace mail transport. The agreed public
+inquiry/Reply-To address is `connectwithus@cookcredit.com`; its separate mailbox
+does not need a new sending credential. The authenticated From address remains
+unchanged. Reuse the deployed secret reference; do not create another sender or
+claim that a Reply-To change also changed the authenticated From address.
 
 ## Runtime and migration controls
 
@@ -286,8 +327,9 @@ is not certified by that run. No household information or payment is used.
 Every API response carries a server-generated `X-Request-ID`. Error events record
 endpoint, status, duration and exception class, never exception messages, tokens,
 request bodies or SQL parameters. The durable audit event commits with the state
-change. Events are not a message-delivery acknowledgement: stage 6 will connect
-them to the existing durable delivery patterns and add retry/age monitoring.
+change. Events are not a message-delivery acknowledgement. The Home bridge uses
+the existing durable delivery patterns; deployed retry/age monitoring still needs
+staging acceptance.
 Do not create a second generic email provider or scheduler. Mutation commands
 ensure the actor exists without rewriting their profile. `/me` handles explicit
 profile refresh; this avoids unnecessary writes and cross-participant FK locks.

@@ -28,6 +28,8 @@ class HomeVisit(Base):
     issue_open = Column(Boolean, nullable=False, default=False)
     quote_id = Column(UUID(as_uuid=True))
     customer_confirmed_at = Column(DateTime(timezone=True))
+    service_minutes = Column(JSONB)
+    recipient = Column(JSONB)
     __table_args__ = (ForeignKeyConstraint(['booking_id', 'quote_id'], ['home_quotes.booking_id', 'home_quotes.id'],
         name='home_visit_current_quote_fk', use_alter=True),)
 
@@ -164,6 +166,7 @@ class HomeFinancialOperation(Base):
     attempts = Column(Integer, nullable=False, default=0)
     available_at = Column(DateTime(timezone=True), nullable=False, default=now)
     first_started_at = Column(DateTime(timezone=True))
+    mutation_started_at = Column(DateTime(timezone=True))
     lease_until = Column(DateTime(timezone=True))
     lease_token = Column(UUID(as_uuid=True))
     last_error = Column(Text)
@@ -184,4 +187,57 @@ class HomeStripeEvent(Base):
     lease_until = Column(DateTime(timezone=True))
     lease_token = Column(UUID(as_uuid=True))
     last_error = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class HomeHousehold(Base):
+    __tablename__ = 'home_households'
+    user_id = Column(Text, ForeignKey('eater_profiles.user_id'), primary_key=True)
+    instructions = Column(JSONB, nullable=False)
+    consented_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class HomeCallback(Base):
+    __tablename__ = 'home_callbacks'
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    fingerprint = Column(Text, nullable=False)
+    name = Column(Text, nullable=False)
+    phone = Column(Text, nullable=False)
+    preferred_time = Column(Text, nullable=False)
+    status = Column(Text, nullable=False, default='requested')
+    version = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class HomeReceipt(Base):
+    __tablename__ = 'home_receipts'
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    booking_id = Column(UUID(as_uuid=True), ForeignKey('home_visits.booking_id'), nullable=False)
+    quote_id = Column(UUID(as_uuid=True), ForeignKey('home_quotes.id'), nullable=False)
+    uploaded_by = Column(Text, ForeignKey('users.id'), nullable=False)
+    request_hash = Column(Text, unique=True, nullable=False)
+    original_hash = Column(Text, nullable=False)
+    object_path = Column(Text, nullable=False)
+    status = Column(Text, nullable=False, default='uploading')
+    generation = Column(Text)
+    sha256 = Column(Text)
+    size_bytes = Column(Integer, nullable=False, default=0)
+    content_type = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (ForeignKeyConstraint(['booking_id','quote_id'],['home_quotes.booking_id','home_quotes.id']),)
+
+
+class HomeNotificationCursor(Base):
+    __tablename__ = 'home_notification_cursors'
+    event_id = Column(UUID(as_uuid=True), ForeignKey('home_events.id'), primary_key=True)
+    status = Column(Text, nullable=False, default='pending')
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class HomeAccessAudit(Base):
+    __tablename__ = 'home_access_audit'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    actor_id = Column(Text, ForeignKey('users.id'), nullable=False)
+    action = Column(Text, nullable=False)
+    subject_id = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
