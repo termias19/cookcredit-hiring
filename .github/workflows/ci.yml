@@ -33,6 +33,10 @@ jobs:
         run: |
           python migrations/run_migrations.py
           python -m pytest tests ../deploy/tests -q -p no:cacheprovider
+      - name: Audit installed dependency advisories
+        run: |
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit --vulnerability-service pypi --strict
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -48,6 +52,9 @@ jobs:
         working-directory: frontend
       - name: Build isolated Home frontend
         run: npm run build:home
+        working-directory: frontend
+      - name: Audit production frontend dependencies
+        run: npm audit --omit=dev --audit-level=low
         working-directory: frontend
   secrets:
     runs-on: ubuntu-latest
