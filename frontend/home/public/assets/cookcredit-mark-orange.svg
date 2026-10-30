@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 30 220 170" role="img" aria-labelledby="title">
+  <title id="title">CookCredit</title>
+  <g fill="none" stroke="#E8833A" stroke-width="5.5" stroke-linecap="round">
+    <path d="M104 100C84 92 62 86 42 71"/>
+    <path d="M136 100C156 92 178 86 198 71"/>
+    <path d="M108 130C100 150 96 164 88 178"/>
+    <path d="M120 138C120 156 118 168 120 184"/>
+    <path d="M132 130C140 150 144 164 152 178"/>
+  </g>
+  <path d="M120 84 146 110 120 136 94 110Z" fill="#E8833A" stroke="#E8833A" stroke-width="9" stroke-linejoin="round"/>
+  <g fill="none" stroke="#E8833A" stroke-width="4.5" stroke-linecap="round">
+    <ellipse cx="34" cy="65" rx="21" ry="7.5" transform="rotate(-13 34 65)"/>
+    <path d="M182 61a14 14 0 0 1 28 0"/>
+  </g>
+  <rect x="175" y="61" width="42" height="7" rx="3.5" fill="#E8833A"/>
+  <circle cx="196" cy="45" r="3.4" fill="#E8833A"/>
+</svg>

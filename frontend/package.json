@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:home": "vite --config home/vite.config.js",
+    "build:home": "vite build --config home/vite.config.js",
     "dev": "vite",
     "build": "vite build && node scripts/copy-landing.mjs && node scripts/copy-hiring-assessment.mjs",
     "lint": "eslint .",

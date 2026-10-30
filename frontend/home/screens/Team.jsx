@@ -1,0 +1,376 @@
+import React, { useEffect, useState } from "react";
+
+import { api, dollars, label, money } from "../api";
+
+export default function Team({ profile }) {
+  const [tab, setTab] = useState("visits"),
+    [data, setData] = useState(null),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setData(null);
+    setError("");
+    api("/" + tab)
+      .then((v) => {
+        if (active) setData(v);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, version]);
+
+  const run = async (task) => {
+    setBusy(true);
+    setError("");
+    try {
+      await task();
+      setVersion((v) => v + 1);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadMore = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const more = await api(
+        "/visits?cursor=" + encodeURIComponent(data.nextCursor),
+      );
+      setData({ ...more, visits: [...data.visits, ...more.visits] });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const review = (event, id) => {
+    event.preventDefault();
+    const f = new FormData(event.currentTarget);
+    run(() =>
+      api("/helpers/" + id + "/review", {
+        method: "POST",
+        body: {
+          enabled: f.has("enabled"),
+          cooking: f.has("cooking"),
+          cleaning: f.has("cleaning"),
+          reviewConfirmed: f.has("reviewConfirmed"),
+        },
+      }),
+    );
+  };
+
+  const saveRates = (event) => {
+    event.preventDefault();
+    const f = new FormData(event.currentTarget);
+    run(() =>
+      api("/pricing", {
+        method: "POST",
+        body: {
+          previousId: data.activeId,
+          currency: "usd",
+          rates: {
+            cookingHourlyCents: dollars(f.get("cooking")),
+            cleaningHourlyCents: dollars(f.get("cleaning")),
+          },
+          customerFeeBps: dollars(f.get("fee")),
+          helperCommissionBps: dollars(f.get("commission")),
+          materialsCapCents: dollars(f.get("cap")),
+          quoteValidMinutes: Number(f.get("validity")),
+        },
+      }),
+    );
+  };
+
+  return (
+    <section className="page">
+      <p className="eyebrow">Private CookCredit operations</p>
+      <h1>Home service desk</h1>
+      <nav className="tabs" aria-label="Service desk">
+        {[
+          "visits",
+          "callbacks",
+          "helpers",
+          "pricing",
+          ...(profile.owner ? ["operations", "audit"] : []),
+        ].map((value) => (
+          <button
+            className={tab === value ? "selected" : "text"}
+            aria-current={tab === value ? "page" : undefined}
+            key={value}
+            onClick={() => setTab(value)}
+          >
+            {label(value)}
+          </button>
+        ))}
+      </nav>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+      {!data && !error && <p role="status">Loading…</p>}
+
+      {data && tab === "visits" && (
+        <>
+          {data.visits.length === 0 && <p>No visit requests yet.</p>}
+          {data.visits.map((v) => (
+            <a className="visit-row" href={"#visit/" + v.id} key={v.id}>
+              <div>
+                <h2>{label(v.service)}</h2>
+                <p>
+                  {v.date} · {v.time.slice(0, 5)}
+                </p>
+              </div>
+              <span>{label(v.status)} →</span>
+            </a>
+          ))}
+          {data.nextCursor && (
+            <button disabled={busy} onClick={loadMore}>
+              More requests
+            </button>
+          )}
+        </>
+      )}
+
+      {data && tab === "callbacks" && (
+        <>
+          {!data.callbacks.length && <p>No open callbacks.</p>}
+          {data.callbacks.map((row) => (
+            <article className="section" key={row.id}>
+              <h2>{row.name}</h2>
+              <p>
+                <a href={"tel:" + row.phone}>{row.phone}</a> ·{" "}
+                {row.preferredTime}
+              </p>
+              <p>{label(row.status)}</p>
+              <div className="actions">
+                {row.status === "requested" && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      run(() =>
+                        api("/callbacks/" + row.id, {
+                          method: "POST",
+                          body: { version: row.version, status: "contacting" },
+                        }),
+                      )
+                    }
+                  >
+                    Mark contacting
+                  </button>
+                )}
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    run(() =>
+                      api("/callbacks/" + row.id, {
+                        method: "POST",
+                        body: { version: row.version, status: "closed" },
+                      }),
+                    )
+                  }
+                >
+                  Close callback
+                </button>
+              </div>
+            </article>
+          ))}
+        </>
+      )}
+
+      {data && tab === "helpers" && (
+        <>
+          {!data.helpers.length && <p>No helper applications yet.</p>}
+          {data.helpers.map((row) => (
+            <article className="section" key={row.id}>
+              <h2>{row.name}</h2>
+              <p>{row.bio}</p>
+              <p>Requested services: {row.requestedServices.join(", ")}</p>
+              {profile.owner ? (
+                <form onSubmit={(event) => review(event, row.id)}>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      name="enabled"
+                      defaultChecked={row.enabled}
+                    />
+                    Enable Home helper access
+                  </label>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      name="cooking"
+                      defaultChecked={row.cooking}
+                    />
+                    Cooking reviewed and approved
+                  </label>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      name="cleaning"
+                      defaultChecked={row.cleaning}
+                    />
+                    Cleaning reviewed and approved
+                  </label>
+                  <label className="check">
+                    <input type="checkbox" name="reviewConfirmed" required />I
+                    reviewed this helper and the service capabilities above.
+                  </label>
+                  <button disabled={busy}>Save reviewed permissions</button>
+                </form>
+              ) : (
+                <p>Owner review is required to grant or change access.</p>
+              )}
+            </article>
+          ))}
+        </>
+      )}
+
+      {data && tab === "pricing" && (
+        <>
+          <p>
+            New prices affect new quotes. Existing quotes and approvals keep
+            their original amounts.
+          </p>
+          {profile.owner && (
+            <details>
+              <summary>Create a pricing version</summary>
+              <form className="narrow left" onSubmit={saveRates}>
+                <div className="two">
+                  <label>
+                    Cooking per hour, USD
+                    <input name="cooking" inputMode="decimal" required />
+                  </label>
+                  <label>
+                    Cleaning per hour, USD
+                    <input name="cleaning" inputMode="decimal" required />
+                  </label>
+                  <label>
+                    Customer service fee, %
+                    <input name="fee" inputMode="decimal" required />
+                  </label>
+                  <label>
+                    Helper commission, %
+                    <input name="commission" inputMode="decimal" required />
+                  </label>
+                  <label>
+                    Maximum materials allowance, USD
+                    <input name="cap" inputMode="decimal" required />
+                  </label>
+                  <label>
+                    Quote validity, minutes
+                    <input
+                      name="validity"
+                      type="number"
+                      min="60"
+                      max="10080"
+                      step="1"
+                      required
+                    />
+                  </label>
+                </div>
+                <button disabled={busy}>Save a new version</button>
+              </form>
+            </details>
+          )}
+          {data.versions.map((card) => (
+            <article className="section" key={card.id}>
+              <h2>
+                {card.id === data.activeId
+                  ? "Active prices"
+                  : "Saved pricing version"}
+              </h2>
+              <p>{new Date(card.createdAt).toLocaleString()}</p>
+              <dl>
+                <div>
+                  <dt>Cooking / hour</dt>
+                  <dd>{money(card.rates.cookingHourlyCents)}</dd>
+                </div>
+                <div>
+                  <dt>Cleaning / hour</dt>
+                  <dd>{money(card.rates.cleaningHourlyCents)}</dd>
+                </div>
+                <div>
+                  <dt>Customer fee / helper commission</dt>
+                  <dd>
+                    {card.customerFeeBps / 100}% /{" "}
+                    {card.helperCommissionBps / 100}%
+                  </dd>
+                </div>
+              </dl>
+              {profile.owner &&
+                card.id !== data.activeId &&
+                card.previousId === data.activeId && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      run(() =>
+                        api("/pricing/" + card.id + "/activate", {
+                          method: "POST",
+                          body: {},
+                        }),
+                      )
+                    }
+                  >
+                    Activate these prices
+                  </button>
+                )}
+            </article>
+          ))}
+        </>
+      )}
+
+      {data && tab === "operations" && (
+        <>
+          <p>
+            Provider operations are reviewed here. A Stripe transfer is not a
+            confirmed bank payout. Uncertain operations require provider
+            reconciliation before retry.
+          </p>
+          <div className="operation-list">
+            {data.operations.map((row) => (
+              <article className="section" key={row.id}>
+                <h3>{label(row.kind)}</h3>
+                <p>
+                  {label(row.status)}
+                  {row.lastError ? " · " + label(row.lastError) : ""}
+                </p>
+                <p className="quiet">
+                  {new Date(row.createdAt).toLocaleString()}
+                </p>
+                {row.bookingId && (
+                  <a href={"#visit/" + row.bookingId}>Open private visit</a>
+                )}
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
+      {data && tab === "audit" && (
+        <ol className="activity">
+          {data.events.map((row, i) => (
+            <li key={i}>
+              <strong>{label(row.action)}</strong>
+              <small>
+                {new Date(row.at).toLocaleString()} · actor {row.actorId} ·
+                record {row.subjectId}
+              </small>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}

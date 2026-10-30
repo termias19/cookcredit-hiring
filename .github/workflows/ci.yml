@@ -46,6 +46,9 @@ jobs:
         working-directory: frontend
       - run: node --test tests/*.test.mjs
         working-directory: frontend
+      - name: Build isolated Home frontend
+        run: npm run build:home
+        working-directory: frontend
   secrets:
     runs-on: ubuntu-latest
     steps:
