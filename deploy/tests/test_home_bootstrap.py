@@ -34,3 +34,28 @@ def test_admin_job_guard_precedes_all_database_operations(monkeypatch,key,value)
     monkeypatch.setenv(key,value)
     monkeypatch.setattr(bootstrap,'create_engine',lambda *a,**k:pytest.fail('Unauthorized connection attempted'))
     with pytest.raises(RuntimeError):bootstrap.main()
+
+
+@pytest.mark.parametrize('already_member', [False, True])
+@pytest.mark.parametrize('fail', [False, True])
+def test_temporary_admin_membership_is_released_on_success_or_failure(already_member, fail):
+    class Cursor:
+        def __init__(self):
+            self.calls=[]
+        def execute(self, statement, parameters=None):
+            self.calls.append(str(statement))
+        def fetchone(self):
+            return (already_member,)
+    cursor=Cursor()
+    if fail:
+        with pytest.raises(RuntimeError):
+            with bootstrap.migration_owner(cursor):
+                raise RuntimeError('synthetic failure')
+    else:
+        with bootstrap.migration_owner(cursor):
+            pass
+    assert 'RESET ROLE' in cursor.calls
+    grants=[q for q in cursor.calls if 'GRANT ' in q]
+    revokes=[q for q in cursor.calls if 'REVOKE ' in q]
+    assert len(grants)==len(revokes)==(0 if already_member else 1)
+    assert all('CURRENT_USER' in q and 'cookcredit_home_migrator' in q for q in grants+revokes)

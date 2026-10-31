@@ -422,7 +422,7 @@ function Visits() {
             </h2>
             <p>
               {row.date} · {row.time.slice(0, 5)} · {row.durationMinutes / 60}{" "}
-              hours
+              {row.durationMinutes === 60 ? "hour" : "hours"}
             </p>
           </div>
           <span>

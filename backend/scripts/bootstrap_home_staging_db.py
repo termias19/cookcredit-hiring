@@ -5,6 +5,7 @@ arrive through Secret Manager references, never arguments or printed SQL. This
 does not alter a Hiring database, restart an instance or rotate existing roles.
 """
 import os
+from contextlib import contextmanager
 
 from psycopg2 import sql
 from sqlalchemy import URL, create_engine
@@ -23,6 +24,24 @@ def target(setting, role):
             or dict(value.query) != {'host': '/cloudsql/' + CONNECTION}):
         raise RuntimeError('Home bootstrap target rejected')
     return value
+
+
+
+@contextmanager
+def migration_owner(cursor):
+    # Cloud SQL's postgres has CREATEDB/CREATEROLE, not true SUPERUSER. It
+    # needs temporary membership to create a database owned by the migrator.
+    # Never grant administrator membership to either Home application role.
+    cursor.execute("SELECT pg_has_role(current_user, %s, 'MEMBER')", (ROLES[0],))
+    granted = not cursor.fetchone()[0]
+    if granted:
+        cursor.execute(sql.SQL('GRANT {} TO CURRENT_USER').format(sql.Identifier(ROLES[0])))
+    try:
+        yield
+    finally:
+        cursor.execute('RESET ROLE')
+        if granted:
+            cursor.execute(sql.SQL('REVOKE {} FROM CURRENT_USER').format(sql.Identifier(ROLES[0])))
 
 
 def main():
@@ -58,23 +77,27 @@ def main():
             existing = cursor.fetchone()
             if existing and existing != (ROLES[0], MARKER):
                 raise RuntimeError('Existing Home database ownership rejected')
-            if not existing:
-                cursor.execute(sql.SQL('CREATE DATABASE {} OWNER {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[0])))
-            cursor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(ROLES[0])))
-            cursor.execute(sql.SQL('COMMENT ON DATABASE {} IS {}').format(sql.Identifier(DATABASE), sql.Literal(MARKER)))
-            cursor.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(DATABASE)))
-            cursor.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[1])))
-            cursor.execute('RESET ROLE')
+            print('Home bootstrap step: database ownership', flush=True)
+            with migration_owner(cursor):
+                if not existing:
+                    cursor.execute(sql.SQL('CREATE DATABASE {} OWNER {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[0])))
+                cursor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(ROLES[0])))
+                cursor.execute(sql.SQL('COMMENT ON DATABASE {} IS {}').format(sql.Identifier(DATABASE), sql.Literal(MARKER)))
+                cursor.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(DATABASE)))
+                cursor.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[1])))
             cursor.close()
     finally:
         admin.dispose()
     setup = create_engine(admin_url.set(database=DATABASE), connect_args={'connect_timeout': 5})
     try:
         with setup.begin() as connection:
+            print('Home bootstrap step: extension and schema', flush=True)
             connection.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis')
-            connection.exec_driver_sql('SET ROLE cookcredit_home_migrator')
-            connection.exec_driver_sql('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
-            connection.exec_driver_sql('RESET ROLE')
+            cursor = connection.connection.driver_connection.cursor()
+            with migration_owner(cursor):
+                cursor.execute('SET ROLE cookcredit_home_migrator')
+                cursor.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
+            cursor.close()
     finally:
         setup.dispose()
     print('Home staging database and non-inheriting roles prepared on existing capacity.', flush=True)
