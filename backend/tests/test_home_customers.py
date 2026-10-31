@@ -205,3 +205,12 @@ def test_receipt_in_place_orientation_keeps_pixels_readable_and_drops_metadata(m
     with Image.open(io.BytesIO(home_receipts.normalize(stream.getvalue()))) as result:
         assert result.size==(40,60) and result.mode=='RGB'
         assert not result.getexif()
+
+
+def test_receipt_authorization_precedes_pixel_processing(app,monkeypatch):
+    c=app.test_client();row,_=fully_approved(c)
+    monkeypatch.setattr(home_receipts,'normalize',lambda data:pytest.fail('Unauthorized receipt reached pixel processing'))
+    assert upload(c,row,uid='customer').status_code==403
+    assert upload(c,row,uid='stranger').status_code==404
+    assert upload(c,{'id':str(uuid.uuid4())}).status_code==404
+    with database.db_session() as session:assert session.query(HomeReceipt).count()==0

@@ -67,19 +67,29 @@ def receipt_dict(row):
             'createdAt':row.created_at.isoformat()}
 
 
+
+def _upload_visit(session, principal, booking_id, operator, *, lock=False):
+    booking, visit = visits.load_visit(session, booking_id, principal['uid'], operator, lock=lock)
+    if not operator and principal['uid'] != booking['cook_id']:
+        visits.fail('forbidden','Only the assigned helper or CookCredit can upload purchase evidence.',403)
+    if not visit.quote_id or booking['status'] == 'cancelled':
+        visits.fail('receipt_not_ready','An agreed quote is required before uploading receipts.',409)
+    return booking, visit
+
+
 def upload(principal, booking_id, key, data, operator):
     if not isinstance(key,str) or len(key)<16 or len(key)>128:
         visits.fail('idempotency_key_required','A receipt upload reference is required.')
+    # Reject out-of-scope uploads before spending memory/CPU on their pixels.
+    # Release SQL before decoding; recheck under lock before reserving evidence.
+    with db_session() as session:
+        _upload_visit(session, principal, booking_id, operator)
     raw_hash = hashlib.sha256(data).hexdigest()
     encoded = normalize(data)
     digest = hashlib.sha256(encoded).hexdigest()
     request_hash = visits.fingerprint({'actor':principal['uid'],'booking':booking_id,'key':key})
     with db_session() as session:
-        booking, visit = visits.load_visit(session, booking_id, principal['uid'], operator, lock=True)
-        if not operator and principal['uid'] != booking['cook_id']:
-            visits.fail('forbidden','Only the assigned helper or CookCredit can upload purchase evidence.',403)
-        if not visit.quote_id or booking['status'] == 'cancelled':
-            visits.fail('receipt_not_ready','An agreed quote is required before uploading receipts.',409)
+        booking, visit = _upload_visit(session, principal, booking_id, operator, lock=True)
         row = session.execute(select(HomeReceipt).where(HomeReceipt.request_hash==request_hash)).scalar_one_or_none()
         if row:
             if row.original_hash != raw_hash:
