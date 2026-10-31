@@ -68,14 +68,14 @@ def test_managed_admin_retains_owner_access_until_schema_setup_finishes(monkeypa
         statement=''
         def execute(self, statement, parameters=None):
             self.statement=str(statement)
-            if 'GRANT {} TO CURRENT_USER' in self.statement:
+            if 'GRANT ' in self.statement and 'CURRENT_USER' in self.statement:
                 membership['active']=True
-            elif 'REVOKE {} FROM CURRENT_USER' in self.statement:
+            elif 'REVOKE ' in self.statement and 'CURRENT_USER' in self.statement:
                 membership['active']=False
         def fetchone(self):
             if 'max_connections' in self.statement:return (20,)
-            if 'FROM pg_roles WHERE rolname' in self.statement:return (False,)*5+(bootstrap.MARKER,)
             if 'FROM pg_auth_members' in self.statement:return None
+            if 'FROM pg_roles WHERE rolname' in self.statement:return (False,)*5+(bootstrap.MARKER,)
             if 'FROM pg_database' in self.statement:return (bootstrap.ROLES[0],bootstrap.MARKER)
             if 'pg_has_role' in self.statement:return (membership['active'],)
             raise AssertionError('Unexpected bootstrap read')
