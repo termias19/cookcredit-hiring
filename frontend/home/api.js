@@ -5,6 +5,29 @@ import { waitForRequest } from "./waitForRequest";
 import { createPendingRequests } from "./pendingRequests";
 
 const pending = createPendingRequests();
+// These domain errors reject validation/state before the command commits.
+// command() checks its committed replay first and db_session() rolls back the
+// rejection. Keep every uncertain, auth, busy, upload or provider outcome keyed.
+const finalRejections = {
+  400: new Set([
+    "invalid_fields", "invalid_input", "invalid_service", "invalid_schedule",
+    "invalid_duration", "scope_mismatch", "recipient_permission_required",
+    "consent_required", "invalid_version", "invalid_operating_rules",
+    "operating_rules_review_required", "operating_rules_incomplete",
+    "invalid_availability", "invalid_amount", "unsupported_currency",
+    "invalid_materials", "materials_limit", "tax_review_required",
+    "customer_supplies", "receipt_review_required", "invalid_receipts",
+    "receipt_evidence_required", "tax_limit", "invalid_phone",
+    "invalid_application", "invalid_permission", "invalid_status",
+  ]),
+  409: new Set([
+    "stale_version", "operating_rules_changed", "availability_changed",
+    "pricing_changed", "outside_operating_hours", "booking_notice_required",
+    "helper_schedule_conflict", "helper_unavailable", "availability_existing_visit",
+    "operating_rules_existing_visit", "quote_changed", "scope_changed",
+    "quote_expired", "visit_in_past", "visit_time_passed",
+  ]),
+};
 export async function api(
   path,
   { method = "GET", body, protectedAccount = false, form = false } = {},
@@ -60,6 +83,8 @@ export async function api(
       );
     }
     if (!response.ok) {
+      if (!form && typeof value.error === "string" &&
+          finalRejections[response.status]?.has(value.code)) pending.acknowledge(reference);
       const error = new Error(
         value.error || "We could not finish. Please retry.",
       );
