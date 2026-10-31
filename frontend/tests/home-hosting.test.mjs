@@ -9,7 +9,8 @@ test('Home staging routes its API before the SPA and pins its own service revisi
   assert.equal(hosting.site,'cookcredit-home-staging')
   assert.equal(hosting.public,'../dist-home')
   assert.deepEqual(hosting.rewrites[0],{source:'/api/home/**',run:{serviceId:'cookcredit-home-staging',region:'us-central1',pinTag:true}})
-  assert.deepEqual(hosting.rewrites[1],{source:'**',destination:'/index.html'})
+  // Home uses hash routes: missing JS must be a404, never the SPA HTML.
+  assert.deepEqual(hosting.rewrites[1],{source:'/',destination:'/index.html'})
 })
 
 test('Home policy supports branded Google login and protects private navigation',()=>{

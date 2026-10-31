@@ -23,6 +23,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './OperatingRulesDraft':{__esModule:true,default:()=>null},
     './Availability':{__esModule:true,default:()=>null},
     './SuggestedTimes':{__esModule:true,default:()=>null},
+    '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
     '../../src/utils/errorReporting':{reportClientError(){}}}
   Object.assign(modules,runtime.modules)
   let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
@@ -448,4 +449,30 @@ test('visit steps preserve a preferred time, submit only on Send, and require a 
   s.render();assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
   assert.equal(calls[1][1].body.timeZone,'UTC');assert.equal(calls[1][1].body.time,'15:00')
   assert.equal(s.location.hash,'visit/'+id)
+})
+
+test('optional suggestion fallback leaves manual request fields outside the boundary and preserves explicit submission',async()=>{
+  const calls=[]
+  const s=await screen('RequestVisit',async(path,options)=>{calls.push([path,options]);return path==='/household'?{household:null}:{id:'saved-visit'}},
+    false,async()=>{},{profile:{consentVersion:'home-visit-v2',consentText:'Synthetic consent',serviceTimeZone:'America/New_York',serviceStates:['GA']}})
+  await s.settle()
+  const submit=body=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:body})
+  await submit({});s.render();await submit({});s.render()
+  s.find(p=>p.name==='date').props.onChange({target:{value:'2030-01-07'}})
+  s.find(p=>p.name==='time').props.onChange({target:{value:'14:00'}});s.render()
+  const boundary=s.find((p,n)=>n.type==='home-boundary')
+  assert.ok(boundary)
+  const nodes=n=>!n||typeof n!=='object'?[]:[n,...(Array.isArray(n.props?.children)?n.props.children:[n.props?.children]).flatMap(nodes)]
+  assert.equal(nodes(boundary).some(n=>['address','date','time','consent'].includes(n.props?.name)),false)
+  const fallback=boundary.props.fallback({reference:'synthetic-reference'})
+  assert.match(JSON.stringify(fallback),/Choose your preferred date and time above/)
+  assert.match(JSON.stringify(fallback),/No time has been verified or reserved/)
+  assert.match(JSON.stringify(fallback),/synthetic-reference/)
+  assert.equal(calls.length,1)
+  assert.equal(s.find(p=>p.name==='date').props.value,'2030-01-07')
+  assert.equal(s.find(p=>p.name==='time').props.value,'14:00')
+  await submit({cooking:'120',date:'2030-01-07',time:'14:00',address:'Synthetic service address',notes:'',preferences:[],consent:'on'})
+  assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
+  assert.equal(calls[1][1].body.time,'14:00')
+  assert.equal(s.location.hash,'visit/saved-visit')
 })

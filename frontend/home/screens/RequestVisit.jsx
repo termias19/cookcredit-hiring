@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api } from "../api";
+import HomeErrorBoundary from "../HomeErrorBoundary";
 
 const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
 
@@ -306,12 +307,16 @@ export default function RequestVisit({ profile, initialService }) {
           {serviceStates.length > 1 && <label>State for the time check<select value={serviceState} onChange={event => setServiceState(event.target.value)}>
             {serviceStates.map(value => <option value={value} key={value}>{value}</option>)}
           </select></label>}
-          {step === 2 && <Suspense fallback={<p role="status">Loading time suggestions…</p>}><SuggestedTimes date={preferredDate} service={service} durationMinutes={durationMinutes} state={serviceState}
+          {step === 2 && <HomeErrorBoundary fallback={({ reference }) => <section className="section" aria-label="Suggested visit times">
+            <h2>Suggested times are unavailable.</h2>
+            <p role="status">Choose your preferred date and time above for CookCredit review. No time has been verified or reserved.</p>
+            {reference && <p className="quiet">Support reference: {reference}</p>}
+          </section>}><Suspense fallback={<p role="status">Loading time suggestions…</p>}><SuggestedTimes date={preferredDate} service={service} durationMinutes={durationMinutes} state={serviceState}
             timeZone={timeZone} selectedTime={preferredTime} onChoose={setPreferredTime} disabled={busy}
             onTimeZone={value => { if (value !== timeZone) {
               setCheckedTimeZone(value); setPreferredTime("");
               setError(`Service times now use ${value}. Choose your preferred start time again.`);
-            } }} /></Suspense>}
+            } }} /></Suspense></HomeErrorBoundary>}
           <label className="check">
             <input name="consent" type="checkbox" required={step === 2} />
             {profile.consentText}

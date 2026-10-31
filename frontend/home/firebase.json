@@ -5,7 +5,7 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {"source": "/api/home/**", "run": {"serviceId": "cookcredit-home-staging", "region": "us-central1", "pinTag": true}},
-      {"source": "**", "destination": "/index.html"}
+      {"source": "/", "destination": "/index.html"}
     ],
     "headers": [
       {"source": "**", "headers": [
