@@ -123,14 +123,17 @@ Commands use `{ "action": "review", "version": 0 }`. Supported actions:
   from the customer. Assignment can change before acceptance; prior helpers lose
   access. The new version invalidates stale screens.
 - `accept`: assigned eligible helper only. Booking status becomes `accepted`.
-- `cancel`: customer or operator, only before service confirmation. Closed visits
+- `cancel`: customer or operator, only before work starts. Closed visits
   cannot be reopened through this command API.
 - `report_issue`: authorized visit participant; holds further progress.
 - `resolve_issue`: operator only; recorded as a separate audited change.
+- `start` / `finish`: assigned helper, with verified payment and the required
+  preceding visit state. `confirm`: customer, after the helper finishes.
 
-Completed visits can still report and resolve an issue; cancellation and service
-edits remain closed. No action marks a visit paid, started, finished or transferred
-yet. The quote routes below add offers to the same visit. Lists return `quoteId`
+Completed visits can still report and resolve an issue. An existing issue on a
+cancelled visit can be resolved by an operator without reopening the visit.
+Cancellation and service edits remain closed. Commands cannot invent a provider
+payment or transfer. The quote routes below add offers to the same visit. Lists return `quoteId`
 without fetching financial detail; the detail route expands the current `quote`.
 Legacy required price fields are zero while unpriced; a quoted visit's estimate
 mirrors its maximum quoted offer. These fields never authorize a payment.
@@ -330,9 +333,26 @@ request bodies or SQL parameters. The durable audit event commits with the state
 change. Events are not a message-delivery acknowledgement. The Home bridge uses
 the existing durable delivery patterns; deployed retry/age monitoring still needs
 staging acceptance.
-Do not create a second generic email provider or scheduler. Mutation commands
+Use the existing AccountEmail provider and Home dispatch endpoint. One Home
+recovery schedule covers its separate durable queues; Hiring's schedules retain
+their own targets. Do not introduce a second mail provider. Mutation commands
 ensure the actor exists without rewriting their profile. `/me` handles explicit
 profile refresh; this avoids unnecessary writes and cross-participant FK locks.
+The welcome event requests a wakeup only when it is newly inserted. Worker
+wakeups coalesce in a future two-second window and remaining batches, retry
+times and abandoned leases request a follow-up through the same worker. Paused
+mail/payment processing does not create a wakeup loop. Queue failure/age logging
+reuses the existing privacy-safe reporter.
+
+`frontend/home/firebase.json` is the separate staging Hosting contract. It routes
+`/api/home/**` to Home before the SPA, pins the backend revision, preserves the
+branded Google popup policy, disables framing and keeps private navigation out
+of referrers. Do not deploy the Hiring Hosting config as Home. The guarded
+`scripts/bootstrap_home_staging_db.py` can provision only the named Home database
+and non-inheriting roles through one execution of the existing staging admin job;
+it cannot restart/resize a database or target Hiring's database. The migration
+permission regression uses actual non-owner roles on disposable PostGIS and
+checks that runtime startup works while audit/schema mutation fails.
 
 ### Release acceptance procedure
 
