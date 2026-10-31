@@ -253,6 +253,24 @@ def test_issue_hold_resolution_cancellation_and_stale_screen(app):
     assert change(client, cancelled.json, 'review').json['code'] == 'visit_closed'
 
 
+def test_cancelled_visit_keeps_its_status_when_operator_resolves_existing_issue(app):
+    client = app.test_client()
+    row = create(client).json
+    held = change(client, row, 'report_issue', uid='customer').json
+    cancelled = change(client, held, 'cancel', uid='customer').json
+    assert cancelled['status'] == 'cancelled'
+    assert change(client, cancelled, 'resolve_issue', uid='customer').status_code == 403
+    resolved = change(client, cancelled, 'resolve_issue', uid='operator')
+    assert resolved.status_code == 200 and resolved.json['status'] == 'cancelled'
+    current = client.get('/api/home/visits/' + row['id'], headers=headers()).json
+    assert current['issueOpen'] is False
+    assert change(client, current, 'resolve_issue').json['code'] == 'invalid_transition'
+    for action in ('review', 'accept', 'start', 'report_issue', 'cancel'):
+        assert change(client, current, action).json['code'] == 'visit_closed'
+    events = client.get('/api/home/visits/' + row['id'] + '/activity', headers=headers('operator')).json['events']
+    assert [event['action'] for event in events] == ['visit_requested', 'report_issue', 'cancel', 'resolve_issue']
+
+
 def test_atomic_rollback_and_safe_error_logging(app, monkeypatch, capsys):
     def broken(*args, **kwargs):
         raise RuntimeError('private@example.test sensitive instruction')

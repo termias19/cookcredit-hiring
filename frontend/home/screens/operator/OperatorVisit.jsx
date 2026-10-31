@@ -90,9 +90,10 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
           {error}
         </p>
       )}
+      {visit.issueOpen && <p>Resolve the reviewed issue before changing this visit.</p>}
       <div className="actions">
         {visit.status === "requested" && !visit.reviewed && (
-          <button disabled={busy} onClick={() => action("review")}>
+          <button disabled={busy || visit.issueOpen} onClick={() => action("review")}>
             Mark requirements reviewed
           </button>
         )}
@@ -137,10 +138,10 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
                   ))}
               </select>
             </label>
-            <button disabled={busy}>Save assignment</button>
+            <button disabled={busy || visit.issueOpen}>Save assignment</button>
           </form>
         )}
-      {visit.status === "accepted" && !visit.payment.id && (
+      {visit.status === "accepted" && !visit.payment.id && !visit.issueOpen && (
         <details>
           <summary>Prepare or update the full quote</summary>
           {!pricing?.activeId ? (

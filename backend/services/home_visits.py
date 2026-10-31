@@ -259,7 +259,11 @@ def transition(session, principal, booking_id, body, operator):
     if body['version'] != visit.version:
         fail('stale_version', 'This visit changed. Refresh it before continuing.', 409)
     action, status, uid = body['action'], booking['status'], principal['uid']
-    if status == 'cancelled' or status == 'completed' and action not in ('report_issue', 'resolve_issue'):
+    # Cancellation freezes the visit, but an existing review hold still needs
+    # an authorized resolution. This never reopens the visit or bypasses payment
+    # reconciliation; the operator check below applies to every resolution.
+    if ((status == 'cancelled' and action != 'resolve_issue')
+            or (status == 'completed' and action not in ('report_issue', 'resolve_issue'))):
         fail('visit_closed', 'This visit is already closed.', 409)
     if visit.issue_open and action not in ('cancel', 'resolve_issue'):
         fail('issue_open', 'CookCredit needs to resolve the reported issue first.', 409)
