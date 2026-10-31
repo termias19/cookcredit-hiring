@@ -41,9 +41,28 @@ test('actual Home client keeps rejected attestation private and does not submit'
   const error=Object.assign(new Error('synthetic provider internals'),{code:'appCheck/recaptcha-error'})
   const clientUnderTest=client(()=>Promise.reject(error))
   await assert.rejects(clientUnderTest.request('/callbacks',{method:'POST',body:{},protectedAccount:true}),e=>
-    /security check could not finish/.test(e.message)&&!e.message.includes('provider internals'))
+    /security check could not finish/.test(e.message)&&e.message.includes('appCheck/recaptcha-error')&&!e.message.includes('provider internals'))
   assert.equal(clientUnderTest.calls.length,0)
   assert.deepEqual(clientUnderTest.reports,['unhandled_error'])
+})
+
+test('Home security diagnostics expose only fixed categories and bounded status, never provider payloads',async()=>{
+  for(const [code,status,expected] of [
+    ['appCheck/fetch-status-error',403,'appCheck/fetch-status-error (403)'],
+    ['appCheck/throttled',403,'appCheck/throttled (403)'],
+    ['appCheck/private@example.test','private-token','appCheck/unknown'],
+  ]){
+    const error=Object.assign(new Error('PRIVATE_PROVIDER_MESSAGE'),{
+      code,customData:{httpStatus:status,token:'PRIVATE_TOKEN',serverResponse:'PRIVATE_RESPONSE'},
+    })
+    const underTest=client(()=>Promise.reject(error))
+    await assert.rejects(underTest.request('/callbacks',{method:'POST',body:{},protectedAccount:true}),e=>{
+      assert.ok(e.message.includes(expected))
+      assert.doesNotMatch(e.message,/PRIVATE_|private@example|private-token/)
+      return true
+    })
+    assert.equal(underTest.calls.length,0)
+  }
 })
 
 test('actual Home client attaches completed attestation before the existing API request',async()=>{

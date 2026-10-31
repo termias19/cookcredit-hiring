@@ -107,9 +107,21 @@ export async function api(
       );
     }
     if (String(error.code || "").startsWith("appCheck/")) {
-      reportClientError("unhandled_error");
+      const reference = reportClientError("unhandled_error");
+      // Provider messages/customData can contain request details. Expose only
+      // fixed SDK categories and HTTP status so support can diagnose failures.
+      const codes = new Set([
+        "appCheck/recaptcha-error", "appCheck/fetch-network-error",
+        "appCheck/fetch-status-error", "appCheck/fetch-parse-error",
+        "appCheck/throttled", "appCheck/initial-throttle",
+        "appCheck/storage-open", "appCheck/storage-get", "appCheck/storage-set",
+      ]);
+      const code = codes.has(error.code) ? error.code : "appCheck/unknown";
+      const status = Number(error.customData?.httpStatus);
+      const diagnostic = code + ([400, 401, 403, 404, 429, 500, 502, 503, 504].includes(status) ? ` (${status})` : "");
       throw new Error(
-        "The security check could not finish. Please retry, or open CookCredit in Chrome, Edge or Safari.",
+        "The security check could not finish. Please retry, or contact customer service."
+        + ` Security reference: ${diagnostic}${typeof reference === "string" && /^[a-f0-9]{32}$/.test(reference) ? `; ${reference}` : ""}.`,
       );
     }
     if (error instanceof TypeError) {
