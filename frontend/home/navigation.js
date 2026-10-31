@@ -1,5 +1,5 @@
 const routePattern =
-  /^(enroll|request|visits|payout|team|helping|visit\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/;
+  /^(enroll|request|visits|payout|availability|team|helping|visit\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/;
 export const safeHomeRoute = (value) =>
   typeof value === "string" && routePattern.test(value) ? value : "visits";
 export function readReturnRoute() {

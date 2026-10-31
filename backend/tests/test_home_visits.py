@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
 
 from middleware import auth
-from models import User, EaterProfile, CookProfile, Booking
+from models import User, EaterProfile, CookProfile, Booking, CookAvailability, CookBlockedDate
 from models.account_email import AccountEmail
 from models.home_service import HomeVisit, HomeEvent, HomeCommand, HomeHelperPermission
 from services import database, home_visits as visits
@@ -45,7 +45,8 @@ def home_db(monkeypatch):
     try:
         with engine.begin() as conn:
             spatial = conn.execute(text("SELECT to_regtype('geography') IS NOT NULL")).scalar()
-            for table in (User.__table__, EaterProfile.__table__, CookProfile.__table__, Booking.__table__, AccountEmail.__table__):
+            for table in (User.__table__, EaterProfile.__table__, CookProfile.__table__, Booking.__table__, AccountEmail.__table__,
+                          CookAvailability.__table__, CookBlockedDate.__table__):
                 ddl = str(CreateTable(table).compile(engine))
                 if not spatial:
                     ddl = re.sub(r'^\s*(?:base_location|eater_location|location)\s+geography\([^\n]+\),\s*\n', '', ddl, flags=re.I | re.M)
@@ -107,12 +108,20 @@ def change(client, visit, action, uid='owner', **extra):
         json={'action': action, 'version': visit['version'], **extra})
 
 
-def seed_helper(client, uid='helper', *, cooking=True, cleaning=True, approved=True):
+def seed_helper(client, uid='helper', *, cooking=True, cleaning=True, approved=True, available=True):
     assert client.get('/api/home/me', headers=headers(uid)).status_code == 200
     with database.db_session() as session:
         session.execute(insert(CookProfile.__table__).values(user_id=uid, approved=approved))
-    return client.put(f'/api/home/helpers/{uid}/permission', headers=headers('owner', uuid.uuid4().hex),
-                      json={'enabled': True, 'cooking': cooking, 'cleaning': cleaning})
+    result=client.put(f'/api/home/helpers/{uid}/permission', headers=headers('owner', uuid.uuid4().hex),
+                     json={'enabled': True, 'cooking': cooking, 'cleaning': cleaning})
+    if available:
+        # Explicit all-day fixture coverage. Production migration seeds no hours.
+        from sqlalchemy import update
+        with database.db_session() as session:
+            session.execute(update(HomeHelperPermission).where(HomeHelperPermission.user_id==uid)
+                .values(availability_version=1,availability_time_zone='America/New_York'))
+            session.add_all([CookAvailability(cook_id=uid,day_of_week=day,start_hour=0,end_hour=24)for day in range(7)])
+    return result
 
 
 def test_default_is_off_and_exposes_no_hiring_routes(monkeypatch):

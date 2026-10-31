@@ -8,6 +8,7 @@ test("Home email continuation accepts only internal task routes", () => {
     "enroll",
     "helping",
     "payout",
+    "availability",
     "visit/11111111-1111-4111-8111-111111111111",
   ])
     assert.equal(safeHomeRoute(route), route);
@@ -32,4 +33,5 @@ test("Home diagnostics categorize routes without sending private identifiers or 
   assert.equal(homeScreenCategory("#team"), "home_operator");
   assert.equal(homeScreenCategory("#enroll"), "home_customer");
   assert.equal(homeScreenCategory("#payout"), "home_helper");
+  assert.equal(homeScreenCategory("#availability"), "home_helper");
 });

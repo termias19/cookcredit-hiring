@@ -16,7 +16,7 @@ export function screenCategory(path = '') {
 export function homeScreenCategory(hash = '') {
   if (/^#(sign-in|account\/)/.test(hash)) return 'auth'
   if (/^#team(?:$|\?)/.test(hash)) return 'home_operator'
-  if (/^#(payout|helping)(?:$|\?)/.test(hash)) return 'home_helper'
+  if (/^#(payout|helping|availability)(?:$|\?)/.test(hash)) return 'home_helper'
   if (/^#(visit\/|visits$|request$|enroll$)/.test(hash)) return 'home_customer'
   return 'landing'
 }

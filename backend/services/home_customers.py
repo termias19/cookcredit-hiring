@@ -12,7 +12,7 @@ from services import home_visits as visits
 def return_route(value=None):
     if value is None:
         return 'visits'
-    if not isinstance(value,str) or not re.fullmatch(r'(enroll|request|visits|payout|team|helping|visit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',value):
+    if not isinstance(value,str) or not re.fullmatch(r'(enroll|request|visits|payout|availability|team|helping|visit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',value):
         visits.fail('invalid_return','Please reopen the account form from your visit.')
     return value
 
@@ -195,5 +195,9 @@ def review_helper(session,principal,helper_id,body):
     profile=session.execute(select(CookProfile.user_id,CookProfile.applied_at).where(CookProfile.user_id==helper_id)).first()
     if not profile or not profile.applied_at:
         visits.fail('application_required','The helper must submit their Home application first.',409)
+    # Match assignment's permission-then-profile lock order, including the first
+    # permission insert. Both updates remain invisible until this transaction
+    # commits, so no partially approved helper can be observed by another worker.
+    result=visits.set_helper_permission(session,principal,helper_id,{key:body[key] for key in ('enabled','cooking','cleaning')})
     session.execute(update(CookProfile.__table__).where(CookProfile.user_id==helper_id).values(approved=body['enabled']and body['cooking']))
-    return visits.set_helper_permission(session,principal,helper_id,{key:body[key] for key in ('enabled','cooking','cleaning')})
+    return result

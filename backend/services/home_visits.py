@@ -225,6 +225,8 @@ def require_free_calendar(session, helper_id, booking, visit):
     start = datetime.combine(booking['scheduled_date'], booking['scheduled_start_time'],
                              ZoneInfo(visit.time_zone)).astimezone(timezone.utc)
     end = start + timedelta(minutes=int(booking['estimated_duration'] * 60))
+    if start <= datetime.now(timezone.utc):
+        fail('visit_time_passed','The requested start time has passed. Contact CookCredit to arrange a new time.',409)
     # Date bounds keep the indexed candidate set small. Two days on either
     # side cover IANA timezone offsets and Home's maximum eight-hour visit.
     safe_isolation, conflict = session.execute(text("""
@@ -248,6 +250,8 @@ def require_free_calendar(session, helper_id, booking, visit):
         # Never identify the other household, address or visit in this error.
         fail('helper_schedule_conflict',
              'This helper already has a visit at that time. Choose another helper or contact CookCredit.', 409)
+    from services.home_availability import require_available
+    require_available(session, helper_id, start, end)
 
 
 def load_visit(session, booking_id, uid, operator, *, lock=False):

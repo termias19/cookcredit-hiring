@@ -52,6 +52,12 @@ def test_migrated_runtime_can_start_but_cannot_rewrite_audit_or_schema(monkeypat
             assert conn.execute(text('SELECT current_user')).scalar() == roles[1]
             assert conn.execute(text('SELECT count(*) FROM home_schema_migrations')).scalar() >= 4
             assert conn.execute(text("SELECT tableowner FROM pg_tables WHERE schemaname='public' AND tablename='home_events'")).scalar() == roles[0]
+            for table in ('cook_availability','cook_blocked_dates'):
+                for privilege in ('SELECT','INSERT','UPDATE','DELETE'):
+                    assert conn.execute(text('SELECT has_table_privilege(current_user,:table,:privilege)'),
+                        {'table':table,'privilege':privilege}).scalar() is True
+            assert conn.execute(text("SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conrelid='cook_availability'::regclass AND conname='home_availability_end_hour'")).scalar() is not None
         for statement in ('UPDATE home_events SET details=details', 'DELETE FROM home_commands',
                           'DELETE FROM home_quotes', 'INSERT INTO home_schema_migrations VALUES (\'unapproved.sql\')',
                           'CREATE TABLE unauthorized (id integer)'):

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { api, dollars, label, money } from "../api";
 import { serviceNames } from "./Enrollment";
 import OperatingRulesDraft from "./OperatingRulesDraft";
+import Availability from "./Availability";
 
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
@@ -17,7 +18,8 @@ export default function Team({ profile }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
-  useEffect(() => setNotice(""), [tab]);
+  const [scheduleHelper, setScheduleHelper] = useState(null);
+  useEffect(() => { setNotice(""); setScheduleHelper(null); }, [tab]);
 
   const [version, setVersion] = useState(0);
 
@@ -251,6 +253,11 @@ export default function Team({ profile }) {
               <h2>{row.name}</h2>
               <p>{row.bio}</p>
               <p>Requested services: {row.requestedServices.join(", ")}</p>
+              {row.enabled && <button type="button" className="secondary" aria-expanded={scheduleHelper === row.id}
+                onClick={() => setScheduleHelper(value => value === row.id ? null : row.id)}>
+                {scheduleHelper === row.id ? "Hide" : "View"} availability for {row.name}
+              </button>}
+              {scheduleHelper === row.id && <Availability key={row.id} helperId={row.id} />}
               {profile.owner ? (
                 <form onSubmit={(event) => review(event, row.id)}>
                   <label className="check">

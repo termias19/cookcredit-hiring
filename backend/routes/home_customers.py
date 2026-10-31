@@ -16,6 +16,33 @@ from routes.home_visits import home_auth,is_owner,is_operator,principal,json_bod
 customer_bp=Blueprint('home_customers',__name__)
 
 
+@customer_bp.route('/availability',methods=['GET','PUT'])
+@home_auth
+@limiter.limit('20 per minute',key_func=lambda:g.user_id)
+def availability():
+    from services import home_availability as schedule
+    with db_session() as session:
+        if request.method=='GET':
+            result=schedule.read(session,g.user_id)
+        else:
+            actor,body=principal(),json_body()
+            result=visits.command(session,actor,request.headers.get('Idempotency-Key'),'helper-availability',body,
+                lambda:schedule.save(session,actor,body))
+    return jsonify(result)
+
+
+@customer_bp.get('/helpers/<helper_id>/availability')
+@home_auth
+@limiter.limit('30 per minute',key_func=lambda:g.user_id)
+def helper_availability(helper_id):
+    if not is_operator():visits.fail('forbidden','Only CookCredit operations can review helper availability.',403)
+    from services import home_availability as schedule
+    with db_session() as session:
+        result=schedule.read(session,helper_id)
+        customers.audit(session,principal(),'helper_availability_viewed',helper_id)
+    return jsonify(result)
+
+
 @customer_bp.route('/operating-rules',methods=['GET','PUT'])
 @home_auth
 @limiter.limit('12 per minute',key_func=lambda:g.user_id)

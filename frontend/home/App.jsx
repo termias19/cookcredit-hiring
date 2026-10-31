@@ -11,6 +11,7 @@ import "./style.css";
 
 const Team = lazy(() => import("./screens/Team"));
 const Payout = lazy(() => import("./screens/Payout"));
+const Availability = lazy(() => import("./screens/Availability"));
 const navigate = (route) => {
   location.hash = route;
 };
@@ -108,6 +109,7 @@ export default function App() {
   else if (route === "team" && profile.operator)
     content = <Team profile={profile} />;
   else if (route === "payout" && profile.helper) content = <Payout />;
+  else if (route === "availability" && profile.helper) content = <Availability />;
   else if (route === "helping") content = <Payout applying />;
   else
     content = (
@@ -149,6 +151,7 @@ export default function App() {
           <a href="#enroll">Service needs</a>
           {profile?.operator && <a href="#team">Team</a>}
           {profile?.helper && <a href="#payout">My earnings</a>}
+          {profile?.helper && <a href="#availability">Availability</a>}
           <a href="#help">Help</a>
           {user ? (
             <button

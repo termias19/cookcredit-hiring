@@ -10,7 +10,7 @@ disabled by default and is not a public booking or payment service yet.
 | --- | --- | --- |
 | 1. Accounts and email | Reuse Firebase identity and the existing core models in an independent Home runtime/database. Existing verification/reset outbox and branded transport. | Fresh deployed signup, actual email receipt, verification and correct return; resend, expired links and reset recovery. Hiring never registers Home routes or runs Home migrations. |
 | 2. Enrollment and owner oversight | Service needs, optional phone, contact consent, withdrawal and bounded owner-only directory use existing records. | A separate customer saves needs and the owner retrieves them. Operators/helpers cannot read the directory. Existing-account acceptance is separate from fresh signup. |
-| 3. Operating rules and scheduling | Existing request/assignment state machine rejects overlapping helper assignments and acceptance, including concurrent operators. Owner-only versioned drafts record service area, notice, planning hours and travel buffer with immutable audit history. | Approve and enforce the actual operating rules against helper availability, blocked dates and durations. Drafts do not publish slots. Instant booking also needs server-calculated slots, reservation expiry and explicit helper authorization for agreed standard work/rates. |
+| 3. Operating rules and scheduling | Existing request/assignment state machine checks overlaps, helper-owned weekly hours and blocked dates, including concurrent schedule edits. Owner-only versioned drafts record service area, notice, planning hours and travel buffer with immutable audit history. | Approve and enforce business operating rules and travel buffers. Drafts do not publish slots. Instant booking still needs server-calculated slots, reservation expiry and explicit helper authorization for agreed standard work/rates. |
 | 4. Pricing and approval | Owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and receipt-review accounting. All money uses integer cents. | Approve actual rates/material allowances and tax handling. Prove quote integrity in the deployed journey. Preview figures are examples, not published rates; approval never marks paid. |
 | 5. Deployed customer/helper journey | Customer request/quote/receipts, helper work and owner service desk use one backend and separate Vite output. Consent, ownership, issue holds and immutable history remain enforced. | Separate participants complete deployed request, assignment and approvals; check cancellation, access revocation, receipt upload and confirmed file save. Verify post-payment completion after stage 7. Local fake-provider results do not close this gate. |
 | 6. Phones, accessibility and notifications | Existing AccountEmail outbox, private receipt photos, household opt-in, family permission and callback intake. Large controls and semantic forms. | Actual phone-browser and keyboard task completion, safe back/refresh, interrupted requests and received visit notices. Manual link sharing and service consent do not enable marketing or automatic SMS. |
@@ -25,7 +25,7 @@ delivery, a working public interface, actual settlement or production readiness.
 Assignment and helper acceptance use the existing helper-permission row lock and
 a fresh READ COMMITTED query over active bookings in the dedicated Home database.
 An overlap returns 409 without changing the visit or exposing another household.
-Adjacent visits are allowed; travel buffers require explicit operating rules.
+Adjacent visits are allowed when within the helper's saved hours; travel buffers require explicit operating rules.
 Cancelled/completed visits release their time. Stored timezones and elapsed
 durations determine overlap, including visits crossing midnight. Unsupported
 transaction isolation fails closed. Readiness requires the complete Home migration
@@ -53,6 +53,37 @@ Every response reports `published: false`. There is no activation endpoint.
 Saving does not change customer request validation, promise coverage anywhere
 in Georgia, enforce lead time or publish appointment slots. Connected helper
 availability and approved operating commitments are still required for that gate.
+
+### Helper availability
+
+`GET/PUT /api/home/availability` lets an enabled helper manage only their own
+schedule. Operators have audited read-only access through
+`GET /api/home/helpers/<id>/availability`; neither that route nor the owner desk
+can edit another person's hours. The helper interface is lazy-loaded at
+`#availability`, and operator review loads one selected helper on demand.
+
+Home reuses `CookAvailability` and `CookBlockedDate` in its dedicated database.
+Original weekday numbering is preserved (Sunday=0). Home alone extends the end
+boundary to 24 for midnight. This release supports one whole-hour window per
+weekday, an explicit IANA timezone and up to 60 unavailable dates within a year.
+It collects no reason for unavailable dates and seeds no helper coverage.
+The existing permission row holds the schedule revision; no second calendar
+store, background worker or process-local cache is added.
+
+Assignment and acceptance require saved hours covering the entire elapsed visit,
+including all local dates when it crosses midnight. Unavailable dates override
+weekly hours. Past start times, unknown schedules and unsupported transaction
+isolation fail closed. Schedule edits share the assignment lock, reject stale
+versions and cannot invalidate an active assigned visit. Cancellation or
+completion releases that commitment; no schedule edit moves or cancels it.
+Helper review also takes permission before profile locks, matching assignment
+and preventing a revoke/assign deadlock without exposing partial approval.
+Idempotent/unchanged saves create no duplicate revision or event. Generic audit
+events record revision and counts, not precise hours, dates or personal reasons.
+
+These checks do not enforce the draft business operating hours, lead time,
+travel buffers or geographical coverage. They do not publish slots, assign a
+helper automatically, grant helper access or enable payments.
 
 ## Reuse and data boundaries
 
@@ -344,7 +375,7 @@ Default: `HOME_SERVICES_ENABLED` unset. To prepare isolated staging:
 The app role receives SELECT/INSERT/UPDATE only on operational tables and
 SELECT/UPDATE on the pricing pointer. Events, command history, rate cards, quotes,
 helper acceptances, customer approvals and reconciliations receive SELECT/INSERT
-only. Startup and health verify all six required Home migration markers, not merely
+only. Startup and health verify all seven required Home migration markers, not merely
 the latest marker or database connectivity. The app role must not own append-only tables or
 have inherited UPDATE/DELETE privileges. Use the migrator for reviewed retention
 operations. Stage 7 must verify these actual deployed privileges.

@@ -41,6 +41,8 @@ class HomeHelperPermission(Base):
     cooking = Column(Boolean, nullable=False)
     cleaning = Column(Boolean, nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    availability_version = Column(Integer, nullable=False, default=0)
+    availability_time_zone = Column(Text)
 
 
 class HomeOperatingRules(Base):

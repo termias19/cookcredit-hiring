@@ -5,7 +5,7 @@ import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
-async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
+async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default') {
   const states=[],effects=[];let index,tree,queued
   const react={lazy:()=> 'lazy-screen',Suspense:'suspense',useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
@@ -17,14 +17,16 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
-    './OperatingRulesDraft':{__esModule:true,default:()=>null}}
-  const source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
+    './OperatingRulesDraft':{__esModule:true,default:()=>null},
+    './Availability':{__esModule:true,default:()=>null}}
+  let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
+  if(exportName!=='default')source+='\nexport { '+exportName+' };'
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
   const context={module:{exports:{}},require:id=>modules[id],URL,window:{scrollTo(){}},
     location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
     FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}}}
   vm.runInNewContext(code,context)
-  const Component=context.module.exports.default
+  const Component=context.module.exports[exportName]
   function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
   function nodes(node){if(node==null||node===false)return [];if(Array.isArray(node))return node.flatMap(nodes);
     return [node,...nodes(node.props?.children)]}
@@ -136,4 +138,39 @@ test('owner operating draft starts closed and saves versioned rules without an a
   assert.equal(body.version,0);assert.equal(body.rules.bufferMinutes,null)
   assert.equal(JSON.stringify(body.rules.weeklyHours),JSON.stringify([{day:'mon',startMinute:540,endMinute:1440}]))
   assert.equal('published' in body,false);assert.equal('enabled' in body,false)
+})
+
+test('helper schedule load failures retry and operator view cannot edit hours',async()=>{
+  let fail=true;const calls=[]
+  const s=await screen('Availability',async path=>{calls.push(path);if(fail)throw new Error('Temporary schedule outage');
+    return {version:0,configured:false,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]}},
+    true,async()=>{},{helperId:'helper-with/slash'})
+  await s.settle();assert.match(s.text(),/Temporary schedule outage/)
+  fail=false;s.find(p=>p.children==='Refresh availability').props.onClick();s.render();await s.settle()
+  assert.match(s.text(),/Only this helper can change/)
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  assert.deepEqual(calls,['/helpers/helper-with%2Fslash/availability','/helpers/helper-with%2Fslash/availability'])
+})
+
+test('helper schedule form saves closed days and blocked dates through the versioned own-account API',async()=>{
+  const saved=[];const data={version:3,timeZone:'America/New_York',weeklyHours:[],blockedDates:['2026-12-01']}
+  const s=await screen('Availability',async()=>{},false,async()=>{},
+    {data,save:async body=>saved.push(body),busy:false},'ScheduleForm')
+  assert.match(s.text(),/no available work days/)
+  assert.equal(s.find(p=>p.name==='mon-start').props.disabled,true)
+  s.find(p=>Array.isArray(p.children)&&p.children.join('')==='Remove 2026-12-01').props.onClick();s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{mon:true,'mon-start':'9','mon-end':'24'}})
+  assert.equal(JSON.stringify(saved[0]),JSON.stringify({version:3,timeZone:'America/New_York',blockedDates:[],
+    weeklyHours:[{day:'mon',startHour:9,endHour:24}]}))
+})
+
+test('failed helper schedule save keeps the editable form and does not claim success',async()=>{
+  const calls=[];const data={version:2,configured:true,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]}
+  const s=await screen('Availability',async(path,options)=>{calls.push([path,options]);if(options)throw new Error('Existing visit conflicts');return data})
+  await s.settle()
+  const form=s.find((p,n)=>typeof n.type==='function'&&n.type.name==='ScheduleForm')
+  await form.props.save({version:2,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]});s.render()
+  assert.match(s.text(),/Existing visit conflicts/);assert.doesNotMatch(s.text(),/Availability saved/)
+  assert.equal(calls[1][0],'/availability');assert.equal(calls[1][1].method,'PUT')
+  assert.ok(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='ScheduleForm'))
 })
