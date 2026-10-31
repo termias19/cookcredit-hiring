@@ -19,9 +19,11 @@ const tasks = [
   ["laundry", "Laundry"],
   ["general_tidy", "General tidying"],
 ];
-export default function RequestVisit({ profile }) {
+export default function RequestVisit({ profile, initialService }) {
   const heading = useRef(null);
-  const [service, setService] = useState("cooking"),
+  const [service, setService] = useState(
+    ["cooking", "cleaning", "both"].includes(initialService) ? initialService : "cooking",
+  ),
     [forOther, setForOther] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);

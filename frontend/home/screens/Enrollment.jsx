@@ -8,7 +8,7 @@ export const serviceNames = {
   not_sure: "Help choosing",
 };
 
-export default function Enrollment({ profile }) {
+export default function Enrollment({ profile, onArrange }) {
   const [ready, setReady] = useState(false), [version, setVersion] = useState(0);
   const [service, setService] = useState(""), [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -61,7 +61,7 @@ export default function Enrollment({ profile }) {
       <h2>You’re on the list.</h2>
       <p role="status">Your request for {serviceNames[service].toLowerCase()} is saved. We can reach you at {profile.email}{phone ? " or " + phone : ""}.</p>
       <p>This does not reserve a visit or authorize a charge.</p>
-      <div className="actions"><a className="button" href="#request">Arrange a visit</a>
+      <div className="actions"><a className="button" href="#request" onClick={() => onArrange?.(service)}>Arrange a visit</a>
         <button className="secondary" onClick={() => setSaved(false)}>Edit my needs</button></div>
     </div> : <form onSubmit={submit}>
       <fieldset><legend>Choose the help you need</legend>

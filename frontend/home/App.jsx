@@ -22,6 +22,7 @@ export default function App() {
     [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(""),
     [sessionVersion, setSessionVersion] = useState(0);
+  const [visitService, setVisitService] = useState(null);
   const main = useRef();
   useEffect(() => {
     const change = () => setRoute(readRoute());
@@ -34,6 +35,7 @@ export default function App() {
         setUser(next);
         setProfile(null);
         setProfileError("");
+        setVisitService(null);
       }),
     [],
   );
@@ -93,8 +95,8 @@ export default function App() {
         <button onClick={refresh}>Try again</button>
       </section>
     );
-  else if (route === "enroll") content = <Enrollment profile={profile} />;
-  else if (route === "request") content = <RequestVisit profile={profile} />;
+  else if (route === "enroll") content = <Enrollment profile={profile} onArrange={setVisitService} />;
+  else if (route === "request") content = <RequestVisit profile={profile} initialService={visitService} />;
   else if (route === "visits") content = <Visits />;
   else if (/^visit\/[a-f0-9-]{36}$/.test(route))
     content = <Visit key={route} id={route.split("/")[1]} profile={profile} />;

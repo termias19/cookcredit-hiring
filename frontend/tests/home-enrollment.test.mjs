@@ -9,6 +9,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
   const states=[],effects=[];let index,tree,queued
   const react={useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
+    useRef(initial){const slot=index++;return states[slot]||=( {current:initial} )},
     useEffect(fn,deps){const slot=index++,old=effects[slot];if(!old||deps.some((d,i)=>d!==old.deps[i]))
       queued.push(()=>{old?.cleanup?.();effects[slot]={deps,cleanup:fn()}})}}
   const jsx=(type,props)=>({type,props})
@@ -18,7 +19,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}}}
   const source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
-  const context={module:{exports:{}},require:id=>modules[id],URL,
+  const context={module:{exports:{}},require:id=>modules[id],URL,window:{scrollTo(){}},
     location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
     FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}}}
   vm.runInNewContext(code,context)
@@ -77,4 +78,28 @@ test('operator assignment excludes the customer even if they are an approved hel
   await s.settle()
   assert.doesNotMatch(s.text(),/Customer cannot be their own helper/)
   assert.match(s.text(),/Eligible helper/)
+})
+
+test('arrange visit carries the saved enrollment choice without overriding later form edits',async()=>{
+  let chosen
+  const enrollment=await screen('Enrollment',async(path,options)=>options?{saved:true}:{enrollment:{service:'both'}},
+    false,async()=>{},{onArrange:value=>{chosen=value}})
+  await enrollment.settle()
+  await enrollment.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
+  enrollment.render()
+  enrollment.find(p=>p.href==='#request').props.onClick()
+  assert.equal(chosen,'both')
+  const visit=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:chosen})
+  await visit.settle()
+  assert.equal(visit.find(p=>p.name==='cleaning').props.defaultValue,'60')
+  assert.ok(visit.find((p,n)=>n.type==='input'&&p.name==='service'&&p.checked))
+  // The chosen service remains editable after entry; loading saved household
+  // data must not reset the user's explicit selection.
+  const cooking=visit.find((p,n)=>n.type==='label'&&Array.isArray(p.children)&&p.children.includes('Cooking'))
+  cooking.props.children.find(n=>n?.type==='input').props.onChange()
+  visit.render();await visit.settle()
+  assert.equal(visit.find(p=>p.name==='cleaning'),undefined)
+  const unsure=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:'not_sure'})
+  await unsure.settle()
+  assert.equal(unsure.find(p=>p.name==='cleaning'),undefined)
 })
