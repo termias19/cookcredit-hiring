@@ -1,17 +1,33 @@
-"""Versioned owner drafts, separate from publication and actual helper availability."""
-from datetime import datetime, timezone
+"""Versioned owner drafts and explicit operating snapshots; no instant bookings."""
+from copy import deepcopy
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from sqlalchemy import text
+from sqlalchemy import text, select
 from models.home_service import HomeOperatingRules
 from services import home_visits as visits
 
 DAYS = ('mon','tue','wed','thu','fri','sat','sun')
 STATES = frozenset('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split())
 
+# Trusted SQL fragments shared by activation, suggestions and locked assignment.
+# A helper's server-stamped finish retains its travel margin even after customer
+# confirmation. With no travel policy, preserve legacy completed-time release.
+PLANNED_START_SQL = '((b.scheduled_date+b.scheduled_start_time) AT TIME ZONE v.time_zone)'
+PLANNED_END_SQL = f"({PLANNED_START_SQL}+b.estimated_duration*INTERVAL '1 hour')"
+COMMITMENT_START_SQL = f'''CASE WHEN :gap_minutes>0 AND b.completed_at IS NOT NULL
+    THEN CASE WHEN b.status='completed' THEN b.completed_at ELSE LEAST({PLANNED_START_SQL},b.completed_at) END
+    ELSE {PLANNED_START_SQL} END'''
+COMMITMENT_END_SQL = f'''CASE WHEN :gap_minutes>0 AND b.completed_at IS NOT NULL
+    THEN CASE WHEN b.status='completed' THEN b.completed_at ELSE GREATEST({PLANNED_END_SQL},b.completed_at) END
+    ELSE {PLANNED_END_SQL} END'''
+COMMITMENT_CANDIDATES_SQL = '''b.status<>'cancelled' AND (
+    (b.status<>'completed' AND b.scheduled_date BETWEEN :first_day AND :last_day)
+    OR (:gap_minutes>0 AND b.completed_at BETWEEN :first_time AND :last_time))'''
+
 
 def defaults():
-    # Initial business direction only. No hours or travel buffer were approved;
-    # an empty week stays closed and there is no activation endpoint here.
+    # Initial direction only. An empty week stays closed until the owner saves
+    # complete settings and explicitly reviews their activation.
     return {'states':['GA'],'timeZone':'America/New_York','noticeHours':24,
             'shortNoticeHours':6,'bufferMinutes':None,'weeklyHours':[]}
 
@@ -19,7 +35,130 @@ def defaults():
 def draft(session):
     row = session.get(HomeOperatingRules,1)
     return {'version':row.version if row else 0, 'rules':row.settings if row else defaults(),
-            'published':False,'updatedAt':row.updated_at.isoformat() if row else None}
+            'published':False,'updatedAt':row.updated_at.isoformat() if row else None,
+            'activePolicy':snapshot(row) if row else None}
+
+
+def snapshot(row):
+    if not row.active_version:return None
+    return {'version':row.active_version,'rules':deepcopy(row.active_settings),
+            'activatedAt':row.activated_at.isoformat()}
+
+
+def active(session,*,lock=False,required=True):
+    """Read current operating snapshot, optionally under a transaction share lock.
+
+    Assignment must call this AFTER locking the helper permission and retain
+    the transaction. Activation takes policy exclusive and reads commitments
+    without helper/booking locks, so the order cannot form a lock cycle.
+    """
+    query=select(HomeOperatingRules).where(HomeOperatingRules.id==1).execution_options(populate_existing=True)
+    if lock:
+        require_read_committed(session)
+        # Cover the no-row/first-activation race too. Shared advisory readers
+        # allow independent helpers to proceed together; owner edits take the
+        # same key exclusively and never lock helper or booking rows.
+        session.execute(text('SELECT pg_advisory_xact_lock_shared(hashtextextended(:key,0))'),{'key':'home-operating-rules'})
+        query=query.with_for_update(read=True)
+    row=session.execute(query).scalar_one_or_none()
+    value=snapshot(row) if row else None
+    if value is None and required:
+        visits.fail('operating_rules_required','CookCredit needs to activate its operating rules before scheduling.',409)
+    return value
+
+
+def require_read_committed(session):
+    if session.execute(text('SHOW transaction_isolation')).scalar_one()!='read committed':
+        visits.fail('calendar_unavailable','Scheduling is temporarily unavailable. Please contact CookCredit.',503)
+
+
+def window_covers(policy,start,end):
+    """Reuse helper coverage's tested midnight/DST elapsed-time primitive.
+
+    Owner windows use quarter-hour minutes. Their conversion to fractional
+    hours is exact in binary; no duplicate wall-clock scheduling algorithm.
+    """
+    if end<=start:return False
+    from services.home_availability import covers
+    settings=policy['rules']
+    return covers({'timeZone':settings['timeZone'],'blockedDates':[],
+        'weeklyHours':[{'day':w['day'],'startHour':w['startMinute']/60,'endHour':w['endMinute']/60}
+                       for w in settings['weeklyHours']]},start,end)
+
+
+def require_window(policy,start,end):
+    if policy is None:return
+    if end<=start or not window_covers(policy,start,end):
+        visits.fail('outside_operating_hours','The full visit must fit CookCredit operating hours. Choose another time.',409)
+
+
+def require_notice(policy,start,reference_time=None,*,manual=False):
+    """Use request creation time for later transitions, not acceptance time.
+
+    manual=True is for an explicitly authorized operator path only, never a
+    customer-controlled request flag. Pre-activation requests keep their
+    original notice terms; this does not bypass operating hours or past starts.
+    """
+    if policy is None:return
+    activated=policy.get('activatedAt')
+    if reference_time is not None and activated is not None:
+        activated=datetime.fromisoformat(activated) if isinstance(activated,str) else activated
+        if reference_time<activated:return
+    reference_time=reference_time or datetime.now(timezone.utc)
+    hours=policy['rules']['shortNoticeHours' if manual else 'noticeHours']
+    if start < reference_time+timedelta(hours=hours):
+        visits.fail('booking_notice_required',f'Choose a start at least {hours} hours ahead.',409)
+
+
+def buffer_minutes(policy):
+    return policy['rules']['bufferMinutes'] if policy else 0
+
+
+def activate(session,principal,body):
+    visits.strict_object(body,('version','reviewConfirmed'))
+    if type(body['version'])is not int or body['version']<1 or body['reviewConfirmed']is not True:
+        visits.fail('operating_rules_review_required','Review the saved operating rules and confirm activation.')
+    require_read_committed(session)
+    session.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key,0))'),{'key':'home-operating-rules'})
+    row=session.execute(select(HomeOperatingRules).where(HomeOperatingRules.id==1)
+        .with_for_update().execution_options(populate_existing=True)).scalar_one_or_none()
+    if row is None or row.version!=body['version']:
+        visits.fail('operating_rules_changed','The draft changed. Refresh and review it before activation.',409)
+    settings=validate(row.settings)
+    if settings['bufferMinutes']is None or not settings['weeklyHours']:
+        visits.fail('operating_rules_incomplete','Set operating hours and a travel buffer before activation.')
+    if row.active_version==row.version:return {'activated':True,'version':row.version,'published':False,'reviewRequired':True}
+    candidate={'version':row.version,'rules':settings};now=datetime.now(timezone.utc)
+    # Activation does not silently invalidate work or quote approvals. A policy
+    # share lock in assignment makes these READ COMMITTED rows fresh after waits.
+    gap=timedelta(minutes=settings['bufferMinutes'])
+    rows=session.execute(text(f'''SELECT b.cook_id,b.status,
+        {COMMITMENT_START_SQL} AS begins,{COMMITMENT_END_SQL} AS ends
+        FROM bookings b JOIN home_visits v ON v.booking_id=b.id
+        WHERE b.cook_id IS NOT NULL AND ({COMMITMENT_CANDIDATES_SQL}) LIMIT 1001'''),
+        {'gap_minutes':settings['bufferMinutes'],'first_day':now.date()-timedelta(days=2),
+         'last_day':now.date()+timedelta(days=367),'first_time':now-gap,
+         'last_time':now+timedelta(days=367)}).all()
+    if len(rows)>1000:visits.fail('operating_rules_review_required','Contact CookCredit to review existing visits before activation.',409)
+    by_helper={}
+    for helper,status,begin,end in rows:
+        if end<=now-gap:continue
+        if status!='completed' and end>now and not window_covers(candidate,begin,end):
+            visits.fail('operating_rules_existing_visit','These rules conflict with an assigned visit. Arrange its change before activation.',409)
+        by_helper.setdefault(helper,[]).append((begin,end))
+    for intervals in by_helper.values():
+        intervals.sort()
+        latest=None
+        for begin,end in intervals:
+            if latest is not None and latest+gap>begin and max(latest,end)>now:
+                visits.fail('operating_rules_existing_visit','The travel buffer conflicts with assigned visits. Arrange their change before activation.',409)
+            latest=max(latest,end) if latest is not None else end
+    row.active_version=row.version;row.active_settings=deepcopy(settings)
+    row.activated_at=now;row.activated_by=principal['uid']
+    visits.event(session,principal['uid'],'operating_rules_activated',policyVersion=row.version,rules=settings)
+    from services.home_customers import audit
+    audit(session,principal,'operating_rules_activated',row.version)
+    return {'activated':True,'version':row.version,'published':False,'reviewRequired':True}
 
 
 def validate(settings):

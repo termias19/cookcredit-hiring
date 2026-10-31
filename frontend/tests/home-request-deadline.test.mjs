@@ -1,21 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {waitForRequest} from '../home/waitForRequest.js'
+import {createPendingRequests} from '../home/pendingRequests.js'
 import {readFileSync} from 'node:fs'
 import vm from 'node:vm'
 
 const source=readFileSync(new URL('../home/api.js',import.meta.url),'utf8')
   .replace(/^import .*;\r?\n/gm,'').replace(/export /g,'')
-function client(prepare) {
+function client(prepare,overrides={}) {
   const calls=[],reports=[]
   let expire,cleared=false
   const sandbox={
-    auth:{currentUser:null},getAppCheckHeaders:prepare,waitForRequest,
+    auth:{currentUser:null},getAppCheckHeaders:prepare,waitForRequest,createPendingRequests,
     reportClientError:code=>reports.push(code),saveHiringFile:()=>{},
     AbortController,DOMException,crypto,
     setTimeout:callback=>{expire=callback;return 1},clearTimeout:()=>{cleared=true},
-    fetch:async(...args)=>{calls.push(args);return {ok:true,json:async()=>({ok:true})}},
+    fetch:async(...args)=>{calls.push(args);if(overrides.offline)throw new TypeError('offline');return {ok:true,json:async()=>({ok:true})}},
   }
+  if(overrides.storage)sandbox.createPendingRequests=()=>createPendingRequests({storage:()=>overrides.storage})
   vm.runInNewContext(source+';globalThis.request=api;',sandbox)
   return {request:sandbox.request,calls,reports,expire:()=>expire(),cleared:()=>cleared}
 }
@@ -52,6 +54,18 @@ test('actual Home client attaches completed attestation before the existing API 
   assert.equal(options.headers['X-Firebase-AppCheck'],'synthetic-token')
   assert.match(options.headers['Idempotency-Key'],/^[a-f0-9-]{36}$/)
   assert.equal(clientUnderTest.cleared(),true)
+})
+
+test('callback UI nonce changes after reload do not duplicate an unacknowledged callback',async()=>{
+  const values=new Map(),storage={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)}
+  const first=client(async()=>({}),{storage,offline:true})
+  await assert.rejects(first.request('/callbacks',{method:'POST',body:{requestId:'old-ui-nonce',name:'Synthetic',phone:'555'}}))
+  const second=client(async()=>({}),{storage})
+  await second.request('/callbacks',{method:'POST',body:{requestId:'new-ui-nonce',name:'Synthetic',phone:'555'}})
+  const a=first.calls[0][1],b=second.calls[0][1]
+  assert.equal(a.headers['Idempotency-Key'],b.headers['Idempotency-Key'])
+  assert.equal(JSON.parse(a.body).requestId,JSON.parse(b.body).requestId)
+  assert.equal(JSON.parse(b.body).requestId,b.headers['Idempotency-Key'])
 })
 
 test('expired request does not start token preparation',async()=>{

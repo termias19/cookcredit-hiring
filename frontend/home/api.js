@@ -2,13 +2,16 @@ import { auth, getAppCheckHeaders } from "../src/firebase";
 import { reportClientError } from "../src/utils/errorReporting";
 import { saveHiringFile } from "../src/utils/saveHiringCv";
 import { waitForRequest } from "./waitForRequest";
+import { createPendingRequests } from "./pendingRequests";
 
-const pending = new Map();
+const pending = createPendingRequests();
 export async function api(
   path,
   { method = "GET", body, protectedAccount = false, form = false } = {},
 ) {
   const headers = {};
+  const startedAt = Date.now();
+  let reference;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), form ? 30000 : 15000);
   let preparingSecurity = false;
@@ -21,18 +24,15 @@ export async function api(
       Object.assign(headers, await waitForRequest(getAppCheckHeaders, controller.signal));
       preparingSecurity = false;
     }
-    const fingerprint =
-      method +
-      ":" +
-      path +
-      ":" +
-      (form
-        ? body.get("file")?.name + ":" + body.get("file")?.size
-        : JSON.stringify(body));
     if (method !== "GET") {
-      if (!pending.has(fingerprint))
-        pending.set(fingerprint, crypto.randomUUID());
-      headers["Idempotency-Key"] = pending.get(fingerprint);
+      const callback = method === "POST" && path === "/callbacks" && body && !form;
+      // A regenerated UI nonce must not turn a lost callback response into a
+      // second request after reload. Bind its existing domain UUID to this key.
+      const fingerprintBody = callback ? Object.fromEntries(Object.entries(body).filter(([key]) => key !== "requestId")) : body;
+      reference = await waitForRequest(() => pending.reserve({ uid: user?.uid, method, path, body: fingerprintBody, form,
+        signal: controller.signal, startedAt }), controller.signal);
+      headers["Idempotency-Key"] = reference.key;
+      if (callback) body = { ...body, requestId: reference.key };
     }
     if (body !== undefined && !form) headers["Content-Type"] = "application/json";
     const response = await fetch("/api/home" + path, {
@@ -68,7 +68,7 @@ export async function api(
       error.reference = value.reference || response.headers.get("X-Request-ID");
       throw error;
     }
-    pending.delete(fingerprint);
+    pending.acknowledge(reference);
     return value;
   } catch (error) {
     if (error.name === "AbortError") {
@@ -76,7 +76,9 @@ export async function api(
       throw new Error(
         preparingSecurity
           ? "The security check did not finish. Please retry, or open CookCredit in Chrome, Edge or Safari."
-          : "This is taking longer than expected. Retry to check the same request safely.",
+          : reference?.durable === false
+            ? "This is taking longer than expected. Keep this page open and retry to check the same request."
+            : "This is taking longer than expected. Retry to check the same request safely.",
       );
     }
     if (String(error.code || "").startsWith("appCheck/")) {
@@ -85,7 +87,12 @@ export async function api(
         "The security check could not finish. Please retry, or open CookCredit in Chrome, Edge or Safari.",
       );
     }
-    if (error instanceof TypeError) reportClientError("api_network_error");
+    if (error instanceof TypeError) {
+      reportClientError("api_network_error");
+      throw new Error(reference?.durable === false
+        ? "We could not reach CookCredit. Keep this page open and retry the same request."
+        : "We could not reach CookCredit. Check your connection and retry the same request.");
+    }
     throw error;
   } finally {
     clearTimeout(timer);

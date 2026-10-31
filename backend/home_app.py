@@ -22,7 +22,7 @@ from services.operations import emit_event
 
 REQUIRED_HOME_MIGRATIONS = ('001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
                             '004_customer_service.sql', '005_helper_calendar.sql', '006_operating_rules_draft.sql',
-                            '007_helper_availability.sql')
+                            '007_helper_availability.sql', '008_active_operating_policy.sql')
 
 
 def check_home_schema(session):
@@ -74,11 +74,15 @@ def create_app(config=None):
             response.headers['Retry-After'] = '5'
         if response.status_code >= 500:
             emit_event('home_request_failed', severity='ERROR', endpoint=request.endpoint or 'unmatched',
+                method=request.method,code=getattr(g,'home_failure_code','unclassified'),
                 status=response.status_code, durationMs=round((time.monotonic() - g.started) * 1000))
         return response
 
     @app.errorhandler(HomeError)
     def home_error(error):
+        # Domain codes are identifiers defined by this application. Never log
+        # the message, request payload, URL, provider response or SQL parameters.
+        g.home_failure_code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}',error.code) else 'invalid_domain_code'
         response = jsonify(error=error.message, code=error.code)
         if error.code == 'receipt_processing_busy':
             response.headers['Retry-After'] = '2'
@@ -90,6 +94,7 @@ def create_app(config=None):
             return jsonify(error=error.name, code='http_error'), error.code
         # Exception messages and traceback locals can contain household data or
         # SQL parameters. Only the class and server reference enter shared logs.
+        g.home_failure_code='temporary_error'
         emit_event('home_unhandled_error', severity='ERROR', exception=type(error).__name__)
         return jsonify(error='We could not finish that request. Please retry.',
                        code='temporary_error', reference=g.request_id), 503

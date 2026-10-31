@@ -10,7 +10,7 @@ disabled by default and is not a public booking or payment service yet.
 | --- | --- | --- |
 | 1. Accounts and email | Reuse Firebase identity and the existing core models in an independent Home runtime/database. Existing verification/reset outbox and branded transport. | Fresh deployed signup, actual email receipt, verification and correct return; resend, expired links and reset recovery. Hiring never registers Home routes or runs Home migrations. |
 | 2. Enrollment and owner oversight | Service needs, optional phone, contact consent, withdrawal and bounded owner-only directory use existing records. | A separate customer saves needs and the owner retrieves them. Operators/helpers cannot read the directory. Existing-account acceptance is separate from fresh signup. |
-| 3. Operating rules and scheduling | Existing request/assignment state machine checks overlaps, helper-owned weekly hours and blocked dates, including concurrent schedule edits. Owner-only versioned drafts record service area, notice, planning hours and travel buffer with immutable audit history. | Approve and enforce business operating rules and travel buffers. Drafts do not publish slots. Instant booking still needs server-calculated slots, reservation expiry and explicit helper authorization for agreed standard work/rates. |
+| 3. Operating rules and scheduling | Existing request/assignment state machine checks overlaps, helper-owned hours, blocked dates and explicitly activated business hours, notice and travel buffers. Bounded advisory suggestions reuse that calendar. | Activate reviewed rules and verify deployed coverage. Suggestions are preferred times, not reservations. Instant confirmation still needs reservation expiry and explicit helper authorization for agreed standard work/rates. |
 | 4. Pricing and approval | Owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and receipt-review accounting. All money uses integer cents. | Approve actual rates/material allowances and tax handling. Prove quote integrity in the deployed journey. Preview figures are examples, not published rates; approval never marks paid. |
 | 5. Deployed customer/helper journey | Customer request/quote/receipts, helper work and owner service desk use one backend and separate Vite output. Consent, ownership, issue holds and immutable history remain enforced. | Separate participants complete deployed request, assignment and approvals; check cancellation, access revocation, receipt upload and confirmed file save. Verify post-payment completion after stage 7. Local fake-provider results do not close this gate. |
 | 6. Phones, accessibility and notifications | Existing AccountEmail outbox, private receipt photos, household opt-in, family permission and callback intake. Large controls and semantic forms. | Actual phone-browser and keyboard task completion, safe back/refresh, interrupted requests and received visit notices. Manual link sharing and service consent do not enable marketing or automatic SMS. |
@@ -25,14 +25,18 @@ delivery, a working public interface, actual settlement or production readiness.
 Assignment and helper acceptance use the existing helper-permission row lock and
 a fresh READ COMMITTED query over active bookings in the dedicated Home database.
 An overlap returns 409 without changing the visit or exposing another household.
-Adjacent visits are allowed when within the helper's saved hours; travel buffers require explicit operating rules.
-Cancelled/completed visits release their time. Stored timezones and elapsed
+The active operating policy adds its travel buffer on either side of a visit;
+an exact buffer boundary is allowed. Without an activated policy, the existing
+manual request path retains its previous terms and provides no slot suggestions.
+Cancelled visits release their time. Completed visits release planned occupancy
+but retain the active travel margin from the helper's server-stamped finish.
+Stored timezones and elapsed
 durations determine overlap, including visits crossing midnight. Unsupported
 transaction isolation fails closed. Readiness requires the complete Home migration
 history, including the bounded active-helper calendar index.
 
-This safeguard does not advertise available slots or provide instant confirmation.
-Until stage 3 is complete, customers request a preferred time for CookCredit review.
+Suggestions do not reserve capacity or provide instant confirmation. Assignment
+and helper acceptance recheck the calendar under the existing permission lock.
 
 ### Operating-rule drafts
 
@@ -49,10 +53,24 @@ do not create another policy revision or audit event. The existing immutable
 event stream preserves the exact settings for each saved revision. Runtime SQL
 grants permit SELECT/INSERT/UPDATE on the draft table and no DELETE.
 
-Every response reports `published: false`. There is no activation endpoint.
-Saving does not change customer request validation, promise coverage anywhere
-in Georgia, enforce lead time or publish appointment slots. Connected helper
-availability and approved operating commitments are still required for that gate.
+Every response reports `published: false`. Saving a draft does not change the
+active policy. Owner-only `POST /api/home/operating-rules/activate` requires its
+saved version and `reviewConfirmed: true`. Activation preserves a separate
+snapshot and rejects conflicts with existing assigned work. New requests enforce
+its full operating window and standard notice. Earlier requests keep their
+original notice terms; assignment and acceptance enforce the active hours and
+buffer. Six-hour manual consideration is not a customer bypass.
+
+Authenticated `GET /api/home/slots?date=YYYY-MM-DD&durationMinutes=120&service=cooking&state=GA`
+returns preferred times from the active policy and existing eligible helpers.
+It searches one date within 30 days, at most 100 helpers, 48 starts and 5,000
+commitments, without revealing helper identities or counts. It excludes the
+requester's own helper capacity. Date, timezone and policy version accompany
+the response; stale timezone choices require a new selection. The customer
+explicitly loads suggestions on the final request step, with no initial-page
+read. Exact service area, route, traffic and weather review remains manual.
+No reservation, automatic assignment, public coverage promise or payment is
+created. Empty coverage produces no suggestions.
 
 ### Helper availability
 
@@ -81,9 +99,9 @@ and preventing a revoke/assign deadlock without exposing partial approval.
 Idempotent/unchanged saves create no duplicate revision or event. Generic audit
 events record revision and counts, not precise hours, dates or personal reasons.
 
-These checks do not enforce the draft business operating hours, lead time,
-travel buffers or geographical coverage. They do not publish slots, assign a
-helper automatically, grant helper access or enable payments.
+Unactivated drafts do not enforce business rules. An active snapshot supplies
+hours, notice and buffers; geographical coverage still requires review. Neither
+calendar edits nor policy activation grants helper access or enables payments.
 
 ## Reuse and data boundaries
 
@@ -124,6 +142,8 @@ Phone help in the design must not imply those authentication paths already exist
 | --- | --- |
 | `GET /health` | Public; `disabled` by default, database guard checked when enabled. Always reports payments unavailable. |
 | `GET /me` | Verified identity; syncs an inert Home customer identity, returns effective operator/owner access and canonical consent version/text. Never imports a Hiring role. |
+| `GET/PUT /operating-rules`, `POST /operating-rules/activate` | Home owner only; versioned drafts and explicit activation with immutable audit. Activation never opens paid booking. |
+| `GET /slots?date=...&durationMinutes=...&state=GA` | Verified identity; bounded advisory preferred times. No household or helper identity is returned. No reservation is created. |
 | `GET/PUT/DELETE /enrollment` | Verified customer's own service interest and optional contact phone. Changes require an idempotency key and explicit service-contact consent. No visit or payment is created. |
 | `GET /enrollments?cursor=...` | Home owner only; bounded, audited directory of Home account membership and service needs. No household addresses, health instructions or visit notes. |
 | `POST /visits` | Customer creates their own visit. Requires an `Idempotency-Key`. Returns `{id, version, status}`. |
@@ -375,7 +395,7 @@ Default: `HOME_SERVICES_ENABLED` unset. To prepare isolated staging:
 The app role receives SELECT/INSERT/UPDATE only on operational tables and
 SELECT/UPDATE on the pricing pointer. Events, command history, rate cards, quotes,
 helper acceptances, customer approvals and reconciliations receive SELECT/INSERT
-only. Startup and health verify all seven required Home migration markers, not merely
+only. Startup and health verify all eight required Home migration markers, not merely
 the latest marker or database connectivity. The app role must not own append-only tables or
 have inherited UPDATE/DELETE privileges. Use the migrator for reviewed retention
 operations. Stage 7 must verify these actual deployed privileges.
@@ -400,7 +420,7 @@ without PostGIS the fixture omits only unused spatial columns; spatial behavior
 is not certified by that run. No household information or payment is used.
 
 Every API response carries a server-generated `X-Request-ID`. Error events record
-endpoint, status, duration and exception class, never exception messages, tokens,
+endpoint, method, status, duration, a validated static error code and exception class, never exception messages, tokens,
 request bodies or SQL parameters. The durable audit event commits with the state
 change. Events are not a message-delivery acknowledgement. The Home bridge uses
 the existing durable delivery patterns; deployed retry/age monitoring still needs
@@ -474,6 +494,31 @@ exact deployed revision:
 Keep Home disabled or private while any required deployed acceptance is open.
 Do not publish household records, test identities, tokens or operational evidence
 in the source repository.
+
+### Interrupted commands and financial review
+
+The browser retains bounded opaque request fingerprints and idempotency keys in
+session storage for unacknowledged commands. Raw household details, tokens and
+receipt bytes are never stored there. A reload can retry the same command; an
+acknowledged command gets a fresh key for a deliberate later action. Changed
+receipt bytes receive a different fingerprint. If storage is unavailable, keep
+the page open until the outcome is known. Do not replace an unknown operation's
+key to force a new request.
+
+An externally adjusted Stripe transfer puts the visit on review hold with an
+explicitly unknown helper balance. Open Activity and use the existing payment
+Refresh control. It queues at most five bounded canonical transfer reads per
+refresh window; provider I/O runs outside database transactions. Strict account,
+mode, destination, charge, amount and Home metadata bindings must match.
+`full_reversal_verified` records canonical recovery of the full transfer amount;
+it does not mean a customer refund or bank payout. The operator may resolve the
+visit outcome, but that never automatically pays the helper again. A canceled
+visit can proceed through the existing refund workflow after full recovery.
+Partial, inconsistent or unavailable evidence leaves the hold and unknown balance
+in place. Keep retries and alerts enabled; inspect the original Stripe transfer
+and reversal before a separately reviewed finance decision. Never edit immutable
+rows, infer residual entitlement or replay a transfer with a new mutation key.
+
 ## Customer enrollment
 
 `/#enroll` preserves its destination through the existing Google/email sign-in

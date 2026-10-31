@@ -63,10 +63,15 @@ def me():
         helper = session.get(HomeHelperPermission, g.user_id)
         from services.home_mail import ensure_welcome
         ensure_welcome(session,principal())
+        from services import home_operating_rules as rules
+        policy=rules.active(session,required=False)
+        service_rules=policy['rules'] if policy else rules.defaults()
     return jsonify(userId=g.user_id, name=g.name, email=g.email, operator=is_operator(), owner=is_owner(),
                    helper=bool(helper and helper.enabled),
                    consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT,
-                   paymentsAvailable=home_stripe.checkout_allowed(),environment=os.getenv('COOKCREDIT_ENVIRONMENT','development'))
+                   paymentsAvailable=home_stripe.checkout_allowed(),environment=os.getenv('COOKCREDIT_ENVIRONMENT','development'),
+                   serviceTimeZone=service_rules['timeZone'] if policy else os.getenv('HOME_SERVICE_TIMEZONE','America/New_York'),
+                   serviceStates=service_rules['states'])
 
 
 @home_bp.post('/visits')

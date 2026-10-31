@@ -61,6 +61,28 @@ def operating_rules():
     return jsonify(result)
 
 
+@customer_bp.post('/operating-rules/activate')
+@home_auth
+@limiter.limit('6 per minute',key_func=lambda:g.user_id)
+def activate_operating_rules():
+    if not is_owner():visits.fail('forbidden','Only the Home owner can activate operating rules.',403)
+    from services import home_operating_rules as rules
+    with db_session() as session:
+        actor,body=principal(),json_body()
+        result=visits.command(session,actor,request.headers.get('Idempotency-Key'),'operating-rules-activate',body,
+            lambda:rules.activate(session,actor,body))
+    return jsonify(result)
+
+
+@customer_bp.get('/slots')
+@home_auth
+@limiter.limit('12 per minute',key_func=lambda:g.user_id)
+def slot_suggestions():
+    from services import home_slots
+    with db_session() as session:result=home_slots.suggestions(session,request.args,customer_id=g.user_id)
+    return jsonify(result)
+
+
 @customer_bp.route('/enrollment',methods=['GET','PUT','DELETE'])
 @home_auth
 @limiter.limit('20 per minute',key_func=lambda:g.user_id)

@@ -39,13 +39,13 @@ export default function Team({ profile }) {
     };
   }, [tab, version]);
 
-  const run = async (task) => {
+  const run = async (task, successNotice = "Change saved.") => {
     setBusy(true);
     setError("");
     setNotice("");
     try {
       await task();
-      setNotice("Change saved.");
+      setNotice(successNotice);
       setVersion((v) => v + 1);
     } catch (e) {
       setError(e.message);
@@ -131,6 +131,7 @@ export default function Team({ profile }) {
           ...(profile.owner ? ["operating-rules", "operations", "audit"] : []),
         ].map((value) => (
           <button
+            disabled={busy}
             className={tab === value ? "selected" : "text"}
             aria-current={tab === value ? "page" : undefined}
             key={value}
@@ -174,7 +175,8 @@ export default function Team({ profile }) {
         {data.nextCursor && <button disabled={busy} onClick={loadMore}>More people</button>}
       </>}
 
-      {data && tab === "operating-rules" && profile.owner && <OperatingRulesDraft key={data.version} data={data} run={run} busy={busy} />}
+      {data && tab === "operating-rules" && profile.owner && <OperatingRulesDraft key={data.version} data={data} run={run} busy={busy}
+        reload={() => setVersion(value => value + 1)} />}
 
       {data && tab === "visits" && (
         <>

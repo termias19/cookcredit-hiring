@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api } from "../api";
+
+const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
 
 const preferences = [
   ["allergies", "Food allergies or ingredients to avoid"],
@@ -19,8 +21,14 @@ const tasks = [
   ["laundry", "Laundry"],
   ["general_tidy", "General tidying"],
 ];
+function localDay(zone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: zone,
+    year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map(p => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 export default function RequestVisit({ profile, initialService }) {
   const heading = useRef(null);
+  const mounted = useRef(true);
   const [service, setService] = useState(
     ["cooking", "cleaning", "both"].includes(initialService) ? initialService : "cooking",
   ),
@@ -30,10 +38,19 @@ export default function RequestVisit({ profile, initialService }) {
   const [saved, setSaved] = useState(null),
     [useSaved, setUseSaved] = useState(false),
     [step, setStep] = useState(0);
+  const [cookingMinutes, setCookingMinutes] = useState(120), [cleaningMinutes, setCleaningMinutes] = useState(60);
+  const [preferredDate, setPreferredDate] = useState(""), [preferredTime, setPreferredTime] = useState("10:00");
+  const serviceStates = Array.isArray(profile.serviceStates) && profile.serviceStates.length ? profile.serviceStates : ["GA"];
+  const [serviceState, setServiceState] = useState(serviceStates[0]);
+  const [checkedTimeZone, setCheckedTimeZone] = useState(null);
+  const timeZone = checkedTimeZone || profile.serviceTimeZone || "America/New_York";
+  const durationMinutes = (service === "cleaning" ? 0 : cookingMinutes) + (service === "cooking" ? 0 : cleaningMinutes);
   useEffect(() => {
+    mounted.current = true;
     api("/household")
-      .then((value) => setSaved(value.household))
+      .then((value) => { if (mounted.current) setSaved(value.household); })
       .catch(() => {});
+    return () => { mounted.current = false; };
   }, []);
   useEffect(() => {
     heading.current?.focus();
@@ -61,6 +78,7 @@ export default function RequestVisit({ profile, initialService }) {
       service,
       date: f.get("date"),
       time: f.get("time"),
+      timeZone,
       durationMinutes: cooking + cleaning,
       serviceMinutes: { cooking, cleaning },
       address: f.get("address"),
@@ -77,6 +95,9 @@ export default function RequestVisit({ profile, initialService }) {
       };
     try {
       const value = await api("/visits", { method: "POST", body });
+      // The acknowledged visit remains saved, but leaving this screen must not
+      // start another account's household update or pull the person back here.
+      if (!mounted.current) return;
       // Saving household details is a separate, explicit choice. A failure must
       // never make an already-created visit appear to have failed.
       if (f.get("remember") === "on")
@@ -84,11 +105,13 @@ export default function RequestVisit({ profile, initialService }) {
           method: "PUT",
           body: { address: body.address, instructions, remember: true },
         }).catch(() => {});
-      location.hash = "visit/" + value.id;
+      if (mounted.current) location.hash = "visit/" + value.id;
     } catch (e) {
-      setError(e.message);
+      if (mounted.current) setError(e.code === "operating_rules_changed"
+        ? "CookCredit’s operating rules changed. Check suggested times again, then review your date and time before resending."
+        : e.message);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
   return (
@@ -125,7 +148,7 @@ export default function RequestVisit({ profile, initialService }) {
           {service !== "cleaning" && (
             <label>
               Cooking time
-              <select name="cooking" defaultValue="120">
+              <select name="cooking" value={cookingMinutes} onChange={event => setCookingMinutes(Number(event.target.value))}>
                 {[60, 90, 120, 150, 180, 210, 240].map((v) => (
                   <option key={v} value={v}>
                     {v / 60} {v === 60 ? "hour" : "hours"}
@@ -137,7 +160,7 @@ export default function RequestVisit({ profile, initialService }) {
           {service !== "cooking" && (
             <label>
               Cleaning time
-              <select name="cleaning" defaultValue="60">
+              <select name="cleaning" value={cleaningMinutes} onChange={event => setCleaningMinutes(Number(event.target.value))}>
                 {[60, 90, 120, 150, 180, 210, 240].map((v) => (
                   <option key={v} value={v}>
                     {v / 60} {v === 60 ? "hour" : "hours"}
@@ -258,7 +281,9 @@ export default function RequestVisit({ profile, initialService }) {
               <input
                 type="date"
                 name="date"
-                min={new Date().toLocaleDateString("en-CA")}
+                value={preferredDate}
+                onChange={event => setPreferredDate(event.target.value)}
+                min={localDay(timeZone)}
                 required={step === 2}
               />
             </label>
@@ -267,16 +292,26 @@ export default function RequestVisit({ profile, initialService }) {
               <input
                 type="time"
                 name="time"
-                defaultValue="10:00"
+                value={preferredTime}
+                onChange={event => setPreferredTime(event.target.value)}
                 step="1800"
                 required={step === 2}
               />
             </label>
           </div>
           <p className="quiet">
-            Times are in America/New_York. Your requested time is subject to
+            Times are in {timeZone}. Your requested time is subject to
             availability.
           </p>
+          {serviceStates.length > 1 && <label>State for the time check<select value={serviceState} onChange={event => setServiceState(event.target.value)}>
+            {serviceStates.map(value => <option value={value} key={value}>{value}</option>)}
+          </select></label>}
+          {step === 2 && <Suspense fallback={<p role="status">Loading time suggestions…</p>}><SuggestedTimes date={preferredDate} service={service} durationMinutes={durationMinutes} state={serviceState}
+            timeZone={timeZone} selectedTime={preferredTime} onChoose={setPreferredTime} disabled={busy}
+            onTimeZone={value => { if (value !== timeZone) {
+              setCheckedTimeZone(value); setPreferredTime("");
+              setError(`Service times now use ${value}. Choose your preferred start time again.`);
+            } }} /></Suspense>}
           <label className="check">
             <input name="consent" type="checkbox" required={step === 2} />
             {profile.consentText}

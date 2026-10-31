@@ -46,13 +46,17 @@ class HomeHelperPermission(Base):
 
 
 class HomeOperatingRules(Base):
-    """Owner's draft business settings; does not publish slots or grant access."""
+    """Owner draft and explicitly activated snapshot; never grants access."""
     __tablename__ = 'home_operating_rules'
     id = Column(Integer, primary_key=True)
     version = Column(Integer, nullable=False)
     settings = Column(JSONB, nullable=False)
     updated_by = Column(Text, ForeignKey('users.id'), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    active_version = Column(Integer)
+    active_settings = Column(JSONB)
+    activated_at = Column(DateTime(timezone=True))
+    activated_by = Column(Text, ForeignKey('users.id'))
 
 
 class HomeEvent(Base):

@@ -57,13 +57,15 @@ def choices(values, allowed, name):
     return sorted(set(values))
 
 
-def validate_request(body):
+def validate_request(body, *, time_zone=None):
     strict_object(body, ('service', 'date', 'time', 'durationMinutes', 'address', 'instructions', 'consent'),
-                  ('serviceMinutes','arrangingFor'))
+                  ('serviceMinutes','arrangingFor','timeZone'))
     if body['service'] not in ('cooking', 'cleaning', 'both'):
         fail('invalid_service', 'Choose cooking, cleaning or both.')
     try:
-        zone = ZoneInfo(os.getenv('HOME_SERVICE_TIMEZONE', 'America/New_York'))
+        zone = ZoneInfo(time_zone or os.getenv('HOME_SERVICE_TIMEZONE', 'America/New_York'))
+        if 'timeZone' in body and body['timeZone'] != zone.key:
+            fail('operating_rules_changed','CookCredit’s schedule time zone changed. Refresh the available times before sending.',409)
         local_now = datetime.now(zone)
         day = date.fromisoformat(body['date'])
         start = time.fromisoformat(body['time'])
@@ -180,7 +182,12 @@ def event(session, uid, action, booking_id=None, version=None, **details):
 
 
 def create_visit(session, principal, body):
-    data = validate_request(body)
+    from services import home_operating_rules as rules
+    policy=rules.active(session,lock=True,required=False)
+    data = validate_request(body,time_zone=policy['rules']['timeZone'] if policy else None)
+    begin=datetime.combine(data['day'],data['start'],ZoneInfo(data['time_zone'])).astimezone(timezone.utc)
+    rules.require_window(policy,begin,begin+timedelta(minutes=data['minutes']))
+    rules.require_notice(policy,begin)
     booking_id = uuid.uuid4()
     # No quote exists yet. Zero here is an unpriced legacy field, never a free
     # quote or payment authorization. Future pricing must use an approved quote.
@@ -227,21 +234,27 @@ def require_free_calendar(session, helper_id, booking, visit):
     end = start + timedelta(minutes=int(booking['estimated_duration'] * 60))
     if start <= datetime.now(timezone.utc):
         fail('visit_time_passed','The requested start time has passed. Contact CookCredit to arrange a new time.',409)
+    from services import home_operating_rules as rules
+    # Match helper scheduling's lock order: permission first, policy second.
+    # Activation reads commitments without taking booking/helper locks.
+    policy=rules.active(session,lock=True,required=False)
+    rules.require_window(policy,start,end)
+    rules.require_notice(policy,start,booking['created_at'])
+    gap=timedelta(minutes=rules.buffer_minutes(policy))
     # Date bounds keep the indexed candidate set small. Two days on either
     # side cover IANA timezone offsets and Home's maximum eight-hour visit.
-    safe_isolation, conflict = session.execute(text("""
+    safe_isolation, conflict = session.execute(text(f"""
         SELECT current_setting('transaction_isolation') = 'read committed', EXISTS (
         SELECT 1 FROM bookings b
         JOIN home_visits v ON v.booking_id = b.id
         WHERE b.cook_id = :helper AND b.id <> :booking
-          AND b.status NOT IN ('cancelled', 'completed')
-          AND b.scheduled_date BETWEEN :first_day AND :last_day
-          AND ((b.scheduled_date + b.scheduled_start_time) AT TIME ZONE v.time_zone) < :ends
-          AND (((b.scheduled_date + b.scheduled_start_time) AT TIME ZONE v.time_zone)
-               + b.estimated_duration * INTERVAL '1 hour') > :starts
+          AND ({rules.COMMITMENT_CANDIDATES_SQL})
+          AND ({rules.COMMITMENT_START_SQL}) < :ends
+          AND ({rules.COMMITMENT_END_SQL}) > :starts
         LIMIT 1)
-        """), {'helper': helper_id, 'booking': booking['id'], 'starts': start, 'ends': end,
-                'first_day': start.date() - timedelta(days=2), 'last_day': end.date() + timedelta(days=2)}).one()
+        """), {'helper': helper_id, 'booking': booking['id'], 'starts': start-gap, 'ends': end+gap,
+                'first_day': start.date() - timedelta(days=2), 'last_day': end.date() + timedelta(days=2),
+                'first_time':start-gap,'last_time':end+gap,'gap_minutes':rules.buffer_minutes(policy)}).one()
     if not safe_isolation:
         # The query after a waited helper lock must see the last committed
         # assignment. Reject a database configured to retain an older snapshot.

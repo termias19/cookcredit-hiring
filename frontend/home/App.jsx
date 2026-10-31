@@ -420,7 +420,12 @@ function Visits() {
       </div>
       <SavedDetails />
       <ErrorMessage error={state.error} />
-      {!state.loading && !state.rows.length && (
+      {state.error && !state.loading && (
+        <button className="secondary" onClick={() => load(false)}>
+          Refresh visits
+        </button>
+      )}
+      {!state.loading && !state.error && !state.rows.length && (
         <p>
           No visits yet. Start with a request and we’ll help arrange the rest.
         </p>

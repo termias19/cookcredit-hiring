@@ -436,12 +436,16 @@ export default function Visit({ id, profile }) {
               </p>
             )}
             <p>
-              {p.helperFunds === "transferred_to_stripe"
+              {p.helperFunds === "provider_review_required" || p.helperTransferBalanceKnown === false
+                ? "The helper transfer balance needs review with Stripe. No additional release will be made until it is reconciled."
+                : p.helperFunds === "transferred_to_stripe"
                 ? "Helper funds transferred to Stripe. This does not confirm a bank payout."
                 : p.helperFunds === "held_after_reversal"
                   ? "Helper funds returned for review."
-                  : "Helper funds have not been released."}
+                  : "A helper fund release has not been confirmed."}
             </p>
+            {p.externalTransferAdjustment && <p className="quiet">A transfer was adjusted outside CookCredit.
+              Refresh checks Stripe for reconciliation. Verified recovery does not automatically release helper funds again.</p>}
             {!closed && !held && (
               <div className="stack">
                 {visit.isAssignedHelper &&

@@ -73,10 +73,10 @@ def test_valid_hours_are_normalized_and_exact_prior_revisions_remain_in_audit(ap
     assert c.get('/api/home/operating-rules',headers=headers('owner')).json['published']is False
 
 
-def test_owner_draft_has_no_activation_backdoor(app):
+def test_owner_draft_cannot_bypass_explicit_activation_review(app):
     c=app.test_client()
     assert save(c,{'version':0,'rules':rules.defaults(),'published':True}).status_code==400
-    assert c.post('/api/home/operating-rules/activate',json={},headers=headers('owner',uuid.uuid4().hex)).status_code==404
+    assert c.post('/api/home/operating-rules/activate',json={},headers=headers('owner',uuid.uuid4().hex)).status_code==400
 
 
 def test_concurrent_owner_tabs_cannot_overwrite_the_same_draft_version(app,monkeypatch):

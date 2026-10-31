@@ -113,6 +113,11 @@ class StripeHome:
             'metadata': {'cookcredit_product': PRODUCT, 'home_operation_id': operation}},
             options={'idempotency_key': 'home:' + operation})
 
+    def transfer_status(self, transfer_id):
+        # Canonical read only; the shared bounded client uses a five-second
+        # request timeout and no hidden network retries. No account override.
+        return client().transfers.retrieve(transfer_id)
+
     def connect(self, operation, payload):
         if os.getenv('HOME_CONNECT_ENABLED') != '1':
             raise RuntimeError('Home account onboarding disabled')

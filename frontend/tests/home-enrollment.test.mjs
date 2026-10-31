@@ -15,16 +15,20 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
   const jsx=(type,props)=>({type,props})
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    './api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
     './OperatingRulesDraft':{__esModule:true,default:()=>null},
-    './Availability':{__esModule:true,default:()=>null}}
+    './Availability':{__esModule:true,default:()=>null},
+    './SuggestedTimes':{__esModule:true,default:()=>null},
+    '../../src/utils/errorReporting':{reportClientError(){}}}
   let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   if(exportName!=='default')source+='\nexport { '+exportName+' };'
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
   const context={module:{exports:{}},require:id=>modules[id],URL,window:{scrollTo(){}},
     location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
-    FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}}}
+    FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}
+      getAll(key){return Array.isArray(this.values[key])?this.values[key]:[]}}}
   vm.runInNewContext(code,context)
   const Component=context.module.exports[exportName]
   function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
@@ -33,7 +37,8 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
   const text=()=>nodes(tree).filter(n=>typeof n==='string'||typeof n==='number').join(' ')
   const find=predicate=>nodes(tree).find(n=>n?.props&&predicate(n.props,n))
   async function settle(){await new Promise(resolve=>setImmediate(resolve));render()}
-  render();return {render,settle,text,find}
+  render();return {render,settle,text,find,location:context.location,
+    unmount(){effects.forEach(effect=>effect?.cleanup?.())}}
 }
 
 test('enrollment load errors retry instead of displaying empty or successful enrollment',async()=>{
@@ -43,6 +48,71 @@ test('enrollment load errors retry instead of displaying empty or successful enr
   assert.equal(s.find((p,n)=>n.type==='form'),undefined)
   fail=false;s.find(p=>p.children==='Try again').props.onClick();s.render();await s.settle()
   assert.ok(s.find((p,n)=>n.type==='form'))
+})
+
+test('My visits retries its failed read only on request and restores the scoped list',async()=>{
+  const calls=[];let finish
+  const s=await screen('../App',async path=>{
+    calls.push(path)
+    if(calls.length===1)throw new Error('Visits temporarily unavailable')
+    return new Promise(resolve=>{finish=resolve})
+  },false,async()=>{},{},'Visits')
+  await s.settle();assert.ok(s.find(p=>p.error==='Visits temporarily unavailable'))
+  assert.doesNotMatch(s.text(),/No visits yet/)
+  assert.deepEqual(calls,['/visits'])
+  const retry=s.find(p=>p.children==='Refresh visits')
+  assert.ok(retry)
+  const pending=retry.props.onClick();s.render()
+  assert.match(s.text(),/Loading visits/)
+  assert.equal(s.find(p=>p.children==='Refresh visits'),undefined)
+  assert.deepEqual(calls,['/visits','/visits'])
+  finish({visits:[{id:'own-visit',service:'cooking',date:'2030-01-07',time:'10:00',durationMinutes:120,status:'requested'}],nextCursor:null})
+  await pending;s.render()
+  assert.ok(s.find(p=>p.href==='#visit/own-visit'))
+  assert.doesNotMatch(s.text(),/Visits temporarily unavailable/)
+  assert.equal(calls.length,2)
+})
+
+test('an acknowledged visit does not redirect or save household details after leaving the request screen',async()=>{
+  const calls=[];let acknowledge
+  const s=await screen('RequestVisit',async(path,options)=>{
+    calls.push([path,options])
+    if(path==='/household')return {household:null}
+    return new Promise(resolve=>{acknowledge=resolve})
+  },false)
+  await s.settle()
+  const event={preventDefault(){},currentTarget:{}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+  }})
+  s.unmount();s.location.hash='home'
+  acknowledge({id:'saved-visit'});await pending
+  assert.equal(s.location.hash,'home')
+  assert.deepEqual(calls.map(([path,options])=>[path,options?.method]),[['/household',undefined],['/visits','POST']])
+})
+
+test('leaving during an explicitly requested household save does not pull the customer back to the visit',async()=>{
+  const calls=[];let finishSave
+  const s=await screen('RequestVisit',async(path,options)=>{
+    calls.push([path,options])
+    if(path==='/visits')return {id:'saved-visit'}
+    if(options)return new Promise(resolve=>{finishSave=resolve})
+    return {household:null}
+  },false)
+  await s.settle()
+  const event={preventDefault(){},currentTarget:{}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+  }})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(calls.at(-1)[1].method,'PUT')
+  s.unmount();s.location.hash='home';finishSave({saved:true});await pending
+  assert.equal(s.location.hash,'home')
+  assert.equal(calls.filter(([path])=>path==='/visits').length,1)
 })
 
 test('enrollment save uses the existing account endpoint and only claims success after acknowledgement',async()=>{
@@ -103,7 +173,7 @@ test('arrange visit carries the saved enrollment choice without overriding later
   assert.equal(chosen,'both')
   const visit=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:chosen})
   await visit.settle()
-  assert.equal(visit.find(p=>p.name==='cleaning').props.defaultValue,'60')
+  assert.equal(visit.find(p=>p.name==='cleaning').props.value,60)
   assert.ok(visit.find((p,n)=>n.type==='input'&&p.name==='service'&&p.checked))
   // The chosen service remains editable after entry; loading saved household
   // data must not reset the user's explicit selection.
@@ -130,6 +200,20 @@ test('approved unpaid quotes show the payment step; expired quotes explain why c
   const expired=await open();await expired.settle()
   assert.match(expired.text(),/quote has expired/)
   assert.equal(expired.find(payButton),undefined)
+})
+
+test('an unknown provider transfer balance stays explicit and cannot be dismissed as an ordinary reviewed issue',async()=>{
+  const value={id:'visit',version:2,status:'completed',service:'cooking',isCustomer:true,time:'10:00',issueOpen:true,
+    instructions:{preferences:[],cleaningTasks:[]},payment:{status:'review_required',helperFunds:'provider_review_required',
+      helperTransferBalanceKnown:false,helperTransferredCents:null},quote:null}
+  const view=await screen('Visit',async path=>path.endsWith('/receipts')?{receipts:[]}:value,false,async()=>{},
+    {id:'visit',profile:{paymentsAvailable:false}})
+  await view.settle();assert.match(view.text(),/transfer balance needs review/)
+  assert.doesNotMatch(view.text(),/funds have not been released/)
+  const ops=await screen('operator/OperatorVisit',async path=>path==='/helpers'?{helpers:[]}:path==='/pricing'?{}:{events:[]},
+    true,async()=>{},{visit:value,receipts:[]})
+  await ops.settle();assert.match(ops.text(),/Reconcile the external transfer change/)
+  assert.equal(ops.find(p=>p.children==='Resolve reviewed issue').props.disabled,true)
 })
 
 test('owner operating draft starts closed and saves versioned rules without an activation request',async()=>{
@@ -182,4 +266,112 @@ test('failed helper schedule save keeps the editable form and does not claim suc
   assert.match(s.text(),/Existing visit conflicts/);assert.doesNotMatch(s.text(),/Availability saved/)
   assert.equal(calls[1][0],'/availability');assert.equal(calls[1][1].method,'PUT')
   assert.ok(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='ScheduleForm'))
+})
+
+test('policy activation requires reviewed saved settings and never activates unsaved edits automatically',async()=>{
+  const calls=[],notices=[]
+  const data={version:2,rules:{states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,
+    bufferMinutes:60,weeklyHours:[{day:'mon',startMinute:600,endMinute:1080}]},activePolicy:null}
+  const s=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data,run:(task,message)=>{notices.push(message);return task()}})
+  const button=()=>s.find(p=>p.children==='Activate saved rules')
+  const acknowledgement=()=>s.find(p=>p.type==='checkbox'&&!p.name)
+  assert.equal(calls.length,0);assert.equal(button().props.disabled,true)
+  acknowledgement().props.onChange({target:{checked:true}});s.render();assert.equal(button().props.disabled,false)
+  s.find((p,n)=>n.type==='form').props.onChange();s.render()
+  assert.equal(button().props.disabled,true);assert.match(s.text(),/Save your changes before activating/)
+  // A fresh acknowledged saved revision can be applied explicitly.
+  const saved=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data,run:(task,message)=>{notices.push(message);return task()}})
+  saved.find(p=>p.type==='checkbox'&&!p.name).props.onChange({target:{checked:true}});saved.render()
+  await saved.find(p=>p.children==='Activate saved rules').props.onClick()
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/operating-rules/activate')
+  assert.equal(JSON.stringify(calls[0][1].body),JSON.stringify({version:2,reviewConfirmed:true}))
+  assert.match(notices[0],/still require review/)
+  assert.match(saved.text(),/not reserved or automatically confirmed/)
+})
+
+test('incomplete and already active operating drafts cannot be reactivated through the owner controls',async()=>{
+  const rules={states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:null,weeklyHours:[]}
+  const incomplete=await screen('OperatingRulesDraft',async()=>assert.fail('unexpected activation'),true,async()=>{},
+    {data:{version:1,rules,activePolicy:null},run:task=>task()})
+  assert.equal(incomplete.find(p=>p.children==='Activate saved rules').props.disabled,true)
+  const complete={...rules,bufferMinutes:60,weeklyHours:[{day:'mon',startMinute:600,endMinute:1080}]}
+  const active=await screen('OperatingRulesDraft',async()=>assert.fail('unexpected activation'),true,async()=>{},
+    {data:{version:2,rules:complete,activePolicy:{version:2,rules:complete}},run:task=>task()})
+  assert.match(active.text(),/saved draft is active/)
+  assert.equal(active.find(p=>p.children==='Activate saved rules').props.disabled,true)
+})
+
+test('owner can reload a changed policy after a failed mutation without replaying the mutation',async()=>{
+  const calls=[];const rules={states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:60,weeklyHours:[]}
+  const s=await screen('Team',async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{version:2,rules,activePolicy:null}})
+  await s.settle();s.find(p=>p.children==='Operating rules').props.onClick();s.render();await s.settle()
+  let editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules)
+  await editor.props.run(async()=>{throw new Error('Rules changed in another window')});s.render()
+  assert.match(s.text(),/Rules changed in another window/)
+  editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules);editor.props.reload();s.render();await s.settle()
+  assert.doesNotMatch(s.text(),/Rules changed in another window/)
+  assert.deepEqual(calls,['/enrollments','/operating-rules','/operating-rules'])
+})
+
+const suggestions=(date='2026-12-01')=>({date,timeZone:'America/New_York',policyVersion:2,
+  slots:[{time:'10:00',durationMinutes:120}],reviewRequired:true,reservesTime:false,areaReviewRequired:true})
+
+test('time suggestions load only on explicit request and choosing one never creates a visit',async()=>{
+  const calls=[],chosen=[],zones=[]
+  const s=await screen('SuggestedTimes',async(...args)=>{calls.push(args);return suggestions()},false,async()=>{},
+    {date:'2026-12-01',service:'cooking',durationMinutes:120,state:'GA',timeZone:'America/New_York',onChoose:t=>chosen.push(t),onTimeZone:z=>zones.push(z)})
+  await s.settle();assert.equal(calls.length,0)
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.equal(calls.length,1);assert.match(calls[0][0],/^\/slots\?date=2026-12-01&durationMinutes=120&service=cooking&state=GA$/)
+  assert.equal(calls[0][1],undefined)
+  s.find(p=>p.children==='10:00 AM').props.onClick();s.render()
+  assert.deepEqual(chosen,['10:00']);assert.deepEqual(zones,['America/New_York']);assert.equal(calls.length,1)
+  assert.match(s.text(),/does not book a visit or charge/)
+})
+
+test('late slot responses cannot overwrite a changed date and failed checks remain retryable',async()=>{
+  let resolveFirst;const calls=[]
+  const props={date:'2026-12-01',service:'cooking',durationMinutes:120,timeZone:'America/New_York',onChoose(){}}
+  const s=await screen('SuggestedTimes',async path=>{calls.push(path);if(calls.length===1)return new Promise(resolve=>{resolveFirst=resolve});
+    return suggestions('2026-12-02')},false,async()=>{},props)
+  const first=s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  props.date='2026-12-02';s.render();resolveFirst(suggestions());await first;s.render()
+  assert.doesNotMatch(s.text(),/10:00 AM/)
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.match(s.text(),/10:00 AM/);assert.equal(calls.length,2)
+  const unavailable=await screen('SuggestedTimes',async()=>{throw Object.assign(new Error('inactive'),{code:'operating_rules_required'})},
+    false,async()=>{},{...props})
+  await unavailable.find(p=>p.children==='Check suggested times').props.onClick();unavailable.render()
+  assert.match(unavailable.text(),/preferred-time request for CookCredit review/)
+  assert.equal(unavailable.find(p=>p.children==='Check suggested times').props.disabled,false)
+})
+
+test('malformed suggestion responses never display or select an unverified time',async()=>{
+  const s=await screen('SuggestedTimes',async()=>({...suggestions(),reservesTime:true}),false,async()=>{},
+    {date:'2026-12-01',service:'cooking',durationMinutes:120,onChoose:()=>assert.fail('unexpected choice')})
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.match(s.text(),/could not read these suggestions/);assert.doesNotMatch(s.text(),/10:00 AM/)
+})
+
+test('visit steps preserve a preferred time, submit only on Send, and require a new time after timezone changes',async()=>{
+  const calls=[],id='11111111-1111-4111-8111-111111111111'
+  const s=await screen('RequestVisit',async(path,options)=>{calls.push([path,options]);return path==='/household'?{household:null}:{id}},
+    false,async()=>{},{profile:{consentVersion:'home-visit-v2',consentText:'Example consent',serviceTimeZone:'America/New_York',serviceStates:['GA']}})
+  await s.settle()
+  const submit=values=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:values})
+  await submit({});s.render();await submit({});s.render()
+  s.find(p=>p.name==='date').props.onChange({target:{value:'2026-12-01'}});s.render()
+  let choice=s.find(p=>typeof p.onChoose==='function')
+  choice.props.onChoose('14:00');s.render();assert.equal(calls.length,1)
+  s.find(p=>p.children==='Back').props.onClick();s.render();await submit({});s.render()
+  assert.equal(s.find(p=>p.name==='time').props.value,'14:00')
+  choice=s.find(p=>typeof p.onTimeZone==='function');choice.props.onTimeZone('UTC');s.render()
+  assert.equal(s.find(p=>p.name==='time').props.value,'');assert.match(s.text(),/Choose your preferred start time again/)
+  s.find(p=>p.name==='time').props.onChange({target:{value:'15:00'}});s.render()
+  await submit({cooking:'120',date:'2026-12-01',time:'15:00',address:'Synthetic address',notes:'',preferences:[],consent:'on'})
+  s.render();assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
+  assert.equal(calls[1][1].body.timeZone,'UTC');assert.equal(calls[1][1].body.time,'15:00')
+  assert.equal(s.location.hash,'visit/'+id)
 })

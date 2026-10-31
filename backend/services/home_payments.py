@@ -7,11 +7,11 @@ is never represented as a completed bank payout. Returns/clicks cannot mark paid
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.dialects.postgresql import insert
 from models import Booking, CookProfile, User
 from models.home_service import (HomeVisit, HomePayment, HomeFinancialOperation,
-    HomeQuoteApproval, HomeQuoteHelperAcceptance, HomeMaterialReconciliation)
+    HomeQuoteApproval, HomeQuoteHelperAcceptance, HomeMaterialReconciliation, HomeEvent)
 from services import home_visits as visits, home_quotes as quotes, home_stripe
 
 SYSTEM = 'system:home'
@@ -105,16 +105,30 @@ def dto(session, booking, visit, payment, uid, operator):
     transfers = [op for op in ops if op.kind == 'transfer']
     reversals = [op for op in ops if op.kind == 'reverse']
     reversed_ids = {op.payload['transferId'] for op in reversals if op.status == 'succeeded'}
+    external_recovered_ids=set(externally_recovered_transfers(session, payment).values())
+    reversed_ids.update(external_recovered_ids)
     outstanding = sum(op.payload['amountCents'] for op in transfers
         if op.status == 'succeeded' and op.provider_id not in reversed_ids)
-    result['helperTransferredCents'] = outstanding
-    result['helperFunds'] = ('reversal_pending' if any(op.status != 'succeeded' for op in reversals)
+    external_review = external_transfer_review_pending(session, payment)
+    result['helperTransferBalanceKnown'] = not external_review
+    result['helperTransferredCents'] = None if external_review else outstanding
+    result['externalTransferAdjustment'] = external_transfer_adjustment_exists(session, payment)
+    if result['externalTransferAdjustment']:
+        result['transferReconciliation'] = 'required' if external_review else 'full_reversal_verified'
+    result['helperFunds'] = ('provider_review_required' if external_review
+        else 'reversal_pending' if any(op.status != 'succeeded' and op.payload['transferId'] not in external_recovered_ids for op in reversals)
         else 'transferred_to_stripe' if outstanding else 'held_after_reversal' if reversed_ids else 'not_released')
     return result
 
 
 def cancel_payment(session, booking, visit, payment):
     if not payment:
+        return
+    if external_transfer_review_pending(session, payment):
+        # A partial external recovery makes the old full reversal unsafe. The
+        # existing review event notifies the operator; cancellation is recorded
+        # independently without attempting any money movement while unresolved.
+        payment.status, visit.issue_open = 'review_required', True
         return
     if payment.paid_at and payment.refunded_cents == payment.amount_cents:
         payment.status = 'refunded'
@@ -124,10 +138,7 @@ def cancel_payment(session, booking, visit, payment):
         operation(session, payment=payment, actor=SYSTEM, kind='expire', suffix=payment.checkout_id,
             payload={'checkoutId': payment.checkout_id})
     if payment.paid_at and payment.amount_cents > payment.refunded_cents:
-        transfer = session.execute(select(HomeFinancialOperation).where(
-            HomeFinancialOperation.payment_id == payment.id, HomeFinancialOperation.kind == 'transfer')).scalar_one_or_none()
-        if transfer and transfer.status == 'succeeded':
-            reverse_transfer(session, payment, transfer)
+        reverse_transferred_funds(session, payment)
         operation(session, payment=payment, actor=SYSTEM, kind='refund_cancel',
             payload={'paymentIntentId': payment.payment_intent_id, 'paymentId': str(payment.id),
                 'amountCents': payment.amount_cents - payment.refunded_cents})
@@ -140,9 +151,56 @@ def reverse_transfer(session, payment, transfer):
                      'paymentId': str(payment.id)})
 
 
+def reverse_transferred_funds(session, payment):
+    # An operator can resolve an issue after a successful reversal, allowing a
+    # later release. Immutable history therefore contains multiple transfers.
+    # Existing provider-bound reversal keys deduplicate already recovered funds.
+    if external_transfer_review_pending(session, payment):
+        return
+    recovered = set(externally_recovered_transfers(session, payment))
+    transfers = session.execute(select(HomeFinancialOperation).where(
+        HomeFinancialOperation.payment_id == payment.id,
+        HomeFinancialOperation.kind == 'transfer',
+        HomeFinancialOperation.status == 'succeeded')).scalars().all()
+    for transfer in transfers:
+        if str(transfer.id) not in recovered:
+            reverse_transfer(session, payment, transfer)
+
+
+def external_transfer_reviews(session, payment):
+    return session.execute(select(HomeEvent).where(
+        HomeEvent.booking_id == payment.booking_id,
+        HomeEvent.action == 'payment_review_required',
+        HomeEvent.details['reason'].astext == 'external_transfer_reversal',
+        HomeEvent.details['paymentId'].astext == str(payment.id))).scalars().all()
+
+
+def externally_recovered_transfers(session, payment):
+    # Only the worker writes this evidence after a bound canonical Stripe read.
+    # Keep the original operation immutable; this is not a synthetic reversal.
+    evidence = session.execute(select(HomeEvent).where(
+        HomeEvent.booking_id == payment.booking_id,
+        HomeEvent.action == 'helper_transfer_reconciled',
+        HomeEvent.details['paymentId'].astext == str(payment.id),
+        HomeEvent.details['basis'].astext == 'stripe_transfer_full_reversal')).scalars().all()
+    return {row.details['operationId']: row.details['transferId'] for row in evidence}
+
+
+def external_transfer_adjustment_exists(session, payment):
+    return bool(external_transfer_reviews(session, payment))
+
+
+def external_transfer_review_pending(session, payment):
+    recovered = externally_recovered_transfers(session, payment)
+    return any(row.details.get('operationId') not in recovered
+        for row in external_transfer_reviews(session, payment))
+
+
 def ensure_settlement(session, booking, visit):
     payment = payment_for_visit(session, booking['id'])
     if not payment or not payment.paid_at or payment.disputed or visit.issue_open:
+        return
+    if external_transfer_review_pending(session, payment):
         return
     if booking['status'] == 'cancelled':
         cancel_payment(session, booking, visit, payment)
@@ -187,12 +245,17 @@ def ensure_settlement(session, booking, visit):
     reversals = session.execute(select(HomeFinancialOperation).where(HomeFinancialOperation.payment_id == payment.id,
         HomeFinancialOperation.kind == 'reverse', HomeFinancialOperation.status == 'succeeded')).scalars().all()
     reversed_ids = {row.payload['transferId'] for row in reversals}
+    reversed_ids.update(externally_recovered_transfers(session, payment).values())
     if any(row.status in ('pending','running','retry','held','review_required') for row in transfers):
         return
     outstanding = sum(row.payload['amountCents'] for row in transfers
         if row.status == 'succeeded' and row.provider_id not in reversed_ids)
     target = reconciled.snapshot['helperActualPayCents']
     if outstanding >= target:
+        return
+    if external_transfer_adjustment_exists(session, payment):
+        # Knowing that funds returned does not establish why they were recalled.
+        # An ordinary issue resolution must never silently pay the helper again.
         return
     operation(session, payment=payment, actor=SYSTEM, kind='transfer', suffix=str(len(transfers)),
         payload={'paymentId': str(payment.id), 'destination': account_id, 'chargeId': payment.charge_id,
@@ -203,13 +266,16 @@ def on_visit_change(session, booking, visit, action):
     if action not in ('cancel', 'report_issue', 'confirm', 'resolve_issue'):
         return
     payment = payment_for_visit(session, booking['id'])
+    if action == 'resolve_issue' and payment and external_transfer_review_pending(session, payment):
+        visits.fail('provider_reconciliation_required',
+            'This transfer adjustment needs Stripe reconciliation before the payment hold can be resolved.',409)
     if action == 'cancel':
         cancel_payment(session, booking, visit, payment)
     elif action == 'report_issue' and payment:
-        transfer = session.execute(select(HomeFinancialOperation).where(HomeFinancialOperation.payment_id == payment.id,
-            HomeFinancialOperation.kind == 'transfer', HomeFinancialOperation.status == 'succeeded')).scalar_one_or_none()
-        if transfer:
-            reverse_transfer(session, payment, transfer)
+        if external_transfer_review_pending(session, payment):
+            payment.status, visit.issue_open = 'review_required', True
+        else:
+            reverse_transferred_funds(session, payment)
     elif action in ('confirm', 'resolve_issue'):
         if action == 'resolve_issue' and payment and payment.paid_at and booking['status'] == 'accepted' and not payment.disputed:
             booking['status'] = 'confirmed'
@@ -251,5 +317,26 @@ def refresh_payment(session, principal, booking_id, operator):
     session.execute(insert(HomeStripeEvent).values(id=f'refresh:{payment.id}:{window}', kind='refresh',
         object_id=payment.checkout_id, payment_id=payment.id, livemode=payment.livemode,
         status='pending').on_conflict_do_nothing())
+    # Reuse the authorized, idempotent refresh command and inbox. Each worker
+    # invocation remains bounded; partial/unknown transfers stay held for review.
+    recovered = externally_recovered_transfers(session, payment)
+    reviews = external_transfer_reviews(session, payment)
+    prior_reads=dict(session.execute(select(HomeStripeEvent.object_id,func.max(HomeStripeEvent.created_at))
+        .where(HomeStripeEvent.payment_id==payment.id,HomeStripeEvent.kind=='transfer.reconcile')
+        .group_by(HomeStripeEvent.object_id)).all())
+    transfers=[]
+    for review in reviews:
+        operation_id=review.details.get('operationId')
+        if operation_id not in recovered:
+            transfer=session.get(HomeFinancialOperation,uuid.UUID(operation_id))
+            if transfer and transfer.provider_id:
+                transfers.append(transfer)
+    # Least recently checked first prevents a partial older transfer starving
+    # later reviews when a long-lived visit has more than five release cycles.
+    transfers.sort(key=lambda row:prior_reads.get(row.provider_id,datetime.min.replace(tzinfo=timezone.utc)))
+    for transfer in transfers[:5]:
+        session.execute(insert(HomeStripeEvent).values(id=f'reconcile:{transfer.id}:{window}',
+            kind='transfer.reconcile',object_id=transfer.provider_id,payment_id=payment.id,
+            livemode=payment.livemode,status='pending').on_conflict_do_nothing())
     session.info['home_dispatch_due'] = now()
     return {'queued': True}

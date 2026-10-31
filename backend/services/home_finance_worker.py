@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import select, update, or_, and_
 from sqlalchemy.dialects.postgresql import insert
 from models import Booking, CookProfile
-from models.home_service import HomeVisit, HomePayment, HomeFinancialOperation as Op, HomeStripeEvent
+from models.home_service import HomeVisit, HomePayment, HomeFinancialOperation as Op, HomeStripeEvent, HomeEvent
 from services.database import db_session
 from services import home_visits as visits, home_payments as money, home_stripe
 from services.operations import emit_event
@@ -17,6 +17,11 @@ from services.operations import emit_event
 class Deferred(Exception):
     def __init__(self, code, *, held=False):
         self.code, self.held = code, held
+
+
+class TransferReconciliationError(Exception):
+    def __init__(self,code):
+        self.code=code  # Fixed internal enum; never provider error text or payload.
 
 
 def _claim(model):
@@ -48,7 +53,8 @@ def _check_mode(payment, provider):
 
 
 def _metadata(value):
-    return value.get('metadata') or {}
+    metadata = value.get('metadata')
+    return metadata if isinstance(metadata,dict) else {}
 
 
 def _validate_session(payment, value):
@@ -102,6 +108,8 @@ def _sync_payment(session, payment, booking, visit, value):
             raise RuntimeError('invalid_refund_total')
         payment.disputed = payment.disputed or bool(charge.get('disputed'))
         payment.status = 'refunded' if payment.refunded_cents == payment.amount_cents else 'paid'
+        if money.external_transfer_review_pending(session, payment):
+            payment.status, visit.issue_open = 'review_required', True
         if first_paid:
             if booking['status'] == 'accepted' and not visit.issue_open:
                 booking['status'] = 'confirmed'
@@ -146,9 +154,18 @@ def _execute(row, provider):
         else:
             payment, booking, visit = _context(session, row)
             _check_mode(payment, provider)
+            if row.kind == 'reverse':
+                if row.payload['transferId'] in money.externally_recovered_transfers(session,payment).values():
+                    raise Deferred('external_transfer_recovered',held=True)
+                if money.external_transfer_review_pending(session,payment):
+                    raise Deferred('external_transfer_review',held=True)
+            if row.kind.startswith('refund_') and money.external_transfer_review_pending(session,payment):
+                raise Deferred('external_transfer_review')
             if row.kind == 'checkout' and (booking['status'] == 'cancelled' or visit.issue_open):
                 raise Deferred('visit_on_hold', held=True)
             if row.kind == 'transfer':
+                if money.external_transfer_adjustment_exists(session,payment):
+                    raise Deferred('external_transfer_adjustment',held=True)
                 if booking['status'] != 'completed' or not visit.customer_confirmed_at or visit.issue_open or payment.disputed:
                     raise Deferred('visit_on_hold', held=True)
                 if not visits.helper_allowed(session, payment.helper_id, visit.service):
@@ -160,6 +177,7 @@ def _execute(row, provider):
                     Op.status.in_(('running','succeeded')))).scalars().all()
                 reversals = session.execute(select(Op).where(Op.payment_id == payment.id, Op.kind == 'reverse', Op.status == 'succeeded')).scalars().all()
                 reversed_ids = {op.payload['transferId'] for op in reversals}
+                reversed_ids.update(money.externally_recovered_transfers(session,payment).values())
                 if any(op.status == 'running' or op.provider_id not in reversed_ids for op in transfers):
                     raise Deferred('reversal_pending')
             if row.kind=='refund_unused' and (visit.issue_open or payment.status=='review_required'
@@ -263,7 +281,8 @@ def _apply(session, row, value):
     current.lease_token = current.lease_until = current.last_error = None
     session.flush()
     if row.payment_id:
-        if row.kind == 'transfer' and (visit.issue_open or payment.disputed or booking['status'] == 'cancelled'):
+        if (row.kind == 'transfer' and (visit.issue_open or payment.disputed or booking['status'] == 'cancelled')
+            and not money.external_transfer_review_pending(session,payment)):
             money.reverse_transfer(session, payment, current)
         money.ensure_settlement(session, booking, visit)
 
@@ -273,7 +292,7 @@ def _failure(model, row, error):
         current = session.get(model, row.id, with_for_update=True)
         if not current or current.lease_token != row.lease_token:
             return
-        code = error.code if isinstance(error, Deferred) else type(error).__name__
+        code = error.code if isinstance(error,(Deferred,TransferReconciliationError)) else type(error).__name__
         held = isinstance(error, Deferred) and error.held
         current.status = ('review_required' if code == 'ambiguous_provider_result' else 'held') if held and model is Op else (
             'review_required' if current.attempts >= 24 else 'retry')
@@ -305,17 +324,55 @@ def dispatch_operations(provider=None, limit=5):
     return counts
 
 
+def _transfer_binding(payment, transfer, value):
+    """Shared signed-event/canonical-read subject validation; no money inference."""
+    metadata = _metadata(value)
+    reference = lambda item: item.get('id') if isinstance(item,dict) else item
+    return bool(payment and transfer and transfer.kind == 'transfer'
+        and transfer.payment_id == payment.id and transfer.booking_id == payment.booking_id
+        and transfer.payload.get('paymentId') == str(payment.id)
+        and metadata.get('cookcredit_product') == home_stripe.PRODUCT
+        and metadata.get('home_payment_id') == str(payment.id)
+        and metadata.get('home_operation_id') == str(transfer.id)
+        and value.get('livemode') is payment.livemode and value.get('currency') == 'usd'
+        and type(value.get('amount')) is int and value['amount'] == transfer.payload.get('amountCents')
+        and reference(value.get('source_transaction')) == transfer.payload.get('chargeId')
+        and reference(value.get('destination')) == transfer.payload.get('destination')
+        and value.get('transfer_group') == 'home:' + str(payment.id)
+        and isinstance(value.get('id'),str) and value['id']
+        and (not transfer.provider_id or transfer.provider_id == value['id']))
+
+
 def receive_event(session, event):
     if bool(event.get('livemode')) != (home_stripe.mode() == 'live'):
         visits.fail('mode_mismatch', 'Webhook mode does not match Home.', 400)
     obj = ((event.get('data') or {}).get('object') or {})
     meta = _metadata(obj)
     payment = None
-    if meta.get('cookcredit_product') == home_stripe.PRODUCT:
+    if meta.get('cookcredit_product') == home_stripe.PRODUCT and isinstance(meta.get('home_payment_id'),str):
         try:
             payment = session.get(HomePayment, uuid.UUID(meta.get('home_payment_id', '')))
         except (ValueError, TypeError):
             pass
+    if event.get('type') == 'transfer.reversed':
+        # Sharing a Stripe account does not grant Toque/other-product events
+        # authority over Home. Bind the signed event to the immutable Home
+        # operation, customer payment, booking, source charge and destination.
+        try:
+            operation_id = meta.get('home_operation_id')
+            transfer = session.get(Op, uuid.UUID(operation_id)) if isinstance(operation_id,str) else None
+        except (ValueError, TypeError):
+            transfer = None
+        if (not _transfer_binding(payment,transfer,obj)
+            or type(obj.get('amount_reversed')) is not int or not 0 < obj['amount_reversed'] <= obj['amount']
+            ):
+            return {'accepted': True, 'ignored': True}
+        # A webhook can arrive before the provider-call response is committed.
+        # Retain it now; dispatch defers until provider_id is durably bound.
+        session.execute(insert(HomeStripeEvent).values(id=event['id'],kind=event['type'],object_id=obj['id'],
+            payment_id=payment.id,livemode=payment.livemode,status='pending').on_conflict_do_nothing())
+        session.info['home_dispatch_due'] = money.now()
+        return {'accepted': True}
     if payment is None:
         reference = obj.get('payment_intent')
         reference = reference.get('id') if isinstance(reference, dict) else reference
@@ -329,6 +386,71 @@ def receive_event(session, event):
     return {'accepted': True}
 
 
+def _review_external_reversal(session, row, payment, booking, visit):
+    transfer = session.execute(select(Op).where(Op.payment_id == payment.id,Op.kind == 'transfer',
+        Op.provider_id == row.object_id,Op.status == 'succeeded')).scalar_one_or_none()
+    if transfer is None:
+        pending = session.execute(select(Op.id).where(Op.payment_id == payment.id,Op.kind == 'transfer',
+            Op.provider_id.is_(None),Op.status.in_(('pending','running','retry'))).limit(1)).first()
+        if pending:
+            raise Deferred('transfer_confirmation_pending')
+        # A delayed event that cannot bind to the confirmed transfer must not
+        # change another transfer or act on copied/incorrect provider metadata.
+        emit_event('home_financial_event_ignored',severity='WARNING',code='transfer_binding_mismatch')
+        return
+    reversal = session.execute(select(Op).where(Op.payment_id == payment.id,Op.kind == 'reverse',
+        Op.payload['transferId'].astext == row.object_id)).scalar_one_or_none()
+    if reversal and reversal.status == 'succeeded' and reversal.payload['amountCents'] == transfer.payload['amountCents']:
+        return  # Full Home-issued recovery is already recorded canonically.
+    if reversal and reversal.mutation_started_at and reversal.status in ('pending','running','retry'):
+        raise Deferred('home_reversal_pending')
+    if str(transfer.id) in money.externally_recovered_transfers(session,payment):
+        return  # A replay cannot reopen a canonically reconciled adjustment.
+    prior = session.execute(select(HomeEvent.id).where(HomeEvent.booking_id == booking['id'],
+        HomeEvent.action == 'payment_review_required',
+        HomeEvent.details['reason'].astext == 'external_transfer_reversal',
+        HomeEvent.details['operationId'].astext == str(transfer.id)).limit(1)).first()
+    payment.status, visit.issue_open = 'review_required', True
+    if not prior:
+        visit.version += 1
+        visits.event(session,money.SYSTEM,'payment_review_required',booking['id'],visit.version,
+            paymentId=str(payment.id),operationId=str(transfer.id),reason='external_transfer_reversal')
+    # No refund, new transfer or assumption about an externally reversed amount.
+    # Signature and bindings justify a hold, not financial settlement evidence.
+
+
+def _reconcile_transfer(session,row,payment,booking,visit,value):
+    transfer=session.execute(select(Op).where(Op.payment_id==payment.id,Op.kind=='transfer',
+        Op.provider_id==row.object_id,Op.status=='succeeded')).scalar_one_or_none()
+    if (not _transfer_binding(payment,transfer,value) or value.get('object')!='transfer'
+        or payment.customer_id!=booking['eater_id'] or payment.helper_id!=booking['cook_id']
+        or type(value.get('amount_reversed')) is not int
+        or not 0<=value['amount_reversed']<=value['amount']):
+        raise TransferReconciliationError('transfer_binding_mismatch')
+    if value.get('reversed') is not (value['amount_reversed']==value['amount']):
+        raise TransferReconciliationError('transfer_reversal_state_mismatch')
+    # A zero/partial reversal remains a hold. Do not infer intended helper pay or
+    # issue another reversal from the residual amount; operator intent is unknown.
+    if not value['reversed']:
+        emit_event('home_financial_deferred',severity='WARNING',kind='transfer.reconcile',
+            code='partial_external_transfer_reversal')
+        return
+    if str(transfer.id) in money.externally_recovered_transfers(session,payment):
+        return
+    if not any(review.details.get('operationId')==str(transfer.id)
+        for review in money.external_transfer_reviews(session,payment)):
+        raise TransferReconciliationError('transfer_review_missing')
+    visit.version+=1
+    visits.event(session,money.SYSTEM,'helper_transfer_reconciled',booking['id'],visit.version,
+        paymentId=str(payment.id),operationId=str(transfer.id),transferId=transfer.provider_id,
+        amountCents=value['amount'],reversedCents=value['amount_reversed'],livemode=payment.livemode,
+        basis='stripe_transfer_full_reversal')
+    session.flush()
+    # Keep the issue open for an operator to decide the visit outcome. Evidence
+    # unlocks ordinary resolution, never automatic compensation or a new transfer.
+    payment.status='review_required'
+
+
 def dispatch_events(provider=None, limit=5):
     provider = provider or home_stripe.StripeHome()
     counts = {'processed': 0, 'deferred': 0}
@@ -337,6 +459,31 @@ def dispatch_events(provider=None, limit=5):
         if not row:
             break
         try:
+            if row.kind == 'transfer.reconcile':
+                with db_session() as session:
+                    payment=session.get(HomePayment,row.payment_id)
+                    _check_mode(payment,provider)
+                value=provider.transfer_status(row.object_id)
+                with db_session() as session:
+                    payment,booking,visit=_context(session,row)
+                    current=session.get(HomeStripeEvent,row.id,with_for_update=True)
+                    if current.lease_token!=row.lease_token:
+                        continue
+                    _reconcile_transfer(session,row,payment,booking,visit,value)
+                    current.status,current.lease_token,current.lease_until='processed',None,None
+                counts['processed']+=1
+                continue
+            if row.kind == 'transfer.reversed':
+                with db_session() as session:
+                    payment, booking, visit = _context(session,row)
+                    _check_mode(payment,provider)
+                    current = session.get(HomeStripeEvent,row.id,with_for_update=True)
+                    if current.lease_token != row.lease_token:
+                        continue
+                    _review_external_reversal(session,row,payment,booking,visit)
+                    current.status,current.lease_token,current.lease_until = 'processed',None,None
+                counts['processed'] += 1
+                continue
             with db_session() as session:
                 payment = session.get(HomePayment, row.payment_id)
                 _check_mode(payment, provider)

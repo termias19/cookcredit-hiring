@@ -7,6 +7,7 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
     [events, setEvents] = useState([]),
     [materials, setMaterials] = useState([]);
   const [error, setError] = useState("");
+  const providerReview = visit.payment?.helperFunds === "provider_review_required" || visit.payment?.helperTransferBalanceKnown === false;
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -90,7 +91,9 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
           {error}
         </p>
       )}
-      {visit.issueOpen && <p>Resolve the reviewed issue before changing this visit.</p>}
+      {visit.issueOpen && <p>{providerReview
+        ? "Reconcile the external transfer change with Stripe before resolving this issue. Additional fund releases are held."
+        : "Resolve the reviewed issue before changing this visit."}</p>}
       <div className="actions">
         {visit.status === "requested" && !visit.reviewed && (
           <button disabled={busy || visit.issueOpen} onClick={() => action("review")}>
@@ -99,7 +102,7 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
         )}
         {visit.issueOpen && (
           <button
-            disabled={busy}
+            disabled={busy || providerReview}
             className="secondary"
             onClick={() => action("resolve_issue")}
           >
