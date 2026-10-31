@@ -59,3 +59,50 @@ def test_temporary_admin_membership_is_released_on_success_or_failure(already_me
     revokes=[q for q in cursor.calls if 'REVOKE ' in q]
     assert len(grants)==len(revokes)==(0 if already_member else 1)
     assert all('CURRENT_USER' in q and 'cookcredit_home_migrator' in q for q in grants+revokes)
+
+
+def test_managed_admin_retains_owner_access_until_schema_setup_finishes(monkeypatch):
+    from contextlib import contextmanager
+    membership={'active':False}
+    class Cursor:
+        statement=''
+        def execute(self, statement, parameters=None):
+            self.statement=str(statement)
+            if 'GRANT {} TO CURRENT_USER' in self.statement:
+                membership['active']=True
+            elif 'REVOKE {} FROM CURRENT_USER' in self.statement:
+                membership['active']=False
+        def fetchone(self):
+            if 'max_connections' in self.statement:return (20,)
+            if 'FROM pg_roles WHERE rolname' in self.statement:return (False,)*5+(bootstrap.MARKER,)
+            if 'FROM pg_auth_members' in self.statement:return None
+            if 'FROM pg_database' in self.statement:return (bootstrap.ROLES[0],bootstrap.MARKER)
+            if 'pg_has_role' in self.statement:return (membership['active'],)
+            raise AssertionError('Unexpected bootstrap read')
+        def close(self):pass
+    cursor=Cursor()
+    class Driver:
+        def cursor(self):return cursor
+    class Connection:
+        class Wrapper:
+            driver_connection=Driver()
+        connection=Wrapper()
+        def exec_driver_sql(self, statement):
+            assert membership['active'], 'Managed administrator lost Home owner access during setup'
+    class Engine:
+        @contextmanager
+        def connect(self):yield Connection()
+        @contextmanager
+        def begin(self):
+            # PUBLIC CONNECT has been revoked; managed postgres needs its
+            # temporary Home owner membership for this second connection.
+            assert membership['active']
+            yield Connection()
+        def dispose(self):pass
+    for name,value in {'HOME_STAGING_BOOTSTRAP':'1','COOKCREDIT_ENVIRONMENT':'staging',
+        'CLOUD_SQL_CONNECTION':bootstrap.CONNECTION,'CLOUD_RUN_JOB':'cc-hiring-stg-migrate','DB_PASS':'synthetic-only'}.items():
+        monkeypatch.setenv(name,value)
+    monkeypatch.setattr(bootstrap,'target',lambda setting,role: URL.create('postgresql+psycopg2',username=role,password='synthetic-only'))
+    monkeypatch.setattr(bootstrap,'create_engine',lambda *a,**k:Engine())
+    bootstrap.main()
+    assert not membership['active'], 'Temporary administrator membership remained after setup'

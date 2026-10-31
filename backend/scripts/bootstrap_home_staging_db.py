@@ -85,21 +85,21 @@ def main():
                 cursor.execute(sql.SQL('COMMENT ON DATABASE {} IS {}').format(sql.Identifier(DATABASE), sql.Literal(MARKER)))
                 cursor.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(DATABASE)))
                 cursor.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[1])))
+                # Keep the temporary owner membership until setup connects:
+                # PUBLIC CONNECT has already been revoked, including postgres.
+                setup = create_engine(admin_url.set(database=DATABASE), connect_args={'connect_timeout': 5})
+                try:
+                    with setup.begin() as connection:
+                        print('Home bootstrap step: extension and schema', flush=True)
+                        connection.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis')
+                        connection.exec_driver_sql('SET ROLE cookcredit_home_migrator')
+                        connection.exec_driver_sql('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
+                        connection.exec_driver_sql('RESET ROLE')
+                finally:
+                    setup.dispose()
             cursor.close()
     finally:
         admin.dispose()
-    setup = create_engine(admin_url.set(database=DATABASE), connect_args={'connect_timeout': 5})
-    try:
-        with setup.begin() as connection:
-            print('Home bootstrap step: extension and schema', flush=True)
-            connection.exec_driver_sql('CREATE EXTENSION IF NOT EXISTS postgis')
-            cursor = connection.connection.driver_connection.cursor()
-            with migration_owner(cursor):
-                cursor.execute('SET ROLE cookcredit_home_migrator')
-                cursor.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
-            cursor.close()
-    finally:
-        setup.dispose()
     print('Home staging database and non-inheriting roles prepared on existing capacity.', flush=True)
 
 
