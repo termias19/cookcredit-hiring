@@ -1,0 +1,436 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {readFile} from 'node:fs/promises'
+import vm from 'node:vm'
+import {transformWithEsbuild} from 'vite'
+import {safeHomeRoute} from '../home/navigation.js'
+
+// Actual screen handlers under controlled failures; browser acceptance is separate.
+async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default',runtime={}) {
+  const states=[],effects=[];let index,tree,queued
+  const react={lazy:()=> 'lazy-screen',Suspense:'suspense',useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
+    return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
+    useRef(initial){const slot=index++;return states[slot]||=( {current:initial} )},
+    useEffect(fn,deps){const slot=index++,old=effects[slot];if(!old||deps.some((d,i)=>d!==old.deps[i]))
+      queued.push(()=>{old?.cleanup?.();effects[slot]={deps,cleanup:fn()}})}}
+  const jsx=(type,props,key)=>({type,props,key})
+  const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
+    '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    './api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    './navigation':{safeHomeRoute},
+    '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
+    './OperatingRulesDraft':{__esModule:true,default:()=>null},
+    './Availability':{__esModule:true,default:()=>null},
+    './SuggestedTimes':{__esModule:true,default:()=>null},
+    '../../src/utils/errorReporting':{reportClientError(){}}}
+  Object.assign(modules,runtime.modules)
+  let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
+  if(exportName!=='default')source+='\nexport { '+exportName+' };'
+  const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
+  const context={module:{exports:{}},require:id=>modules[id],URL,URLSearchParams,crypto,window:{scrollTo(){}},
+    location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
+    FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}
+      getAll(key){return Array.isArray(this.values[key])?this.values[key]:[]}},...runtime.context}
+  vm.runInNewContext(code,context)
+  const Component=context.module.exports[exportName]
+  function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
+  function nodes(node){if(node==null||node===false)return [];if(Array.isArray(node))return node.flatMap(nodes);
+    return [node,...nodes(node.props?.children)]}
+  const text=()=>nodes(tree).filter(n=>typeof n==='string'||typeof n==='number').join(' ')
+  const find=predicate=>nodes(tree).find(n=>n?.props&&predicate(n.props,n))
+  async function settle(){await new Promise(resolve=>setImmediate(resolve));render()}
+  render();return {render,settle,text,find,location:context.location,
+    unmount(){effects.forEach(effect=>effect?.cleanup?.())}}
+}
+
+test('enrollment load errors retry instead of displaying empty or successful enrollment',async()=>{
+  let fail=true
+  const s=await screen('Enrollment',async()=>{if(fail)throw new Error('Connection lost');return {enrollment:null}})
+  await s.settle();assert.match(s.text(),/Connection lost/)
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  fail=false;s.find(p=>p.children==='Try again').props.onClick();s.render();await s.settle()
+  assert.ok(s.find((p,n)=>n.type==='form'))
+})
+
+test('Google account recovery opens the chooser in the click and returns to the callback instead of another dashboard',async()=>{
+  const events=[];let provider
+  class GoogleAuthProvider { setCustomParameters(value){this.parameters=value} }
+  const s=await screen('Account',async()=>assert.fail('Popup click must not need an extra API'),false,async()=>{},
+    {user:null,next:'callback',refresh:async()=>{events.push('refresh')}},'default',{
+      modules:{'firebase/auth':{GoogleAuthProvider,signInWithPopup(_auth,value){provider=value;events.push('popup');return Promise.resolve()}},
+        '../../src/firebase':{auth:{}},'../../src/utils/verifyAccountLink':{},
+        '../navigation':{safeHomeRoute,readReturnRoute:()=>null,rememberReturnRoute(){},forgetReturnRoute(){events.push('forget')}}},
+      context:{location:{hash:'#sign-in?next=callback'}},
+    })
+  s.find(p=>p.className==='google').props.onClick()
+  assert.deepEqual(events,['popup'])
+  assert.equal(JSON.stringify(provider.parameters),JSON.stringify({prompt:'select_account'}))
+  await s.settle()
+  assert.equal(s.location.hash,'callback')
+  assert.deepEqual(events,['popup','refresh','forget'])
+})
+
+test('known private Home denial offers account recovery and contact without another doomed callback submission',async()=>{
+  let switched=0
+  const s=await screen('../App',async()=>assert.fail('Blocked callback must not submit'),false,async()=>{},
+    {user:{email:'fixture@example.test',emailVerified:true},accessErrorCode:'private_acceptance',
+      returnTo:'callback',switchAccount:()=>{switched++}},'Help')
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  assert.match(s.text(),/sign-in worked/);assert.match(s.text(),/No callback request was submitted/)
+  assert.match(s.text(),/fixture@example.test/)
+  assert.ok(s.find(p=>p.href==='mailto:connectwithus@cookcredit.com'))
+  s.find(p=>p.children==='Use a different account').props.onClick();assert.equal(switched,1)
+})
+
+test('anonymous public callbacks stay available while an actual authentication rejection offers a return to Help',async()=>{
+  let calls=0
+  const s=await screen('../App',async()=>{calls++;throw Object.assign(new Error('Missing authorization'),{status:401})},
+    false,async()=>{},{user:null,returnTo:'callback'},'Help')
+  const form=s.find((p,n)=>n.type==='form');assert.ok(form)
+  await form.props.onSubmit({preventDefault(){},currentTarget:{name:'Example',phone:'4045550123',time:'Afternoon',consent:'on'}})
+  s.render()
+  assert.match(s.text(),/Sign in before sending/);assert.doesNotMatch(s.text(),/callback request is received/)
+  assert.ok(s.find(p=>p.href==='#sign-in?next=callback'))
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  s.render();assert.equal(calls,1)
+})
+
+test('enabled staging customers may submit and a second callback is only created after an explicit new request',async()=>{
+  const calls=[]
+  const s=await screen('../App',async(path,options)=>{calls.push([path,options]);return {received:true}},false,async()=>{},
+    {user:{emailVerified:true},profile:{environment:'staging'},returnTo:'help'},'Help')
+  const event={preventDefault(){},currentTarget:{name:'Example',phone:'4045550123',time:'Afternoon',consent:'on'}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  assert.match(s.text(),/callback request is received/);assert.match(s.text(),/visit has not been booked/)
+  s.find(p=>p.children==='Request another call').props.onClick();s.render()
+  assert.equal(calls.length,1);assert.ok(s.find((p,n)=>n.type==='form'))
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  assert.equal(calls.length,2);assert.notEqual(calls[0][1].body.requestId,calls[1][1].body.requestId)
+})
+
+test('My visits retries its failed read only on request and restores the scoped list',async()=>{
+  const calls=[];let finish
+  const s=await screen('../App',async path=>{
+    calls.push(path)
+    if(calls.length===1)throw new Error('Visits temporarily unavailable')
+    return new Promise(resolve=>{finish=resolve})
+  },false,async()=>{},{},'Visits')
+  await s.settle();assert.ok(s.find(p=>p.error==='Visits temporarily unavailable'))
+  assert.doesNotMatch(s.text(),/No visits yet/)
+  assert.deepEqual(calls,['/visits'])
+  const retry=s.find(p=>p.children==='Refresh visits')
+  assert.ok(retry)
+  const pending=retry.props.onClick();s.render()
+  assert.match(s.text(),/Loading visits/)
+  assert.equal(s.find(p=>p.children==='Refresh visits'),undefined)
+  assert.deepEqual(calls,['/visits','/visits'])
+  finish({visits:[{id:'own-visit',service:'cooking',date:'2030-01-07',time:'10:00',durationMinutes:120,status:'requested'}],nextCursor:null})
+  await pending;s.render()
+  assert.ok(s.find(p=>p.href==='#visit/own-visit'))
+  assert.doesNotMatch(s.text(),/Visits temporarily unavailable/)
+  assert.equal(calls.length,2)
+})
+
+test('an acknowledged visit does not redirect or save household details after leaving the request screen',async()=>{
+  const calls=[];let acknowledge
+  const s=await screen('RequestVisit',async(path,options)=>{
+    calls.push([path,options])
+    if(path==='/household')return {household:null}
+    return new Promise(resolve=>{acknowledge=resolve})
+  },false)
+  await s.settle()
+  const event={preventDefault(){},currentTarget:{}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+  }})
+  s.unmount();s.location.hash='home'
+  acknowledge({id:'saved-visit'});await pending
+  assert.equal(s.location.hash,'home')
+  assert.deepEqual(calls.map(([path,options])=>[path,options?.method]),[['/household',undefined],['/visits','POST']])
+})
+
+test('leaving during an explicitly requested household save does not pull the customer back to the visit',async()=>{
+  const calls=[];let finishSave
+  const s=await screen('RequestVisit',async(path,options)=>{
+    calls.push([path,options])
+    if(path==='/visits')return {id:'saved-visit'}
+    if(options)return new Promise(resolve=>{finishSave=resolve})
+    return {household:null}
+  },false)
+  await s.settle()
+  const event={preventDefault(){},currentTarget:{}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+  }})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(calls.at(-1)[1].method,'PUT')
+  s.unmount();s.location.hash='home';finishSave({saved:true});await pending
+  assert.equal(s.location.hash,'home')
+  assert.equal(calls.filter(([path])=>path==='/visits').length,1)
+})
+
+test('enrollment save uses the existing account endpoint and only claims success after acknowledgement',async()=>{
+  const calls=[];let fail=true
+  const s=await screen('Enrollment',async(path,options)=>{calls.push([path,options]);
+    if(!options)return {enrollment:null};if(fail)throw new Error('Retry safely');return {enrollment:{service:'both'}}})
+  await s.settle()
+  s.find(p=>p.value==='both').props.onChange();s.render()
+  const submit=()=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
+  await submit();s.render();assert.match(s.text(),/Retry safely/);assert.doesNotMatch(s.text(),/You’re on the list/)
+  fail=false;await submit();s.render();assert.match(s.text(),/You’re on the list/)
+  assert.equal(calls.length,3)
+  assert.equal(calls[2][0],'/enrollment');assert.equal(calls[2][1].method,'PUT')
+  assert.equal(JSON.stringify(calls[2][1].body),JSON.stringify({service:'both',phone:'',contactConsent:true}))
+})
+
+test('only the owner screen requests the enrollment directory and failed copy stays honest',async()=>{
+  const calls=[]
+  const api=async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{visits:[]}}
+  const operator=await screen('Team',api,false);await operator.settle()
+  assert.deepEqual(calls,['/visits']);assert.doesNotMatch(operator.text(),/People enrolled/)
+  const owner=await screen('Team',api,true,async()=>{throw new Error('clipboard blocked')});await owner.settle()
+  assert.equal(calls.at(-1),'/enrollments')
+  assert.match(owner.text(),/People enrolled/)
+  await owner.find(p=>p.children==='Copy enrollment link').props.onClick();owner.render()
+  assert.match(owner.text(),/link was not copied/)
+  assert.equal(owner.find(p=>p.readOnly).props.value,'https://home.example.test/#enroll')
+})
+
+test('clicking the selected service-desk tab keeps its loaded data and does not strand the page on Loading',async()=>{
+  const calls=[]
+  const s=await screen('Team',async path=>{calls.push(path);return {enrollments:[]}})
+  await s.settle();assert.match(s.text(),/People enrolled/)
+  s.find(p=>p.children==='enrollments').props.onClick();s.render();await s.settle()
+  assert.match(s.text(),/People enrolled/);assert.doesNotMatch(s.text(),/Loading/)
+  assert.deepEqual(calls,['/enrollments'])
+})
+
+test('operator assignment excludes the customer even if they are an approved helper',async()=>{
+  const s=await screen('operator/OperatorVisit',async path=>path==='/helpers'?{helpers:[
+    {id:'customer',name:'Customer cannot be their own helper',enabled:true,cooking:true,cleaning:true},
+    {id:'other',name:'Eligible helper',enabled:true,cooking:true,cleaning:true},
+  ]}:path==='/pricing'?{}:{events:[]},true,async()=>{},
+    {visit:{id:'visit',version:1,status:'requested',reviewed:true,customerId:'customer',service:'cooking'},receipts:[]})
+  await s.settle()
+  assert.doesNotMatch(s.text(),/Customer cannot be their own helper/)
+  assert.match(s.text(),/Eligible helper/)
+})
+
+test('arrange visit carries the saved enrollment choice without overriding later form edits',async()=>{
+  let chosen
+  const enrollment=await screen('Enrollment',async(path,options)=>options?{saved:true}:{enrollment:{service:'both'}},
+    false,async()=>{},{onArrange:value=>{chosen=value}})
+  await enrollment.settle()
+  await enrollment.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
+  enrollment.render()
+  enrollment.find(p=>p.href==='#request').props.onClick()
+  assert.equal(chosen,'both')
+  const visit=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:chosen})
+  await visit.settle()
+  assert.equal(visit.find(p=>p.name==='cleaning').props.value,60)
+  assert.ok(visit.find((p,n)=>n.type==='input'&&p.name==='service'&&p.checked))
+  // The chosen service remains editable after entry; loading saved household
+  // data must not reset the user's explicit selection.
+  const cooking=visit.find((p,n)=>n.type==='label'&&Array.isArray(p.children)&&p.children.includes('Cooking'))
+  cooking.props.children.find(n=>n?.type==='input').props.onChange()
+  visit.render();await visit.settle()
+  assert.equal(visit.find(p=>p.name==='cleaning'),undefined)
+  const unsure=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:'not_sure'})
+  await unsure.settle()
+  assert.equal(unsure.find(p=>p.name==='cleaning'),undefined)
+})
+
+test('approved unpaid quotes show the payment step; expired quotes explain why checkout is unavailable',async()=>{
+  const value={id:'visit',version:1,status:'accepted',service:'both',isCustomer:true,time:'10:00',
+    instructions:{preferences:[],cleaningTasks:[]},payment:{status:'unpaid'},
+    quote:{approved:true,helperAcceptedQuote:true,expired:false,labor:[],materials:[],expiresAt:'2030-01-01'}}
+  const api=async path=>path.endsWith('/receipts')?{receipts:[]}:value
+  const open=()=>screen('Visit',api,false,async()=>{},{id:'visit',profile:{paymentsAvailable:true}})
+  const approved=await open();await approved.settle()
+  assert.match(approved.text(),/full quote is approved\. Payment must be confirmed/)
+  const payButton=(p,n)=>n.type==='button'&&typeof p.children==='string'&&p.children.startsWith('Pay up to')
+  assert.ok(approved.find(payButton))
+  value.quote.expired=true
+  const expired=await open();await expired.settle()
+  assert.match(expired.text(),/quote has expired/)
+  assert.equal(expired.find(payButton),undefined)
+})
+
+test('an unknown provider transfer balance stays explicit and cannot be dismissed as an ordinary reviewed issue',async()=>{
+  const value={id:'visit',version:2,status:'completed',service:'cooking',isCustomer:true,time:'10:00',issueOpen:true,
+    instructions:{preferences:[],cleaningTasks:[]},payment:{status:'review_required',helperFunds:'provider_review_required',
+      helperTransferBalanceKnown:false,helperTransferredCents:null},quote:null}
+  const view=await screen('Visit',async path=>path.endsWith('/receipts')?{receipts:[]}:value,false,async()=>{},
+    {id:'visit',profile:{paymentsAvailable:false}})
+  await view.settle();assert.match(view.text(),/transfer balance needs review/)
+  assert.doesNotMatch(view.text(),/funds have not been released/)
+  const ops=await screen('operator/OperatorVisit',async path=>path==='/helpers'?{helpers:[]}:path==='/pricing'?{}:{events:[]},
+    true,async()=>{},{visit:value,receipts:[]})
+  await ops.settle();assert.match(ops.text(),/Reconcile the external transfer change/)
+  assert.equal(ops.find(p=>p.children==='Resolve reviewed issue').props.disabled,true)
+})
+
+test('owner operating draft starts closed and saves versioned rules without an activation request',async()=>{
+  const calls=[]
+  const draft=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data:{version:0,rules:{states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:null,weeklyHours:[]}},run:task=>task()})
+  assert.match(draft.text(),/All days are currently closed/)
+  assert.match(draft.text(),/does not publish appointment slots/)
+  assert.equal(draft.find(p=>p.name==='notice').props.defaultValue,24)
+  await draft.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    states:' ga, GA ',zone:'America/New_York',notice:'24',short:'6',buffer:'',mon:true,'mon-start':'09:00','mon-end':'00:00',
+  }})
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/operating-rules')
+  const body=calls[0][1].body
+  assert.equal(body.version,0);assert.equal(body.rules.bufferMinutes,null)
+  assert.equal(JSON.stringify(body.rules.weeklyHours),JSON.stringify([{day:'mon',startMinute:540,endMinute:1440}]))
+  assert.equal('published' in body,false);assert.equal('enabled' in body,false)
+})
+
+test('helper schedule load failures retry and operator view cannot edit hours',async()=>{
+  let fail=true;const calls=[]
+  const s=await screen('Availability',async path=>{calls.push(path);if(fail)throw new Error('Temporary schedule outage');
+    return {version:0,configured:false,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]}},
+    true,async()=>{},{helperId:'helper-with/slash'})
+  await s.settle();assert.match(s.text(),/Temporary schedule outage/)
+  fail=false;s.find(p=>p.children==='Refresh availability').props.onClick();s.render();await s.settle()
+  assert.match(s.text(),/Only this helper can change/)
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  assert.deepEqual(calls,['/helpers/helper-with%2Fslash/availability','/helpers/helper-with%2Fslash/availability'])
+})
+
+test('helper schedule form saves closed days and blocked dates through the versioned own-account API',async()=>{
+  const saved=[];const data={version:3,timeZone:'America/New_York',weeklyHours:[],blockedDates:['2026-12-01']}
+  const s=await screen('Availability',async()=>{},false,async()=>{},
+    {data,save:async body=>saved.push(body),busy:false},'ScheduleForm')
+  assert.match(s.text(),/no available work days/)
+  assert.equal(s.find(p=>p.name==='mon-start').props.disabled,true)
+  s.find(p=>Array.isArray(p.children)&&p.children.join('')==='Remove 2026-12-01').props.onClick();s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{mon:true,'mon-start':'9','mon-end':'24'}})
+  assert.equal(JSON.stringify(saved[0]),JSON.stringify({version:3,timeZone:'America/New_York',blockedDates:[],
+    weeklyHours:[{day:'mon',startHour:9,endHour:24}]}))
+})
+
+test('failed helper schedule save keeps the editable form and does not claim success',async()=>{
+  const calls=[];const data={version:2,configured:true,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]}
+  const s=await screen('Availability',async(path,options)=>{calls.push([path,options]);if(options)throw new Error('Existing visit conflicts');return data})
+  await s.settle()
+  const form=s.find((p,n)=>typeof n.type==='function'&&n.type.name==='ScheduleForm')
+  await form.props.save({version:2,timeZone:'America/New_York',weeklyHours:[],blockedDates:[]});s.render()
+  assert.match(s.text(),/Existing visit conflicts/);assert.doesNotMatch(s.text(),/Availability saved/)
+  assert.equal(calls[1][0],'/availability');assert.equal(calls[1][1].method,'PUT')
+  assert.ok(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='ScheduleForm'))
+})
+
+test('policy activation requires reviewed saved settings and never activates unsaved edits automatically',async()=>{
+  const calls=[],notices=[]
+  const data={version:2,rules:{states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,
+    bufferMinutes:60,weeklyHours:[{day:'mon',startMinute:600,endMinute:1080}]},activePolicy:null}
+  const s=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data,run:(task,message)=>{notices.push(message);return task()}})
+  const button=()=>s.find(p=>p.children==='Activate saved rules')
+  const acknowledgement=()=>s.find(p=>p.type==='checkbox'&&!p.name)
+  assert.equal(calls.length,0);assert.equal(button().props.disabled,true)
+  acknowledgement().props.onChange({target:{checked:true}});s.render();assert.equal(button().props.disabled,false)
+  s.find((p,n)=>n.type==='form').props.onChange();s.render()
+  assert.equal(button().props.disabled,true);assert.match(s.text(),/Save your changes before activating/)
+  // A fresh acknowledged saved revision can be applied explicitly.
+  const saved=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data,run:(task,message)=>{notices.push(message);return task()}})
+  saved.find(p=>p.type==='checkbox'&&!p.name).props.onChange({target:{checked:true}});saved.render()
+  await saved.find(p=>p.children==='Activate saved rules').props.onClick()
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/operating-rules/activate')
+  assert.equal(JSON.stringify(calls[0][1].body),JSON.stringify({version:2,reviewConfirmed:true}))
+  assert.match(notices[0],/still require review/)
+  assert.match(saved.text(),/not reserved or automatically confirmed/)
+})
+
+test('incomplete and already active operating drafts cannot be reactivated through the owner controls',async()=>{
+  const rules={states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:null,weeklyHours:[]}
+  const incomplete=await screen('OperatingRulesDraft',async()=>assert.fail('unexpected activation'),true,async()=>{},
+    {data:{version:1,rules,activePolicy:null},run:task=>task()})
+  assert.equal(incomplete.find(p=>p.children==='Activate saved rules').props.disabled,true)
+  const complete={...rules,bufferMinutes:60,weeklyHours:[{day:'mon',startMinute:600,endMinute:1080}]}
+  const active=await screen('OperatingRulesDraft',async()=>assert.fail('unexpected activation'),true,async()=>{},
+    {data:{version:2,rules:complete,activePolicy:{version:2,rules:complete}},run:task=>task()})
+  assert.match(active.text(),/saved draft is active/)
+  assert.equal(active.find(p=>p.children==='Activate saved rules').props.disabled,true)
+})
+
+test('owner can reload a changed policy after a failed mutation without replaying the mutation',async()=>{
+  const calls=[];const rules={states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:60,weeklyHours:[]}
+  const s=await screen('Team',async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{version:2,rules,activePolicy:null}})
+  await s.settle();s.find(p=>p.children==='Operating rules').props.onClick();s.render();await s.settle()
+  let editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules)
+  await editor.props.run(async()=>{throw new Error('Rules changed in another window')});s.render()
+  assert.match(s.text(),/Rules changed in another window/)
+  editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules);editor.props.reload();s.render();await s.settle()
+  assert.doesNotMatch(s.text(),/Rules changed in another window/)
+  assert.deepEqual(calls,['/enrollments','/operating-rules','/operating-rules'])
+})
+
+const suggestions=(date='2026-12-01')=>({date,timeZone:'America/New_York',policyVersion:2,
+  slots:[{time:'10:00',durationMinutes:120}],reviewRequired:true,reservesTime:false,areaReviewRequired:true})
+
+test('time suggestions load only on explicit request and choosing one never creates a visit',async()=>{
+  const calls=[],chosen=[],zones=[]
+  const s=await screen('SuggestedTimes',async(...args)=>{calls.push(args);return suggestions()},false,async()=>{},
+    {date:'2026-12-01',service:'cooking',durationMinutes:120,state:'GA',timeZone:'America/New_York',onChoose:t=>chosen.push(t),onTimeZone:z=>zones.push(z)})
+  await s.settle();assert.equal(calls.length,0)
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.equal(calls.length,1);assert.match(calls[0][0],/^\/slots\?date=2026-12-01&durationMinutes=120&service=cooking&state=GA$/)
+  assert.equal(calls[0][1],undefined)
+  s.find(p=>p.children==='10:00 AM').props.onClick();s.render()
+  assert.deepEqual(chosen,['10:00']);assert.deepEqual(zones,['America/New_York']);assert.equal(calls.length,1)
+  assert.match(s.text(),/does not book a visit or charge/)
+})
+
+test('late slot responses cannot overwrite a changed date and failed checks remain retryable',async()=>{
+  let resolveFirst;const calls=[]
+  const props={date:'2026-12-01',service:'cooking',durationMinutes:120,timeZone:'America/New_York',onChoose(){}}
+  const s=await screen('SuggestedTimes',async path=>{calls.push(path);if(calls.length===1)return new Promise(resolve=>{resolveFirst=resolve});
+    return suggestions('2026-12-02')},false,async()=>{},props)
+  const first=s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  props.date='2026-12-02';s.render();resolveFirst(suggestions());await first;s.render()
+  assert.doesNotMatch(s.text(),/10:00 AM/)
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.match(s.text(),/10:00 AM/);assert.equal(calls.length,2)
+  const unavailable=await screen('SuggestedTimes',async()=>{throw Object.assign(new Error('inactive'),{code:'operating_rules_required'})},
+    false,async()=>{},{...props})
+  await unavailable.find(p=>p.children==='Check suggested times').props.onClick();unavailable.render()
+  assert.match(unavailable.text(),/preferred-time request for CookCredit review/)
+  assert.equal(unavailable.find(p=>p.children==='Check suggested times').props.disabled,false)
+})
+
+test('malformed suggestion responses never display or select an unverified time',async()=>{
+  const s=await screen('SuggestedTimes',async()=>({...suggestions(),reservesTime:true}),false,async()=>{},
+    {date:'2026-12-01',service:'cooking',durationMinutes:120,onChoose:()=>assert.fail('unexpected choice')})
+  await s.find(p=>p.children==='Check suggested times').props.onClick();s.render()
+  assert.match(s.text(),/could not read these suggestions/);assert.doesNotMatch(s.text(),/10:00 AM/)
+})
+
+test('visit steps preserve a preferred time, submit only on Send, and require a new time after timezone changes',async()=>{
+  const calls=[],id='11111111-1111-4111-8111-111111111111'
+  const s=await screen('RequestVisit',async(path,options)=>{calls.push([path,options]);return path==='/household'?{household:null}:{id}},
+    false,async()=>{},{profile:{consentVersion:'home-visit-v2',consentText:'Example consent',serviceTimeZone:'America/New_York',serviceStates:['GA']}})
+  await s.settle()
+  const submit=values=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:values})
+  await submit({});s.render();await submit({});s.render()
+  s.find(p=>p.name==='date').props.onChange({target:{value:'2026-12-01'}});s.render()
+  let choice=s.find(p=>typeof p.onChoose==='function')
+  choice.props.onChoose('14:00');s.render();assert.equal(calls.length,1)
+  s.find(p=>p.children==='Back').props.onClick();s.render();await submit({});s.render()
+  assert.equal(s.find(p=>p.name==='time').props.value,'14:00')
+  choice=s.find(p=>typeof p.onTimeZone==='function');choice.props.onTimeZone('UTC');s.render()
+  assert.equal(s.find(p=>p.name==='time').props.value,'');assert.match(s.text(),/Choose your preferred start time again/)
+  s.find(p=>p.name==='time').props.onChange({target:{value:'15:00'}});s.render()
+  await submit({cooking:'120',date:'2026-12-01',time:'15:00',address:'Synthetic address',notes:'',preferences:[],consent:'on'})
+  s.render();assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
+  assert.equal(calls[1][1].body.timeZone,'UTC');assert.equal(calls[1][1].body.time,'15:00')
+  assert.equal(s.location.hash,'visit/'+id)
+})

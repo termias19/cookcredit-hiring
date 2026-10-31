@@ -8,7 +8,7 @@ from services.operations import emit_event
 observability_bp = Blueprint('observability', __name__)
 CODES = {'render_error', 'unhandled_error', 'unhandled_rejection', 'api_network_error',
          'api_timeout', 'api_response_invalid', 'google_signin_error'}
-SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other'}
+SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other', 'home_customer', 'home_helper', 'home_operator'}
 
 
 @observability_bp.post('/client-error')
@@ -16,7 +16,8 @@ SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other'}
 def client_error():
     # No token is needed: login and initial render errors must also be visible.
     # The report is untrusted, uses shared IP rate limits and cannot carry free text.
-    origins = {v.strip().rstrip('/') for v in os.getenv('FRONTEND_URL', '').split(',') if v.strip()}
+    origin_setting = 'HOME_FRONTEND_ORIGINS' if os.getenv('COOKCREDIT_PRODUCT') == 'home-services' else 'FRONTEND_URL'
+    origins = {v.strip().rstrip('/') for v in os.getenv(origin_setting, '').split(',') if v.strip()}
     if request.headers.get('Origin', '') not in origins:
         return jsonify(error='Forbidden'), 403
     if request.content_length is None or request.content_length > 2048:

@@ -91,9 +91,8 @@ def _verify_token(token: str) -> dict:
     return claims
 
 
-def require_auth(f):
-    """Protect a route: verify `Authorization: Bearer <firebase_id_token>` and
-    attach the user to Flask's `g` (g.user_id / g.email / g.name)."""
+def require_identity(f):
+    """Verify shared identity only. Product authorization belongs to each API."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if request.method == "OPTIONS":
@@ -114,6 +113,16 @@ def require_auth(f):
             # Don't echo the verifier's internal reason back to the caller.
             return jsonify({"error": "Invalid or expired token"}), 401
 
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_auth(f):
+    """Existing Hiring identity, approval and verification policy."""
+    @wraps(f)
+    @require_identity
+    def decorated(*args, **kwargs):
+        # Preflight was handled by require_identity before product authorization.
         # Hiring has shared Firebase identities but separately approved API access.
         from services.hiring_access import enabled, employer_access_allowed
         if os.environ.get('COOKCREDIT_ENVIRONMENT') == 'staging' or enabled():

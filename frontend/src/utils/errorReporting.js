@@ -13,13 +13,21 @@ export function screenCategory(path = '') {
   return 'other'
 }
 
+export function homeScreenCategory(hash = '') {
+  if (/^#(sign-in|account\/)/.test(hash)) return 'auth'
+  if (/^#team(?:$|\?)/.test(hash)) return 'home_operator'
+  if (/^#(payout|helping|availability)(?:$|\?)/.test(hash)) return 'home_helper'
+  if (/^#(visit\/|visits$|request$|enroll$)/.test(hash)) return 'home_customer'
+  return 'landing'
+}
+
 export function reportClientError(code) {
   if (!settings?.enabled || globalThis.navigator?.onLine === false) return ''
   const allowed = ['render_error', 'unhandled_error', 'unhandled_rejection',
     'api_network_error', 'api_timeout', 'api_response_invalid', 'google_signin_error']
   if (!allowed.includes(code)) return ''
   try {
-    const screen = screenCategory(globalThis.location?.pathname)
+    const screen = settings.product === 'home' ? homeScreenCategory(globalThis.location?.hash) : screenCategory(globalThis.location?.pathname)
     const key = `${code}:${screen}`
     if (sent.has(key)) return sent.get(key)
     if (sent.size >= 5) return ''
@@ -27,7 +35,8 @@ export function reportClientError(code) {
     sent.set(key, reference)
     const release = /^[a-f0-9]{40}$/.test(settings.release || '') ? settings.release : 'unrecorded'
     // Failure reporting must never delay or retry a customer's action.
-    Promise.resolve(globalThis.fetch(`${settings.apiOrigin}/api/observability/client-error`, {
+    const path = settings.product === 'home' ? '/api/home/observability/client-error' : '/api/observability/client-error'
+    Promise.resolve(globalThis.fetch(`${settings.apiOrigin}${path}`, {
       method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: true,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, screen, release, reference }),
