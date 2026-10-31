@@ -119,8 +119,8 @@ def deliver(item):
             '/#team' if action in ('callback_requested','helper_application_received','report_issue') else '/#visits')
         content=account_email_content('welcome',base+path,custom=(subject,title,body,'Open CookCredit Home',
             'This service message concerns your Home account or visit. Customer service: '+SUPPORT))
-    # Keep the agreed existing authenticated sender. The shared transport sets
-    # connectwithus as Reply-To; receiving address and sending credentials are
-    # separate. No second mailbox credential or unverified From alias is needed.
+    # Reuse the authenticated transport. An explicitly configured, already
+    # verified support alias controls visible/envelope From; Reply-To remains
+    # customer service. No second mailbox password is needed for that grant.
     send_account_message(item.recipient,*content)
     return 'sent'

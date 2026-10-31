@@ -166,8 +166,13 @@ def test_provider_switch_does_not_send_stale_jobs(monkeypatch):
 
 
 @pytest.mark.parametrize('kind', ['verify', 'reset', 'welcome'])
-def test_google_smtp_sends_the_matching_branded_message(monkeypatch, kind):
+@pytest.mark.parametrize('public_alias', [None, 'connectwithus@cookcredit.com'])
+def test_google_smtp_sends_the_matching_branded_message(monkeypatch, kind, public_alias):
     import ssl
+    if public_alias:
+        monkeypatch.setenv('GOOGLE_SMTP_VERIFIED_FROM', public_alias)
+    else:
+        monkeypatch.delenv('GOOGLE_SMTP_VERIFIED_FROM', raising=False)
     monkeypatch.setenv('AUTH_EMAIL_PROVIDER', 'google_smtp')
     monkeypatch.setenv('AUTH_WELCOME_EMAILS_ENABLED', '1')
     monkeypatch.setenv('COOKCREDIT_ENVIRONMENT', 'development')
@@ -194,8 +199,8 @@ def test_google_smtp_sends_the_matching_branded_message(monkeypatch, kind):
             calls.append('login')
         def send_message(self, message, from_addr, to_addrs):
             assert calls[-1] == 'login'
-            assert from_addr == 'sender@cookcredit.com' and to_addrs == [user.email]
-            assert str(message['From']) == 'CookCredit <sender@cookcredit.com>'
+            assert from_addr == (public_alias or 'sender@cookcredit.com') and to_addrs == [user.email]
+            assert str(message['From']) == 'CookCredit <'+(public_alias or 'sender@cookcredit.com')+'>'
             assert str(message['Reply-To']) == 'CookCredit <connectwithus@cookcredit.com>'
             assert message.get_content_type() == 'multipart/alternative'
             text, markup = [part.get_content() for part in message.iter_parts()]
@@ -245,3 +250,14 @@ def test_verification_link_stays_on_hiring_origin_with_issued_action_code(monkey
     assert result.netloc=='cookcredit-hiring-staging.web.app'
     assert result.path=='/account/action'
     assert parse_qs(result.query)['oobCode']==['test-code']
+
+
+@pytest.mark.parametrize('alias', ['unapproved@outside.test','noreply@cookcredit.com','connectwithus@cookcredit.com\nBcc: other@example.test'])
+def test_unapproved_public_mail_sender_fails_before_provider_call(monkeypatch,alias):
+    from services import mail_transport
+    monkeypatch.setenv('GOOGLE_SMTP_USER','sender@cookcredit.com')
+    monkeypatch.setenv('GOOGLE_SMTP_APP_PASSWORD','synthetic-only')
+    monkeypatch.setenv('GOOGLE_SMTP_VERIFIED_FROM',alias)
+    monkeypatch.setattr(mail_transport.smtplib,'SMTP',lambda *a,**kw:pytest.fail('Unapproved sender contacted provider'))
+    with pytest.raises(RuntimeError,match='^email_sender_not_approved$'):
+        mail_transport.send_google_smtp('customer@example.test','Subject','Text','<p>Text</p>')

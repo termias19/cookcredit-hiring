@@ -122,6 +122,8 @@ def create_app(config=None):
                 if (os.getenv('AUTH_EMAIL_PROVIDER')!='google_smtp' or not sender.endswith('@cookcredit.com')
                     or sender.count('@')!=1 or any(c.isspace()for c in sender) or not os.getenv('GOOGLE_SMTP_APP_PASSWORD')):
                     raise RuntimeError('Home mail requires the existing CookCredit Workspace transport')
+                from services.mail_transport import google_smtp_sender
+                google_smtp_sender()  # Fail startup on an unapproved visible sender.
                 if os.getenv('AUTH_APP_CHECK_REQUIRED')!='1' or not os.getenv('FIREBASE_APP_CHECK_APP_IDS'):
                     raise RuntimeError('Home account email requires App Check')
             if not origins or any(urlsplit(o).scheme != 'https' or urlsplit(o).path not in ('', '/')

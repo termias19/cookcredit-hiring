@@ -271,10 +271,14 @@ to private records and contain no address, allergy instruction, phone number,
 receipt image or hosted payment URL. Verification/reset links are generated at
 delivery, never persisted. `HOME_EMAILS_ENABLED=1` requires App Check and the
 existing authenticated CookCredit Workspace mail transport. The agreed public
-inquiry/Reply-To address is `connectwithus@cookcredit.com`; its separate mailbox
-does not need a new sending credential. The authenticated From address remains
-unchanged. Reuse the deployed secret reference; do not create another sender or
-claim that a Reply-To change also changed the authenticated From address.
+inquiry/Reply-To address is `connectwithus@cookcredit.com`. An existing verified
+Google Send-as authorization can be selected explicitly with
+`GOOGLE_SMTP_VERIFIED_FROM=connectwithus@cookcredit.com`. That selects visible
+and envelope From while `GOOGLE_SMTP_USER` remains the authenticated login.
+The default transport keeps its current sender when this setting is absent.
+Reuse the existing credential; never treat a Reply-To change or an unverified
+address as a verified sending identity. Confirm the real received From header
+before public acceptance.
 
 ## Runtime and migration controls
 
