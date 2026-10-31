@@ -83,6 +83,21 @@ test('known private Home denial offers account recovery and contact without anot
   s.find(p=>p.children==='Use a different account').props.onClick();assert.equal(switched,1)
 })
 
+test('private Help waits for identity and requires sign-in before collecting callback contact details',async()=>{
+  const api=async()=>assert.fail('Private signed-out Help must not submit or discover metadata')
+  const loading=await screen('../App',api,false,async()=>{},{privateAcceptance:true,returnTo:'help'},'Help')
+  assert.match(loading.text(),/Checking your account/)
+  assert.equal(loading.find((p,n)=>n.type==='form'),undefined)
+  const signedOut=await screen('../App',api,false,async()=>{},{user:null,privateAcceptance:true,returnTo:'help'},'Help')
+  assert.match(signedOut.text(),/Sign in before sending/)
+  assert.equal(signedOut.find(p=>p.name==='phone'),undefined)
+  assert.ok(signedOut.find(p=>p.href==='#sign-in?next=help'))
+  const unverified=await screen('../App',api,false,async()=>{},
+    {user:{email:'fixture@example.test',emailVerified:false},privateAcceptance:true,returnTo:'callback'},'Help')
+  assert.equal(unverified.find((p,n)=>n.type==='form'),undefined)
+  assert.ok(unverified.find(p=>p.href==='#sign-in?next=callback'))
+})
+
 test('anonymous public callbacks stay available while an actual authentication rejection offers a return to Help',async()=>{
   let calls=0
   const s=await screen('../App',async()=>{calls++;throw Object.assign(new Error('Missing authorization'),{status:401})},

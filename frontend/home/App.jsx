@@ -97,6 +97,7 @@ export default function App() {
   else if (route === "how") content = <How />;
   else if (route === "help" || route === "callback") content = <Help key={route} user={user} profile={profile}
     accessErrorCode={profileErrorCode} busySwitching={sessionBusy} returnTo={route}
+    privateAcceptance={import.meta.env.VITE_HOME_PRIVATE_ACCEPTANCE === "1"}
     switchAccount={() => leaveAccount("sign-in?next=" + encodeURIComponent(route))} />;
   else if (
     route.startsWith("account/action") ||
@@ -313,14 +314,15 @@ function How() {
     </section>
   );
 }
-function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = false, returnTo = "callback" }) {
+function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = false, returnTo = "callback", privateAcceptance = false }) {
   const [sent, setSent] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     id = useRef(crypto.randomUUID());
   const [denial, setDenial] = useState("");
   const restricted = accessErrorCode === "private_acceptance" || denial === "private_acceptance";
-  const needsSignIn = denial === "sign_in_required" || (profile?.environment === "staging" && !user?.emailVerified);
+  const checkingIdentity = privateAcceptance && user === undefined;
+  const needsSignIn = denial === "sign_in_required" || ((privateAcceptance || profile?.environment === "staging") && !user?.emailVerified);
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -356,7 +358,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
         Request a call to discuss a visit or get help with your account. This
         service is not for emergencies.
       </p>
-      {restricted || needsSignIn ? (
+      {checkingIdentity ? <p role="status">Checking your account…</p> : restricted || needsSignIn ? (
         <div className="notice" role="status">
           <h2>{restricted ? "This account cannot send a callback request here yet." : "Sign in before sending this callback request."}</h2>
           <p>{restricted

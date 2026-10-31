@@ -24,7 +24,8 @@ async function app(api,refreshFailure=false,options={}) {
     '../src/firebase':{auth},'./api':{api},'./navigation':{safeHomeRoute}}
   for(const name of ['Account','RequestVisit','Visit','SavedDetails','Enrollment'])modules['./screens/'+name]={__esModule:true,default:name}
   const source=await readFile(new URL('../home/App.jsx',import.meta.url),'utf8')
-  const {code}=await transformWithEsbuild(source,'App.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',define:{'import.meta.env':'{"DEV":false}'}})
+  const {code}=await transformWithEsbuild(source,'App.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',define:{
+    'import.meta.env':JSON.stringify({DEV:false,VITE_HOME_PRIVATE_ACCEPTANCE:options.privateAcceptance?'1':undefined})}})
   const context={module:{exports:{}},require:id=>modules[id]||{},URLSearchParams,location:{hash:options.route||'#team'},
     addEventListener(name,fn){listeners.set(name,fn)},removeEventListener(name){listeners.delete(name)},window:{scrollTo(){}}}
   vm.runInNewContext(code,context)
@@ -94,6 +95,13 @@ test('a public Help link with tracking parameters opens without signing in or lo
   const s=await app(async()=>assert.fail('Public help must not load an account'),false,{signedOut:true,route:'#help?source=email'})
   assert.ok(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Help'))
   assert.doesNotMatch(s.text(),/Opening your account|Checking your account/)
+  assert.equal(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Help').props.privateAcceptance,false)
+})
+
+test('the explicit private build flag reaches Help without a hostname guess or an account request',async()=>{
+  const s=await app(async()=>assert.fail('Signed-out Help must not fetch a private profile'),false,
+    {signedOut:true,privateAcceptance:true,route:'#help?source=email'})
+  assert.equal(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Help').props.privateAcceptance,true)
 })
 
 test('signing in from callback recovery preserves that exact internal destination',async()=>{
