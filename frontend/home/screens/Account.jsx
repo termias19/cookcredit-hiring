@@ -43,7 +43,7 @@ const friendly = (error) =>
     ? "Sign-in could not finish. Please retry or contact customer service."
     : error.message);
 
-export default function Account({ user, refresh, next }) {
+export default function Account({ user, refresh, next, enrollmentOnly = false }) {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -61,7 +61,7 @@ export default function Account({ user, refresh, next }) {
   const code = params.get("oobCode"),
     kind = params.get("mode");
   const returnRoute = useRef(
-    safeHomeRoute(params.get("next") || readReturnRoute() || next),
+    safeHomeRoute(params.get("next") || readReturnRoute() || next, enrollmentOnly),
   );
   const continueTo = () => {
     // A completed popup must not pull someone back after they chose another page.
@@ -72,10 +72,10 @@ export default function Account({ user, refresh, next }) {
   };
   useEffect(() => {
     returnRoute.current = safeHomeRoute(
-      action ? params.get("next") || readReturnRoute() : next,
+      action ? params.get("next") || readReturnRoute() : next, enrollmentOnly,
     );
     rememberReturnRoute(returnRoute.current);
-  }, [next]);
+  }, [next, enrollmentOnly]);
   useEffect(() => {
     if (!cooldown) return;
     const timer = setTimeout(
@@ -205,7 +205,7 @@ export default function Account({ user, refresh, next }) {
         <h1>Check your email.</h1>
         <p>
           Open the verification link sent to <strong>{user.email}</strong>. Your
-          account will return to this visit after verification.
+          account can continue where you started after verification.
         </p>
         <p role="status">{notice}</p>
         {error && (
@@ -257,7 +257,9 @@ export default function Account({ user, refresh, next }) {
       <p>
         {resetCode
           ? "Use a password you don’t use elsewhere."
-          : "Use your existing CookCredit account, or create one. Your Home visits stay in your own account."}
+          : enrollmentOnly
+            ? "Use Google or create an account to save your service needs. Enrollment does not book a visit or take payment."
+            : "Use your existing CookCredit account, or create one. Your Home visits stay in your own account."}
       </p>
       {!resetCode && (
         <>

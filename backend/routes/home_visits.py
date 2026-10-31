@@ -1,7 +1,7 @@
 """Home API. It is intentionally absent from the Hiring blueprint registry."""
 import os
 from functools import wraps
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, request,current_app
 from extensions import limiter
 from middleware.auth import require_identity, require_verified_email
 from services.database import db_session
@@ -67,9 +67,11 @@ def me():
         policy=rules.active(session,required=False)
         service_rules=policy['rules'] if policy else rules.defaults()
     return jsonify(userId=g.user_id, name=g.name, email=g.email, operator=is_operator(), owner=is_owner(),
-                   helper=bool(helper and helper.enabled),
+                   helper=bool(helper and helper.enabled and not current_app.config.get('HOME_ENROLLMENT_ONLY',False)),
                    consentVersion=visits.CONSENT_VERSION, consentText=visits.CONSENT_TEXT,
-                   paymentsAvailable=home_stripe.checkout_allowed(),environment=os.getenv('COOKCREDIT_ENVIRONMENT','development'),
+                   paymentsAvailable=False if current_app.config.get('HOME_ENROLLMENT_ONLY',False)else home_stripe.checkout_allowed(),
+                   enrollmentOnly=current_app.config.get('HOME_ENROLLMENT_ONLY',False),
+                   environment=os.getenv('COOKCREDIT_ENVIRONMENT','development'),
                    serviceTimeZone=service_rules['timeZone'] if policy else os.getenv('HOME_SERVICE_TIMEZONE','America/New_York'),
                    serviceStates=service_rules['states'])
 
@@ -300,8 +302,9 @@ def internal_dispatch():
     from services.home_finance_worker import dispatch_events, dispatch_operations
     if not internal_request_authorized(request):
         return jsonify(error='Forbidden'), 403
-    events = dispatch_events(limit=5) if home_stripe.mode() != 'off' else {'paused':True}
-    operations = dispatch_operations(limit=5) if home_stripe.mode() != 'off' else {'paused':True}
+    finance_enabled=not current_app.config.get('HOME_ENROLLMENT_ONLY',False)and home_stripe.mode()!='off'
+    events = dispatch_events(limit=5) if finance_enabled else {'paused':True}
+    operations = dispatch_operations(limit=5) if finance_enabled else {'paused':True}
     from services.home_mail import convert_events
     from services.account_email import dispatch_account_emails
     notifications=convert_events()

@@ -1,6 +1,6 @@
-"""One-off Home DB bootstrap on the already-running Hiring staging instance.
+"""One-off Home DB bootstrap on an explicitly approved running Hiring instance.
 
-Run only as an override of the existing staging administrator job. Passwords
+Run only as an override of an allowlisted administrator job. Passwords
 arrive through Secret Manager references, never arguments or printed SQL. This
 does not alter a Hiring database, restart an instance or rotate existing roles.
 """
@@ -15,13 +15,43 @@ CONNECTION = 'cookcredit-scoring:us-central1:cookcredit-hiring-stg-db'
 DATABASE = 'cookcredit_home_staging'
 MARKER = 'cookcredit-home:staging:v1'
 ROLES = ('cookcredit_home_migrator', 'cookcredit_home_app')
+STAGING_TARGET = (CONNECTION, DATABASE, MARKER, 'staging', 'cc-hiring-stg-migrate', 'HOME_STAGING_BOOTSTRAP')
+PRODUCTION_TARGET = ('cookcredit-scoring:us-central1:cookcredit-hiring-db',
+    'cookcredit_home_prod', 'cookcredit-home:production:v1', 'production',
+    'cc-hiring-migrate', 'HOME_PRODUCTION_BOOTSTRAP')
 
 
-def target(setting, role):
+def guarded_configuration():
+    """Choose one complete fixed tuple before reading secrets or connecting.
+
+    No environment variable can supply an arbitrary database, instance or role.
+    A production invocation must use the existing production administrator job;
+    the staging override cannot be repurposed by changing only its socket.
+    """
+    environment=os.getenv('COOKCREDIT_ENVIRONMENT')
+    configuration=next((value for value in (STAGING_TARGET,PRODUCTION_TARGET)
+                        if value[3]==environment),None)
+    if configuration is None:
+        raise RuntimeError('Home bootstrap environment rejected')
+    connection,_,_,_,job,flag=configuration
+    other_flag='HOME_PRODUCTION_BOOTSTRAP' if flag=='HOME_STAGING_BOOTSTRAP' else 'HOME_STAGING_BOOTSTRAP'
+    if (os.getenv(flag)!='1' or os.getenv(other_flag)not in (None,'0')
+            or os.getenv('CLOUD_SQL_CONNECTION')!=connection
+            or os.getenv('CLOUD_RUN_JOB')!=job):
+        raise RuntimeError('Home bootstrap requires its explicit environment administrator job')
+    return configuration
+
+
+def target(setting, role, configuration=STAGING_TARGET):
+    if configuration not in (STAGING_TARGET,PRODUCTION_TARGET):
+        raise RuntimeError('Home bootstrap configuration rejected')
+    connection,database,*_=configuration
+    if (setting,role)not in (('HOME_DATABASE_URL',ROLES[0]),('HOME_RUNTIME_DATABASE_URL',ROLES[1])):
+        raise RuntimeError('Home bootstrap role rejected')
     value = make_url(os.environ[setting])
-    if (value.drivername != 'postgresql+psycopg2' or value.database != DATABASE
-            or value.username != role or not value.password or value.host
-            or dict(value.query) != {'host': '/cloudsql/' + CONNECTION}):
+    if (value.drivername != 'postgresql+psycopg2' or value.database != database
+            or value.username != role or not value.password or value.host or value.port is not None
+            or dict(value.query) != {'host': '/cloudsql/' + connection}):
         raise RuntimeError('Home bootstrap target rejected')
     return value
 
@@ -45,14 +75,12 @@ def migration_owner(cursor):
 
 
 def main():
-    if (os.getenv('HOME_STAGING_BOOTSTRAP') != '1' or os.getenv('COOKCREDIT_ENVIRONMENT') != 'staging'
-            or os.getenv('CLOUD_SQL_CONNECTION') != CONNECTION
-            or os.getenv('CLOUD_RUN_JOB') != 'cc-hiring-stg-migrate'):
-        raise RuntimeError('Home bootstrap requires the existing staging admin job')
-    migration = target('HOME_DATABASE_URL', ROLES[0])
-    application = target('HOME_RUNTIME_DATABASE_URL', ROLES[1])
+    configuration=guarded_configuration()
+    instance,database,marker,environment,_,_=configuration
+    migration = target('HOME_DATABASE_URL', ROLES[0], configuration)
+    application = target('HOME_RUNTIME_DATABASE_URL', ROLES[1], configuration)
     admin_url = URL.create('postgresql+psycopg2', username='postgres', password=os.environ['DB_PASS'],
-                          database='postgres', query={'host': '/cloudsql/' + CONNECTION})
+                          database='postgres', query={'host': '/cloudsql/' + instance})
     admin = create_engine(admin_url, isolation_level='AUTOCOMMIT', connect_args={'connect_timeout': 5,
         'options': '-c statement_timeout=30000 -c lock_timeout=3000'})
     try:
@@ -65,29 +93,29 @@ def main():
                 cursor.execute("SELECT rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolbypassrls,shobj_description(oid,'pg_authid') FROM pg_roles WHERE rolname=%s", (role,))
                 existing = cursor.fetchone()
                 if existing:
-                    if tuple(existing[:5]) != (False,) * 5 or existing[5] != MARKER:
+                    if tuple(existing[:5]) != (False,) * 5 or existing[5] != marker:
                         raise RuntimeError('Existing Home role ownership/permissions rejected')
                 else:
                     cursor.execute(sql.SQL('CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS').format(sql.Identifier(role), sql.Literal(url.password)))
-                    cursor.execute(sql.SQL('COMMENT ON ROLE {} IS {}').format(sql.Identifier(role), sql.Literal(MARKER)))
+                    cursor.execute(sql.SQL('COMMENT ON ROLE {} IS {}').format(sql.Identifier(role), sql.Literal(marker)))
                 cursor.execute('SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname=%s)', (role,))
                 if cursor.fetchone():
                     raise RuntimeError('Home roles must not inherit other roles')
-            cursor.execute("SELECT pg_get_userbyid(datdba),shobj_description(oid,'pg_database') FROM pg_database WHERE datname=%s", (DATABASE,))
+            cursor.execute("SELECT pg_get_userbyid(datdba),shobj_description(oid,'pg_database') FROM pg_database WHERE datname=%s", (database,))
             existing = cursor.fetchone()
-            if existing and existing != (ROLES[0], MARKER):
+            if existing and existing != (ROLES[0], marker):
                 raise RuntimeError('Existing Home database ownership rejected')
             print('Home bootstrap step: database ownership', flush=True)
             with migration_owner(cursor):
                 if not existing:
-                    cursor.execute(sql.SQL('CREATE DATABASE {} OWNER {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[0])))
+                    cursor.execute(sql.SQL('CREATE DATABASE {} OWNER {}').format(sql.Identifier(database), sql.Identifier(ROLES[0])))
                 cursor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(ROLES[0])))
-                cursor.execute(sql.SQL('COMMENT ON DATABASE {} IS {}').format(sql.Identifier(DATABASE), sql.Literal(MARKER)))
-                cursor.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(DATABASE)))
-                cursor.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(DATABASE), sql.Identifier(ROLES[1])))
+                cursor.execute(sql.SQL('COMMENT ON DATABASE {} IS {}').format(sql.Identifier(database), sql.Literal(marker)))
+                cursor.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(database)))
+                cursor.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO {}').format(sql.Identifier(database), sql.Identifier(ROLES[1])))
                 # Keep the temporary owner membership until setup connects:
                 # PUBLIC CONNECT has already been revoked, including postgres.
-                setup = create_engine(admin_url.set(database=DATABASE), connect_args={'connect_timeout': 5})
+                setup = create_engine(admin_url.set(database=database), connect_args={'connect_timeout': 5})
                 try:
                     with setup.begin() as connection:
                         print('Home bootstrap step: extension and schema', flush=True)
@@ -100,7 +128,7 @@ def main():
             cursor.close()
     finally:
         admin.dispose()
-    print('Home staging database and non-inheriting roles prepared on existing capacity.', flush=True)
+    print('Home '+environment+' database and non-inheriting roles prepared on existing capacity.', flush=True)
 
 
 if __name__ == '__main__':
@@ -108,5 +136,5 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         # Do not let DBAPI exception parameters expose password-bearing SQL.
-        print('Home staging bootstrap failed: ' + type(error).__name__, flush=True)
+        print('Home bootstrap failed: ' + type(error).__name__, flush=True)
         raise SystemExit(1)

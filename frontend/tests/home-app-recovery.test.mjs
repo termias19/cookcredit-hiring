@@ -26,7 +26,8 @@ async function app(api,refreshFailure=false,options={}) {
   for(const name of ['Account','RequestVisit','Visit','SavedDetails','Enrollment'])modules['./screens/'+name]={__esModule:true,default:name}
   const source=await readFile(new URL('../home/App.jsx',import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,'App.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',define:{
-    'import.meta.env':JSON.stringify({DEV:false,VITE_HOME_PRIVATE_ACCEPTANCE:options.privateAcceptance?'1':undefined})}})
+    'import.meta.env':JSON.stringify({DEV:false,VITE_HOME_PRIVATE_ACCEPTANCE:options.privateAcceptance?'1':undefined,
+      VITE_HOME_ENROLLMENT_ONLY:options.enrollmentBuild?'1':undefined})}})
   const context={module:{exports:{}},require:id=>modules[id]||{},URLSearchParams,location:{hash:options.route||'#team'},
     addEventListener(name,fn){listeners.set(name,fn)},removeEventListener(name){listeners.delete(name)},window:{scrollTo(){}}}
   vm.runInNewContext(code,context)
@@ -139,4 +140,39 @@ test('operations and helper navigation stays permission-scoped while the public 
   assert.ok(publicHome.find((p,n)=>n.type==='header'))
   assert.equal(publicHome.find((p,n)=>n.type==='aside'),undefined)
   assert.ok(publicHome.find(p=>p.href==='#how'))
+})
+
+test('server enrollment-only mode blocks every booking/helper deep link without mounting forms or calling their APIs',async()=>{
+  const calls=[]
+  const s=await app(async path=>{calls.push(path);return {owner:false,operator:false,helper:true,enrollmentOnly:true}},false,{route:'#request'})
+  for(const route of ['#request','#visits','#visit/11111111-1111-4111-8111-111111111111','#availability','#payout','#helping']){
+    s.navigate(route);await s.settle()
+    assert.ok(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='EnrollmentEntry'))
+    assert.equal(s.find((p,n)=>['RequestVisit','Visit','SavedDetails'].includes(n.type)||n.type==='lazy-screen'),undefined)
+  }
+  assert.equal(s.find(p=>p.href==='#visits'),undefined)
+  assert.equal(s.find(p=>p.href==='#request'),undefined)
+  assert.equal(s.find(p=>p.href==='#payout'),undefined)
+  assert.equal(s.find(p=>p.className==='button home-workspace-primary').props.href,'#enroll')
+  assert.deepEqual(calls,['/me'])
+})
+
+test('enrollment-only staff retain their service desk while the server flag preserves full private staging when false',async()=>{
+  const owner=await app(async()=>({owner:true,operator:true,enrollmentOnly:true}),false,{route:'#team'})
+  assert.ok(owner.find((p,n)=>n.type==='lazy-screen'&&p.profile?.owner===true))
+  assert.ok(owner.find(p=>p.href==='#team'))
+  assert.equal(owner.find(p=>p.href==='#request'),undefined)
+  const staging=await app(async()=>({owner:false,operator:false,enrollmentOnly:false}),false,{route:'#request',enrollmentBuild:true})
+  assert.ok(staging.find((p,n)=>n.type==='RequestVisit'))
+})
+
+test('public enrollment build gives landing and account entry enrollment copy without exposing booking navigation',async()=>{
+  const s=await app(async()=>assert.fail('Signed-out public landing has no private fetch'),false,
+    {signedOut:true,enrollmentBuild:true,route:'#home'})
+  assert.equal(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Home').props.enrollmentOnly,true)
+  assert.equal(s.find(p=>p.href==='#visits'),undefined)
+  assert.equal(s.find(p=>p.href==='#helping'),undefined)
+  s.navigate('#sign-in?next=request')
+  const account=s.find((p,n)=>n.type==='Account')
+  assert.equal(account.props.next,'enroll');assert.equal(account.props.enrollmentOnly,true)
 })

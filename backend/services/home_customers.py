@@ -1,4 +1,5 @@
 """Home-only customer preferences, callback intake and helper review."""
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -11,9 +12,13 @@ from services import home_visits as visits
 
 def return_route(value=None):
     if value is None:
-        return 'visits'
+        return 'enroll'if os.getenv('HOME_ENROLLMENT_ONLY')=='1'else'visits'
     if not isinstance(value,str) or not re.fullmatch(r'(enroll|request|visits|payout|availability|team|helping|help|callback|visit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',value):
         visits.fail('invalid_return','Please reopen the account form from your visit.')
+    if os.getenv('HOME_ENROLLMENT_ONLY')=='1'and value not in ('enroll','help','callback','team'):
+        # Validate before normalizing. An old booking/helper continuation can
+        # recover to enrollment; external or malformed input is never accepted.
+        return 'enroll'
     return value
 
 

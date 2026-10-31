@@ -4,6 +4,28 @@ Home services let customers request cooking, cleaning or both. The backend
 stores requests, consent, review, assignment, versioned quotes and approvals. It is
 disabled by default and is not a public booking or payment service yet.
 
+### Enrollment-only public release
+
+`HOME_ENROLLMENT_ONLY=1` limits a production runtime to verified customers' own
+service-interest enrollment, existing account emails and App Check protected
+callback intake. The owner retains the enrollment directory, callback follow-up
+and access audit. Existing authorization and origin checks still apply. All
+booking, household, helper, scheduling, pricing and payout APIs are denied,
+including staff access; new endpoints are denied until explicitly reviewed.
+Startup rejects enabled payment modes or financial gates in this scope.
+
+Build this public entry with `VITE_HOME_ENROLLMENT_ONLY=1` and
+`VITE_HOME_PRIVATE_ACCEPTANCE=0`. The authenticated `/me` scope remains
+authoritative. Old booking links recover to enrollment without mounting address
+or household-instruction forms. Welcome emails describe free enrollment and
+optional call requests. Service-contact consent does not subscribe anyone to
+advertising. The separate private staging runtime keeps full visit acceptance;
+its records must never be copied into the public production database.
+
+Enrollment-only launch acceptance is separate from the full booking/payment
+gates below. Publishing enrollment must not be described as accepting confirmed
+visits, paid services or instant reservations.
+
 ## Stages and acceptance gates
 
 | Stage | Deliverable | Acceptance gate |

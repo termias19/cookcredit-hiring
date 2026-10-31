@@ -51,7 +51,9 @@ export default function Enrollment({ profile, onArrange }) {
   return <section className="narrow">
     <p className="eyebrow">CookCredit at home</p>
     <h1>What would help?</h1>
-    <p>Tell us what you need. CookCredit will contact you to discuss availability. No address, date or payment is needed yet.</p>
+    <p>{profile.enrollmentOnly
+      ? "Choose the kind of help you are interested in. Enrollment and call requests are open; visit booking, scheduling and payments are not available yet."
+      : "Tell us what you need. CookCredit will contact you to discuss availability. No address, date or payment is needed yet."}</p>
     {error && <p className="error" role="alert">{error}</p>}
     {withdrawn && <p role="status">Your service interest and its phone number have been removed. Existing visits stay unchanged.</p>}
     {!ready ? error
@@ -61,7 +63,9 @@ export default function Enrollment({ profile, onArrange }) {
       <h2>You’re on the list.</h2>
       <p role="status">Your request for {serviceNames[service].toLowerCase()} is saved. We can reach you at {profile.email}{phone ? " or " + phone : ""}.</p>
       <p>This does not reserve a visit or authorize a charge.</p>
-      <div className="actions"><a className="button" href="#request" onClick={() => onArrange?.(service)}>Arrange a visit</a>
+      <div className="actions">{profile.enrollmentOnly
+        ? <a className="button" href="#callback">Request a call</a>
+        : <a className="button" href="#request" onClick={() => onArrange?.(service)}>Arrange a visit</a>}
         <button className="secondary" onClick={() => setSaved(false)}>Edit my needs</button></div>
     </div> : <form onSubmit={submit}>
       <fieldset><legend>Choose the help you need</legend>
@@ -70,10 +74,14 @@ export default function Enrollment({ profile, onArrange }) {
         </label>)}
       </fieldset>
       <label>Phone number (optional)<input type="tel" autoComplete="tel" maxLength="40" value={phone} onChange={e => setPhone(e.target.value)} /></label>
-      <p>We’ll use your account email: {profile.email}. You can discuss allergies or other requirements privately when arranging a visit.</p>
+      <p>We’ll use your account email: {profile.email}. Please do not include addresses, medical details or allergy instructions here.</p>
       <label className="check"><input type="checkbox" name="contactConsent" required />CookCredit may contact me about these services.</label>
       <button disabled={busy}>{busy ? "Saving…" : "Save my service needs"}</button>
     </form>}
     {registered && <button className="text" disabled={busy} onClick={remove}>Remove my service needs</button>}
+    <details><summary>Your information</summary>
+      <p>Only the CookCredit Home owner can open the enrollment directory. It contains your account name and email, selected service interest and optional phone number, so CookCredit can follow up with your permission. This is service-contact permission, not advertising consent.</p>
+      <p>Use “Remove my service needs” to withdraw your interest and remove the optional phone from this enrollment. Your CookCredit login remains. Email <a href="mailto:connectwithus@cookcredit.com">connectwithus@cookcredit.com</a> for account or data requests. Read our <a href="https://cookcredit.com/privacy.html">Privacy Policy</a>.</p>
+    </details>
   </section>;
 }

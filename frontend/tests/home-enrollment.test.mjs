@@ -76,6 +76,21 @@ test('Google account recovery opens the chooser in the click and returns to the 
   assert.deepEqual(events,['popup','refresh','forget'])
 })
 
+test('public account sign-in maps an old booking destination to enrollment without collecting service details',async()=>{
+  class GoogleAuthProvider { setCustomParameters(){} }
+  const s=await screen('Account',async()=>assert.fail('Account entry must not call booking APIs'),false,async()=>{},
+    {user:null,next:'request',enrollmentOnly:true,refresh:async()=>{}},'default',{
+      modules:{'firebase/auth':{GoogleAuthProvider,signInWithPopup:async()=>{}},'../../src/firebase':{auth:{}},
+        '../../src/utils/verifyAccountLink':{},'../navigation':{safeHomeRoute,readReturnRoute:()=> 'visits',rememberReturnRoute(){},forgetReturnRoute(){}}},
+      context:{location:{hash:'#sign-in?next=request'}},
+    })
+  assert.match(s.text(),/Enrollment does not book a visit or take payment/)
+  assert.doesNotMatch(s.text(),/Your Home visits/)
+  assert.equal(s.find(p=>p.name==='address'),undefined)
+  s.find(p=>p.className==='google').props.onClick();await s.settle()
+  assert.equal(s.location.hash,'enroll')
+})
+
 test('known private Home denial offers account recovery and contact without another doomed callback submission',async()=>{
   let switched=0
   const s=await screen('../App',async()=>assert.fail('Blocked callback must not submit'),false,async()=>{},
@@ -114,6 +129,22 @@ test('anonymous public callbacks stay available while an actual authentication r
   assert.ok(s.find(p=>p.href==='#sign-in?next=callback'))
   assert.equal(s.find((p,n)=>n.type==='form'),undefined)
   s.render();assert.equal(calls,1)
+})
+
+test('enrollment-only public Help accepts only an explicitly consented call request with staff-purpose disclosure',async()=>{
+  const calls=[]
+  const s=await screen('../App',async(...args)=>{calls.push(args);return {received:true}},false,async()=>{},
+    {user:null,enrollmentOnly:true,returnTo:'callback'},'Help')
+  assert.match(s.text(),/authorized CookCredit Home staff/)
+  assert.match(s.text(),/not advertising/)
+  assert.ok(s.find(p=>p.href==='https://cookcredit.com/privacy.html'))
+  assert.equal(s.find(p=>p.name==='address'),undefined)
+  await s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{name:'Synthetic',phone:'4045550123',time:'Afternoon',consent:'on'}})
+  s.render()
+  assert.match(s.text(),/callback request is received/)
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/callbacks')
+  assert.equal(calls[0][1].body.contactConsent,true)
+  assert.equal('address' in calls[0][1].body,false)
 })
 
 test('enabled staging customers may submit and a second callback is only created after an explicit new request',async()=>{
@@ -281,6 +312,53 @@ test('service desk groups settings behind disclosure and loads only the explicit
   assert.deepEqual(calls.map(([path])=>path),['/enrollments','/pricing'])
   assert.ok(calls.every(([,options])=>!options))
   assert.equal(s.find(p=>p.children==='Refresh people'),undefined)
+})
+
+test('public enrollment desk exposes only customer, callback and owner audit sections without booking API reads',async()=>{
+  const calls=[]
+  const owner=await screen('Team',async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{events:[]}},true,async()=>{},
+    {profile:{owner:true,operator:true,enrollmentOnly:true}})
+  await owner.settle()
+  assert.doesNotMatch(owner.text(),/Helpers|Pricing|Hours and scheduling|Payment operations/)
+  assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Callbacks'))
+  assert.equal(owner.find((p,n)=>n.type==='button'&&p.children==='Visits'),undefined)
+  owner.find((p,n)=>n.type==='button'&&p.children==='Activity log').props.onClick();owner.render();await owner.settle()
+  assert.deepEqual(calls,['/enrollments','/audit'])
+  const operatorCalls=[]
+  const operator=await screen('Team',async path=>{operatorCalls.push(path);return {callbacks:[]}},false,async()=>{},
+    {profile:{owner:false,operator:true,enrollmentOnly:true}})
+  await operator.settle()
+  assert.deepEqual(operatorCalls,['/callbacks'])
+  assert.equal(operator.find((p,n)=>n.type==='button'&&p.children==='Customers'),undefined)
+  assert.equal(operator.find((p,n)=>n.type==='button'&&p.children==='Activity log'),undefined)
+})
+
+test('public enrollment saves interest only and offers a call with clear information and withdrawal controls',async()=>{
+  const calls=[]
+  const s=await screen('Enrollment',async(path,options)=>{calls.push([path,options]);return options?{saved:true}:{enrollment:null}},false,async()=>{},
+    {profile:{email:'fixture@example.test',enrollmentOnly:true}})
+  await s.settle()
+  assert.match(s.text(),/not advertising consent/)
+  assert.ok(s.find(p=>p.href==='https://cookcredit.com/privacy.html'))
+  assert.equal(s.find(p=>p.name==='address'),undefined)
+  s.find(p=>p.value==='cooking').props.onChange();s.render()
+  await s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}});s.render()
+  assert.equal(s.find(p=>p.href==='#request'),undefined)
+  assert.ok(s.find(p=>p.href==='#callback'))
+  assert.ok(s.find(p=>p.children==='Remove my service needs'))
+  assert.equal(calls.length,2);assert.equal(calls[1][0],'/enrollment');assert.equal(calls[1][1].method,'PUT')
+  assert.equal(JSON.stringify(calls[1][1].body),JSON.stringify({service:'cooking',phone:'',contactConsent:true}))
+})
+
+test('enrollment-only landing, explanation and blocked entry never offer booking or health intake',async()=>{
+  for(const name of ['Home','How','EnrollmentEntry']){
+    const s=await screen('../App',async()=>assert.fail('Public copy requires no API'),false,async()=>{},{enrollmentOnly:true},name)
+    assert.ok(s.find(p=>p.href==='#enroll'))
+    assert.equal(s.find(p=>p.href==='#request'),undefined)
+    assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+    assert.doesNotMatch(s.text(),/Arrange a visit|Pay securely|Share food allergies/)
+    assert.match(s.text(),/not available/)
+  }
 })
 
 test('operator assignment excludes the customer even if they are an approved helper',async()=>{

@@ -32,6 +32,7 @@ export default function App() {
   const [profileErrorCode, setProfileErrorCode] = useState("");
   const [sessionBusy, setSessionBusy] = useState(false), [sessionError, setSessionError] = useState("");
   const [visitService, setVisitService] = useState(null);
+  const enrollmentOnly = profile ? profile.enrollmentOnly === true : import.meta.env.VITE_HOME_ENROLLMENT_ONLY === "1";
   const main = useRef();
   useEffect(() => {
     const change = () => setRoute(readRoute());
@@ -94,11 +95,12 @@ export default function App() {
   let content;
   if (user === undefined && requiresAccount)
     content = <p role="status">Checking your account…</p>;
-  else if (route === "home") content = <Home />;
-  else if (route === "how") content = <How />;
+  else if (route === "home") content = <Home enrollmentOnly={enrollmentOnly} />;
+  else if (route === "how") content = <How enrollmentOnly={enrollmentOnly} />;
   else if (route === "help" || route === "callback") content = <Help key={route} user={user} profile={profile}
     accessErrorCode={profileErrorCode} busySwitching={sessionBusy} returnTo={route}
     privateAcceptance={import.meta.env.VITE_HOME_PRIVATE_ACCEPTANCE === "1"}
+    enrollmentOnly={enrollmentOnly}
     switchAccount={() => leaveAccount("sign-in?next=" + encodeURIComponent(route))} />;
   else if (
     route.startsWith("account/action") ||
@@ -110,7 +112,8 @@ export default function App() {
         key={route}
         user={user}
         refresh={refresh}
-        next={route.split("?")[0] === "sign-in" ? safeHomeRoute(new URLSearchParams(route.split("?")[1] || "").get("next")) : route}
+        enrollmentOnly={enrollmentOnly}
+        next={safeHomeRoute(route.split("?")[0] === "sign-in" ? new URLSearchParams(route.split("?")[1] || "").get("next") : route, enrollmentOnly)}
       />
     );
   else if (user === undefined || (!profile && !profileError))
@@ -131,6 +134,7 @@ export default function App() {
         <p><a href="#help">Get help</a> or <a href="#home">return to Home</a>.</p>
       </section>
     );
+  else if (profile.enrollmentOnly && safeHomeRoute(route, true) !== route) content = <EnrollmentEntry />;
   else if (route === "enroll") content = <Enrollment profile={profile} onArrange={setVisitService} />;
   else if (route === "request") content = <RequestVisit profile={profile} initialService={visitService} />;
   else if (route === "visits") content = <Visits />;
@@ -175,7 +179,7 @@ export default function App() {
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>CookCredit<small>At-home services</small></span>
         </a>
-        <a className="button home-workspace-primary" href="#request">Arrange a visit</a>
+        <a className="button home-workspace-primary" href={enrollmentOnly ? "#enroll" : "#request"}>{enrollmentOnly ? "Choose service needs" : "Arrange a visit"}</a>
         <nav className="home-workspace-nav" aria-label="Your workspace">
           {profile.operator && <div className="home-workspace-group">
             <p className="home-workspace-label">CookCredit operations</p>
@@ -183,10 +187,10 @@ export default function App() {
           </div>}
           <div className="home-workspace-group">
             <p className="home-workspace-label">Your home</p>
-            <a href="#visits" aria-current={route === "visits" || route.startsWith("visit/") ? "page" : undefined}>My visits</a>
+            {!enrollmentOnly && <a href="#visits" aria-current={route === "visits" || route.startsWith("visit/") ? "page" : undefined}>My visits</a>}
             <a href="#enroll" aria-current={route === "enroll" ? "page" : undefined}>Service needs</a>
           </div>
-          {profile.helper && <div className="home-workspace-group">
+          {profile.helper && !enrollmentOnly && <div className="home-workspace-group">
             <p className="home-workspace-label">Your work</p>
             <a href="#availability" aria-current={route === "availability" ? "page" : undefined}>Availability</a>
             <a href="#payout" aria-current={route === "payout" ? "page" : undefined}>My earnings</a>
@@ -208,11 +212,11 @@ export default function App() {
         </a>
         <nav aria-label="Main">
           <a href="#how">How it works</a>
-          <a href="#visits">My visits</a>
+          {!enrollmentOnly && <a href="#visits">My visits</a>}
           <a href="#enroll">Service needs</a>
           {profile?.operator && <a href="#team">Team</a>}
-          {profile?.helper && <a href="#payout">My earnings</a>}
-          {profile?.helper && <a href="#availability">Availability</a>}
+          {profile?.helper && !enrollmentOnly && <a href="#payout">My earnings</a>}
+          {profile?.helper && !enrollmentOnly && <a href="#availability">Availability</a>}
           <a href="#help">Help</a>
           {user ? (
             <button
@@ -223,7 +227,7 @@ export default function App() {
               Sign out
             </button>
           ) : (
-            <a href="#sign-in">Sign in</a>
+            <a href={enrollmentOnly ? "#sign-in?next=enroll" : "#sign-in"}>Sign in</a>
           )}
         </nav>
       </header>}
@@ -233,7 +237,7 @@ export default function App() {
       </main>
       <footer>
         <a href="#home">CookCredit Home</a>
-        <a href="#helping">Work with us</a>
+        {!enrollmentOnly && <a href="#helping">Work with us</a>}
         <a href="mailto:connectwithus@cookcredit.com">
           connectwithus@cookcredit.com
         </a>
@@ -244,7 +248,16 @@ export default function App() {
   );
 }
 
-function Home() {
+function EnrollmentEntry() {
+  return <section className="narrow">
+    <p className="eyebrow">CookCredit Home</p>
+    <h1>Start with your service needs.</h1>
+    <p>Enrollment and call requests are open. Visit booking, scheduling and payments are not available in this launch.</p>
+    <div className="actions"><a className="button" href="#enroll">Choose service needs</a><a className="button secondary" href="#callback">Request a call</a></div>
+  </section>;
+}
+
+function Home({ enrollmentOnly = false } = {}) {
   return (
     <>
       <section className="hero">
@@ -262,17 +275,15 @@ function Home() {
             <br />A home cared for.
           </h1>
           <p>
-            Arrange a cooking visit, help with cleaning, or both. Tell us what
-            would make your day easier.
+            {enrollmentOnly ? "Tell us whether you need cooking, cleaning or both. Join our service-interest list, or ask CookCredit to call you." : "Arrange a cooking visit, help with cleaning, or both. Tell us what would make your day easier."}
           </p>
-          <a className="button" href="#request">
-            Arrange a visit <span aria-hidden="true">→</span>
+          <a className="button" href={enrollmentOnly ? "#enroll" : "#request"}>
+            {enrollmentOnly ? "Choose service needs" : "Arrange a visit"} <span aria-hidden="true">→</span>
           </a>
           <p className="quiet">
-            No charge for sending a request. You approve your helper and full
-            price before paying.
+            {enrollmentOnly ? "Enrollment is free. Visit booking, scheduling and payments are not available in this launch." : "No charge for sending a request. You approve your helper and full price before paying."}
           </p>
-          <a href="#enroll">Not ready to book? Tell us what you need.</a>
+          {!enrollmentOnly && <a href="#enroll">Not ready to book? Tell us what you need.</a>}
           <a href="#callback">Prefer help by phone? Request a call.</a>
         </div>
       </section>
@@ -280,24 +291,21 @@ function Home() {
         <h2>Your home. Your way.</h2>
         <div className="three">
           <div>
-            <h3>Meals that suit you</h3>
+            <h3>{enrollmentOnly ? "Choose what you need" : "Meals that suit you"}</h3>
             <p>
-              Share food allergies, texture preferences or meal instructions you
-              already follow.
+              {enrollmentOnly ? "Choose cooking, cleaning, both or help deciding. No address or health details are needed." : "Share food allergies, texture preferences or meal instructions you already follow."}
             </p>
           </div>
           <div>
-            <h3>The help you choose</h3>
+            <h3>{enrollmentOnly ? "Talk with CookCredit" : "The help you choose"}</h3>
             <p>
-              Choose cooking, specific cleaning tasks and how much time you
-              need.
+              {enrollmentOnly ? "Request a call to ask questions about our service plans." : "Choose cooking, specific cleaning tasks and how much time you need."}
             </p>
           </div>
           <div>
-            <h3>Every cost explained</h3>
+            <h3>{enrollmentOnly ? "Stay in control" : "Every cost explained"}</h3>
             <p>
-              Review time, materials, service fees and tax before agreeing to a
-              visit.
+              {enrollmentOnly ? "Enrollment does not reserve a visit or authorize payment. You can remove your service needs." : "Review time, materials, service fees and tax before agreeing to a visit."}
             </p>
           </div>
         </div>
@@ -305,7 +313,17 @@ function Home() {
     </>
   );
 }
-function How() {
+function How({ enrollmentOnly = false } = {}) {
+  if (enrollmentOnly) return <section className="narrow">
+    <p className="eyebrow">How it works</p><h1>A simple way to get started.</h1>
+    <ol className="steps">
+      <li><h2>Create your account</h2><p>Use Google or verify your email to save your service needs.</p></li>
+      <li><h2>Choose what would help</h2><p>Select cooking, cleaning, both or help choosing. Your phone number is optional for enrollment.</p></li>
+      <li><h2>Talk with CookCredit</h2><p>Request a call if you prefer. Enrollment and call requests do not book a visit or authorize a payment.</p></li>
+    </ol>
+    <p>Visit booking and scheduling are not available yet. Please do not include addresses, medical details or allergy instructions in enrollment or call requests.</p>
+    <a className="button" href="#enroll">Choose service needs</a>
+  </section>;
   return (
     <section className="narrow">
       <p className="eyebrow">How it works</p>
@@ -346,7 +364,7 @@ function How() {
     </section>
   );
 }
-function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = false, returnTo = "callback", privateAcceptance = false }) {
+function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = false, returnTo = "callback", privateAcceptance = false, enrollmentOnly = false }) {
   const [sent, setSent] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -387,8 +405,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
       <p className="eyebrow">A person to help</p>
       <h1>Let’s talk it through.</h1>
       <p>
-        Request a call to discuss a visit or get help with your account. This
-        service is not for emergencies.
+        {enrollmentOnly ? "Request a call about your service needs or account. Visit booking is not available yet." : "Request a call to discuss a visit or get help with your account."} This service is not for emergencies.
       </p>
       {checkingIdentity ? <p role="status">Checking your account…</p> : restricted || needsSignIn ? (
         <div className="notice" role="status">
@@ -438,6 +455,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
               maxLength="100"
               required
             />
+            <small>Please give a call window only. Do not include addresses, medical details or allergy instructions.</small>
           </label>
           <label className="check">
             <input type="checkbox" name="consent" required />
@@ -449,6 +467,10 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
           </button>
         </form>
       )}
+      <details><summary>Your information</summary>
+        <p>Your name, phone number and preferred call time are available to authorized CookCredit Home staff so they can respond to this request. This permission is for service contact, not advertising.</p>
+        <p>Email <a href="mailto:connectwithus@cookcredit.com">connectwithus@cookcredit.com</a> to change or withdraw a callback request or ask about your data. Read our <a href="https://cookcredit.com/privacy.html">Privacy Policy</a>.</p>
+      </details>
       <p>
         Or email{" "}
         <a href="mailto:connectwithus@cookcredit.com">

@@ -24,6 +24,25 @@ REQUIRED_HOME_MIGRATIONS = ('001_booking_workflow.sql', '002_quotes.sql', '003_p
                             '004_customer_service.sql', '005_helper_calendar.sql', '006_operating_rules_draft.sql',
                             '007_helper_availability.sql', '008_active_operating_policy.sql')
 
+# This is a product-scope gate, not an authorization replacement. Every allowed
+# endpoint retains its existing identity, owner/operator, App Check, origin,
+# signed webhook or internal OIDC checks. New endpoints default to denied.
+ENROLLMENT_ONLY_ENDPOINTS = {
+    'health': frozenset(('GET','HEAD')),
+    'home_visits.me': frozenset(('GET',)),
+    'home_customers.enrollment': frozenset(('GET','PUT','DELETE')),
+    'home_customers.request_callback': frozenset(('POST',)),
+    'home_customers.verification': frozenset(('POST',)),
+    'home_customers.password_reset': frozenset(('POST',)),
+    'home_customers.enrollments': frozenset(('GET',)),
+    'home_customers.callbacks': frozenset(('GET',)),
+    'home_customers.callback_update': frozenset(('POST',)),
+    'home_customers.access_audit': frozenset(('GET',)),
+    'observability.client_error': frozenset(('POST',)),
+    'home_visits.internal_dispatch': frozenset(('POST',)),
+    'home_visits.stripe_webhook': frozenset(('POST',)),
+}
+
 
 def check_home_schema(session):
     # A live database connection alone does not mean the new API can serve it.
@@ -51,19 +70,34 @@ def database_url():
 
 def create_app(config=None):
     app = Flask(__name__)
+    enrollment_flag=os.getenv('HOME_ENROLLMENT_ONLY','0')
+    if enrollment_flag not in ('0','1'):
+        raise RuntimeError('HOME_ENROLLMENT_ONLY must be explicitly 0 or 1')
     # This entrypoint targets Cloud Run's single trusted reverse-proxy hop.
     # Do not trust forwarded Host, and do not expose this container directly.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     app.config.update(MAX_CONTENT_LENGTH=16 * 1024, HOME_ENABLED=os.getenv('HOME_SERVICES_ENABLED') == '1',
+                      HOME_ENROLLMENT_ONLY=enrollment_flag=='1',
                       RATELIMIT_DEFAULT='60 per minute',RATELIMIT_KEY_PREFIX='cookcredit-home',RATELIMIT_HEADERS_ENABLED=True)
     if config:
         app.config.update(config)
+    if type(app.config['HOME_ENROLLMENT_ONLY'])is not bool:
+        raise RuntimeError('HOME_ENROLLMENT_ONLY application setting must be boolean')
+    if app.config['HOME_ENROLLMENT_ONLY']:
+        from services.home_stripe import mode
+        if mode()!='off' or any(os.getenv(flag)=='1'for flag in (
+            'HOME_CHECKOUT_ENABLED','HOME_TRANSFERS_ENABLED','HOME_LIVE_REFUNDS_ENABLED','HOME_CONNECT_ENABLED')):
+            raise RuntimeError('Enrollment-only Home requires payments and all money gates off')
 
     @app.before_request
     def trace():
         g.request_id, g.started = uuid.uuid4().hex, time.monotonic()
         if request.path != '/api/home/health' and not app.config['HOME_ENABLED']:
             return jsonify(error='Home services are not available yet.', code='home_disabled'), 503
+        if app.config['HOME_ENROLLMENT_ONLY'] and request.method!='OPTIONS':
+            if request.method not in ENROLLMENT_ONLY_ENDPOINTS.get(request.endpoint,()):
+                return jsonify(error='Home is accepting service enrollment and call requests. Visit booking is not available here yet.',
+                    code='enrollment_only'),403
 
     @app.after_request
     def finish(response):
@@ -103,10 +137,11 @@ def create_app(config=None):
     def health():
         from services.home_stripe import checkout_allowed
         if not app.config['HOME_ENABLED']:
-            return jsonify(status='disabled', paymentsAvailable=False)
+            return jsonify(status='disabled', paymentsAvailable=False,enrollmentOnly=app.config['HOME_ENROLLMENT_ONLY'])
         with database.db_session() as session:
             check_home_schema(session)
-        return jsonify(status='ok', paymentsAvailable=checkout_allowed())
+        return jsonify(status='ok',paymentsAvailable=False if app.config['HOME_ENROLLMENT_ONLY']else checkout_allowed(),
+            enrollmentOnly=app.config['HOME_ENROLLMENT_ONLY'])
 
     if app.config['HOME_ENABLED']:
         origins = [v.strip() for v in os.getenv('HOME_FRONTEND_ORIGINS', '').split(',') if v.strip()]

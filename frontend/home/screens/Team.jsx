@@ -8,7 +8,7 @@ import { visitSchedule, visitStatusLabel } from "../visitPresentation";
 
 const deskGroups = [
   { title: "Daily work", sections: [
-    { id: "enrollments", title: "Customers", owner: true, intro: "See who has joined and the services they need. Open a visit to review its private details." },
+    { id: "enrollments", title: "Customers", owner: true, intro: "See who has joined and the services they need." },
     { id: "visits", title: "Visits", intro: "Review requests, assign helpers and follow each visit through its approvals." },
     { id: "callbacks", title: "Callbacks", intro: "Follow up with people who have asked CookCredit to call them." },
     { id: "helpers", title: "Helpers", intro: "Review experience, service permissions and each helper’s own availability." },
@@ -24,9 +24,13 @@ const deskGroups = [
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
   // cannot render against another tab's data shape or overwrite its result.
-  const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : "visits", data: null });
+  const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : profile.enrollmentOnly ? "callbacks" : "visits", data: null });
   const { tab, data } = screen;
-  const groups = deskGroups.map(group => ({ ...group, sections: group.sections.filter(item => !item.owner || profile.owner) }));
+  const groups = deskGroups.map(group => ({ ...group,
+    title: profile.enrollmentOnly && group.collapsible ? "Records" : group.title,
+    sections: group.sections.filter(item => (!item.owner || profile.owner) &&
+      (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit"].includes(item.id))),
+  })).filter(group => group.sections.length);
   const currentSection = groups.flatMap(group => group.sections).find(item => item.id === tab) ||
     { title: "Home service desk", intro: "Choose an available section." };
   const setTab = (tab) => setScreen(current => current.tab === tab ? current : { tab, data: null });

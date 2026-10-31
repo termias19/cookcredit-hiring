@@ -124,8 +124,15 @@ def deliver(item):
         subject,title,body=COPY[action]
         path=('/#visit/'+item.content['bookingId']) if (item.content or {}).get('bookingId') else (
             '/#team' if action in OPERATOR_ACTIONS else '/#visits')
-        content=account_email_content('welcome',base+path,custom=(subject,title,body,'Open CookCredit Home',
-            'This service message concerns your Home account or visit. Customer service: '+SUPPORT))
+        button='Open CookCredit Home'
+        footer='This service message concerns your Home account or visit. Customer service: '+SUPPORT
+        if action=='home_account_created'and os.getenv('HOME_ENROLLMENT_ONLY')=='1':
+            subject,title='Your CookCredit Home account is ready','Tell us what would help'
+            body=('Save the cooking or cleaning services you are interested in, or request an optional call from CookCredit. '
+                'Enrollment is free. It does not reserve a visit or authorize a payment.')
+            path,button='/#enroll','Save my service needs'
+            footer='This service message confirms your Home account. Customer service: '+SUPPORT
+        content=account_email_content('welcome',base+path,custom=(subject,title,body,button,footer))
     # Reuse the authenticated transport. An explicitly configured, already
     # verified support alias controls visible/envelope From; Reply-To remains
     # customer service. No second mailbox password is needed for that grant.

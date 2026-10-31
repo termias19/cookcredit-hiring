@@ -37,3 +37,10 @@ test("Home diagnostics categorize routes without sending private identifiers or 
   assert.equal(homeScreenCategory("#payout"), "home_helper");
   assert.equal(homeScreenCategory("#availability"), "home_helper");
 });
+
+test('public enrollment account returns never reopen booking or helper routes',()=>{
+  for(const route of ['request','visits','payout','availability','helping','visit/11111111-1111-4111-8111-111111111111','https://evil.example',null])
+    assert.equal(safeHomeRoute(route,true),'enroll')
+  for(const route of ['enroll','help','callback','team'])assert.equal(safeHomeRoute(route,true),route)
+  assert.equal(safeHomeRoute('request',false),'request')
+})
