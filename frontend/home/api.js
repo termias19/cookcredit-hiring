@@ -1,6 +1,7 @@
 import { auth, getAppCheckHeaders } from "../src/firebase";
 import { reportClientError } from "../src/utils/errorReporting";
 import { saveHiringFile } from "../src/utils/saveHiringCv";
+import { waitForRequest } from "./waitForRequest";
 
 const pending = new Map();
 export async function api(
@@ -8,26 +9,32 @@ export async function api(
   { method = "GET", body, protectedAccount = false, form = false } = {},
 ) {
   const headers = {};
-  if (auth.currentUser)
-    headers.Authorization = "Bearer " + (await auth.currentUser.getIdToken());
-  if (protectedAccount) Object.assign(headers, await getAppCheckHeaders());
-  const fingerprint =
-    method +
-    ":" +
-    path +
-    ":" +
-    (form
-      ? body.get("file")?.name + ":" + body.get("file")?.size
-      : JSON.stringify(body));
-  if (method !== "GET") {
-    if (!pending.has(fingerprint))
-      pending.set(fingerprint, crypto.randomUUID());
-    headers["Idempotency-Key"] = pending.get(fingerprint);
-  }
-  if (body !== undefined && !form) headers["Content-Type"] = "application/json";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), form ? 30000 : 15000);
+  let preparingSecurity = false;
   try {
+    const user = auth.currentUser;
+    if (user)
+      headers.Authorization = "Bearer " + (await waitForRequest(() => user.getIdToken(), controller.signal));
+    if (protectedAccount) {
+      preparingSecurity = true;
+      Object.assign(headers, await waitForRequest(getAppCheckHeaders, controller.signal));
+      preparingSecurity = false;
+    }
+    const fingerprint =
+      method +
+      ":" +
+      path +
+      ":" +
+      (form
+        ? body.get("file")?.name + ":" + body.get("file")?.size
+        : JSON.stringify(body));
+    if (method !== "GET") {
+      if (!pending.has(fingerprint))
+        pending.set(fingerprint, crypto.randomUUID());
+      headers["Idempotency-Key"] = pending.get(fingerprint);
+    }
+    if (body !== undefined && !form) headers["Content-Type"] = "application/json";
     const response = await fetch("/api/home" + path, {
       method,
       headers,
@@ -67,7 +74,15 @@ export async function api(
     if (error.name === "AbortError") {
       reportClientError("api_timeout");
       throw new Error(
-        "This is taking longer than expected. Retry to check the same request safely.",
+        preparingSecurity
+          ? "The security check did not finish. Please retry, or open CookCredit in Chrome, Edge or Safari."
+          : "This is taking longer than expected. Retry to check the same request safely.",
+      );
+    }
+    if (String(error.code || "").startsWith("appCheck/")) {
+      reportClientError("unhandled_error");
+      throw new Error(
+        "The security check could not finish. Please retry, or open CookCredit in Chrome, Edge or Safari.",
       );
     }
     if (error instanceof TypeError) reportClientError("api_network_error");
@@ -87,7 +102,7 @@ export async function downloadReceipt(visit, id) {
           `/api/home/visits/${visit}/receipts/${id}`,
           {
             headers: {
-              Authorization: "Bearer " + (await auth.currentUser.getIdToken()),
+              Authorization: "Bearer " + (await waitForRequest(() => auth.currentUser.getIdToken(), controller.signal)),
             },
             cache: "no-store",
             credentials: "omit",
