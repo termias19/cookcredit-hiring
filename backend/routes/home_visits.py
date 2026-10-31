@@ -302,8 +302,14 @@ def internal_dispatch():
     from services.operations import report_queue_health
     healthy=report_queue_health('email') if os.getenv('HOME_EMAILS_ENABLED')=='1' else None
     from services.home_dispatch import request_next
+    # If the outbox is full and SMTP made no progress, do not wake every two
+    # seconds while provider retries are delayed. Eligible account mail keeps
+    # its own earlier deadline; only unconverted Home notices back off.
+    from datetime import datetime, timedelta, timezone
+    notice_retry = (datetime.now(timezone.utc) + timedelta(seconds=30)
+        if notifications.get('backpressured') and not (mail.get('sent',0) + mail.get('skipped',0)) else None)
     with db_session() as session:
-        request_next(session)
+        request_next(session, notifications_not_before=notice_retry)
     return jsonify(events=events, operations=operations,notifications=notifications,mail=mail,healthy=healthy)
 
 

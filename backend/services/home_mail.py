@@ -63,6 +63,7 @@ def convert_events(limit=20):
         return {'converted':0}
     from services.email_capacity import reserve_email_slot, EmailQueueBusy
     count=0
+    backpressured=False
     for _ in range(min(20,max(1,int(limit)))):
         try:
             with db_session() as session:
@@ -81,8 +82,9 @@ def convert_events(limit=20):
                 cursor.status='done'
                 count+=1
         except EmailQueueBusy:
+            backpressured=True
             break
-    return {'converted':count}
+    return {'converted':count,'backpressured':backpressured}
 
 
 def deliver(item):

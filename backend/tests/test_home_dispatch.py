@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from google.api_core.exceptions import AlreadyExists
 from services import database, home_dispatch, webhook_dispatch
-from tests.test_home_visits import home_db
+from tests.test_home_visits import home_db, app, headers
 from models.account_email import AccountEmail
 
 
@@ -49,3 +49,25 @@ def test_remaining_mail_schedules_one_followup_and_sent_mail_does_not(home_db,mo
     with database.db_session() as session:
         assert home_dispatch.request_next(session) is None
     assert wakes==[due]
+
+
+def test_full_outbox_keeps_notice_pending_and_backs_off_without_delaying_account_mail(app,monkeypatch):
+    from services import home_mail,email_capacity
+    from models.home_service import HomeNotificationCursor
+    monkeypatch.setenv('HOME_PAYMENT_MODE','off')
+    monkeypatch.setenv('HOME_EMAILS_ENABLED','1')
+    wakes=[]
+    monkeypatch.setattr(home_dispatch,'enqueue',lambda due:wakes.append(due))
+    assert app.test_client().get('/api/home/me',headers=headers('customer')).status_code==200
+    def busy(*args,**kwargs):raise email_capacity.EmailQueueBusy('synthetic capacity limit')
+    monkeypatch.setattr(email_capacity,'reserve_email_slot',busy)
+    assert home_mail.convert_events()=={'converted':0,'backpressured':True}
+    later=datetime.now(timezone.utc)+timedelta(seconds=30)
+    with database.db_session() as session:
+        assert session.query(HomeNotificationCursor).filter_by(status='pending').count()==1
+        assert home_dispatch.request_next(session,notifications_not_before=later)==later
+    urgent=later-timedelta(seconds=20)
+    with database.db_session() as session:
+        session.add(AccountEmail(dedupe_key='synthetic-urgent',kind='verify',recipient='synthetic@example.test',available_at=urgent))
+    with database.db_session() as session:
+        assert home_dispatch.request_next(session,notifications_not_before=later)==urgent

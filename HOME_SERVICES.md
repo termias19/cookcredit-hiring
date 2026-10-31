@@ -341,8 +341,10 @@ profile refresh; this avoids unnecessary writes and cross-participant FK locks.
 The welcome event requests a wakeup only when it is newly inserted. Worker
 wakeups coalesce in a future two-second window and remaining batches, retry
 times and abandoned leases request a follow-up through the same worker. Paused
-mail/payment processing does not create a wakeup loop. Queue failure/age logging
-reuses the existing privacy-safe reporter.
+mail/payment processing does not create a wakeup loop. If the outbox is full and
+SMTP makes no progress, unconverted notices back off for thirty seconds while
+verification/reset mail keeps its own earlier retry time. Queue failure/age
+logging reuses the existing privacy-safe reporter.
 
 `frontend/home/firebase.json` is the separate staging Hosting contract. It routes
 `/api/home/**` to Home before the SPA, pins the backend revision, preserves the

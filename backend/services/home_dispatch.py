@@ -36,16 +36,19 @@ def enqueue(due):
     return True
 
 
-def request_next(session):
+def request_next(session, *, notifications_not_before=None):
     """Wake the same worker for remaining batches, scheduled retries or leases."""
     from sqlalchemy import select, func, union_all, case
     from models.account_email import AccountEmail
     from models.home_service import HomeNotificationCursor, HomeFinancialOperation, HomeStripeEvent
     candidates = []
     if os.getenv('HOME_EMAILS_ENABLED') == '1':
+        notification_due = HomeNotificationCursor.created_at
+        if notifications_not_before is not None:
+            notification_due = func.greatest(notification_due, notifications_not_before)
         candidates.extend([select(func.min(AccountEmail.available_at).label('due')).where(AccountEmail.status == 'pending'),
             select(func.min(AccountEmail.lease_until).label('due')).where(AccountEmail.status == 'sending'),
-            select(func.min(HomeNotificationCursor.created_at).label('due')).where(HomeNotificationCursor.status == 'pending')])
+            select(func.min(notification_due).label('due')).where(HomeNotificationCursor.status == 'pending')])
     from services.home_stripe import mode
     for model in ((HomeFinancialOperation, HomeStripeEvent) if mode() != 'off' else ()):
         candidates.append(select(func.min(case((model.status == 'running', model.lease_until), else_=model.available_at)).label('due'))
