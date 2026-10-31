@@ -16,6 +16,34 @@ from routes.home_visits import home_auth,is_owner,is_operator,principal,json_bod
 customer_bp=Blueprint('home_customers',__name__)
 
 
+@customer_bp.route('/enrollment',methods=['GET','PUT','DELETE'])
+@home_auth
+@limiter.limit('20 per minute',key_func=lambda:g.user_id)
+def enrollment():
+    with db_session() as session:
+        if request.method=='GET':
+            result={'enrollment':customers.enrollment(session,g.user_id)}
+        else:
+            body,actor=json_body(),principal()
+            result=visits.command(session,actor,request.headers.get('Idempotency-Key'),'enrollment:'+request.method,body,
+                lambda:customers.save_enrollment(session,actor,body) if request.method=='PUT' else customers.withdraw_enrollment(session,actor,body))
+    return jsonify(result)
+
+
+@customer_bp.get('/enrollments')
+@home_auth
+@limiter.limit('30 per minute',key_func=lambda:g.user_id)
+def enrollments():
+    # The owner's directory includes people who have not booked yet. Home
+    # operator/helper access does not grant access to these contact details.
+    if not is_owner():
+        visits.fail('forbidden','Only the Home owner can view enrollments.',403)
+    with db_session() as session:
+        result=customers.list_enrollments(session,request.args.get('cursor'))
+        customers.audit(session,principal(),'enrollment_list_viewed','directory')
+    return jsonify(result)
+
+
 @customer_bp.post('/account/verification')
 @require_identity
 @require_app_check

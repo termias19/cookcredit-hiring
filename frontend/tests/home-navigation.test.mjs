@@ -5,6 +5,7 @@ import { homeScreenCategory } from "../src/utils/errorReporting.js";
 test("Home email continuation accepts only internal task routes", () => {
   for (const route of [
     "request",
+    "enroll",
     "helping",
     "payout",
     "visit/11111111-1111-4111-8111-111111111111",
@@ -29,5 +30,6 @@ test("Home diagnostics categorize routes without sending private identifiers or 
   );
   assert.equal(homeScreenCategory("#account/action?oobCode=private"), "auth");
   assert.equal(homeScreenCategory("#team"), "home_operator");
+  assert.equal(homeScreenCategory("#enroll"), "home_customer");
   assert.equal(homeScreenCategory("#payout"), "home_helper");
 });

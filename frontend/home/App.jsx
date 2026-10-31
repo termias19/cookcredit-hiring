@@ -6,6 +6,7 @@ import Account from "./screens/Account";
 import RequestVisit from "./screens/RequestVisit";
 import Visit from "./screens/Visit";
 import SavedDetails from "./screens/SavedDetails";
+import Enrollment from "./screens/Enrollment";
 import "./style.css";
 
 const Team = lazy(() => import("./screens/Team"));
@@ -92,6 +93,7 @@ export default function App() {
         <button onClick={refresh}>Try again</button>
       </section>
     );
+  else if (route === "enroll") content = <Enrollment profile={profile} />;
   else if (route === "request") content = <RequestVisit profile={profile} />;
   else if (route === "visits") content = <Visits />;
   else if (/^visit\/[a-f0-9-]{36}$/.test(route))
@@ -137,6 +139,7 @@ export default function App() {
         <nav aria-label="Main">
           <a href="#how">How it works</a>
           <a href="#visits">My visits</a>
+          <a href="#enroll">Service needs</a>
           {profile?.operator && <a href="#team">Team</a>}
           {profile?.helper && <a href="#payout">My earnings</a>}
           <a href="#help">Help</a>
@@ -199,6 +202,7 @@ function Home() {
             No charge for sending a request. You approve your helper and full
             price before paying.
           </p>
+          <a href="#enroll">Not ready to book? Tell us what you need.</a>
           <a href="#callback">Prefer help by phone? Request a call.</a>
         </div>
       </section>

@@ -32,6 +32,7 @@ COPY = {
  'report_issue':('A Home visit needs attention','An issue needs review','An issue was reported for a Home visit. Open the private queue to review it. New transfers are held; an existing transfer may need recovery.'),
  'payment_review_required':('A Home payment needs review','Review the payment state','A payment adjustment needs operator review. Funds remain held. Open the private visit record for details.'),
  'callback_requested':('A Home callback was requested','A callback needs follow-up','Someone requested telephone help. Open the private callback queue to read the contact details and record your follow-up.'),
+ 'service_interest_saved':('A Home enrollment needs follow-up','Someone shared their service needs','Open the private enrollment list to review the services requested. Contact details remain inside CookCredit.'),
  'helper_application_received':('A Home helper application needs review','Review a helper application','A helper submitted their Home service experience. Review their profile and capabilities before granting access.'),
 }
 
@@ -45,7 +46,7 @@ def ensure_welcome(session,principal):
 
 
 def _recipients(session,event):
-    if event.action in ('callback_requested','helper_application_received','report_issue','payment_review_required'):
+    if event.action in ('callback_requested','service_interest_saved','helper_application_received','report_issue','payment_review_required'):
         return [(SUPPORT,None)]
     if event.action=='home_account_created':
         user=session.get(User,event.actor_id)
@@ -116,7 +117,7 @@ def deliver(item):
         action=(item.content or {}).get('action','home_account_created')
         subject,title,body=COPY[action]
         path=('/#visit/'+item.content['bookingId']) if (item.content or {}).get('bookingId') else (
-            '/#team' if action in ('callback_requested','helper_application_received','report_issue') else '/#visits')
+            '/#team' if action in ('callback_requested','service_interest_saved','helper_application_received','report_issue') else '/#visits')
         content=account_email_content('welcome',base+path,custom=(subject,title,body,'Open CookCredit Home',
             'This service message concerns your Home account or visit. Customer service: '+SUPPORT))
     # Reuse the authenticated transport. An explicitly configured, already

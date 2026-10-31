@@ -406,3 +406,23 @@ exact deployed revision:
 Keep Home disabled or private while any required deployed acceptance is open.
 Do not publish household records, test identities, tokens or operational evidence
 in the source repository.
+# Customer enrollment
+
+`/#enroll` preserves its destination through the existing Google/email sign-in
+and verification flow. A verified customer chooses cooking, cleaning, both or
+help choosing, with an optional phone number and explicit service-contact consent.
+This does not create a booking or authorize a charge.
+
+Enrollment metadata lives in the existing household preferences row. The existing
+unique Home welcome event identifies account membership; there is no second user,
+CRM or messaging system. Saving/forgetting visit preferences preserves enrollment.
+Withdrawing service interest clears its service/phone fields and leaves a minimal
+withdrawal marker, without changing existing visits.
+
+The Home owner alone can read `/api/home/enrollments`. The directory uses bounded
+keyset pages over the User primary key and logs access in the existing private
+audit trail. Operators and helpers do not inherit this access. Household addresses,
+allergy preferences and free-text visit instructions are excluded from directory
+responses and notification emails. The service desk provides the canonical link
+for manual sharing by text or email; it does not send marketing or SMS messages.
+

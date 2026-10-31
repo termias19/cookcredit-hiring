@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 
 import { api, dollars, label, money } from "../api";
+import { serviceNames } from "./Enrollment";
 
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
   // cannot render against another tab's data shape or overwrite its result.
-  const [screen, setScreen] = useState({ tab: "visits", data: null });
+  const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : "visits", data: null });
   const { tab, data } = screen;
   const setTab = (tab) => setScreen({ tab, data: null });
   const setData = (data) =>
@@ -55,13 +56,24 @@ export default function Team({ profile }) {
     setError("");
     try {
       const more = await api(
-        "/visits?cursor=" + encodeURIComponent(data.nextCursor),
+        "/" + tab + "?cursor=" + encodeURIComponent(data.nextCursor),
       );
-      setData({ ...more, visits: [...data.visits, ...more.visits] });
+      setData({ ...more, [tab]: [...data[tab], ...more[tab]] });
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+  const enrollmentLink = new URL(location.href);
+  enrollmentLink.hash = "enroll";
+  enrollmentLink.search = "";
+  const copyEnrollment = async () => {
+    try {
+      await navigator.clipboard.writeText(enrollmentLink.href);
+      setNotice("Enrollment link copied. You can paste it into a text or email.");
+    } catch {
+      setNotice("The link was not copied. Select and copy it from the field below.");
     }
   };
   const review = (event, id) => {
@@ -108,6 +120,7 @@ export default function Team({ profile }) {
       <h1>Home service desk</h1>
       <nav className="tabs" aria-label="Service desk">
         {[
+          ...(profile.owner ? ["enrollments"] : []),
           "visits",
           "callbacks",
           "helpers",
@@ -135,6 +148,27 @@ export default function Team({ profile }) {
         </p>
       )}
       {!data && !error && <p role="status">Loading…</p>}
+      {error && !data && <button onClick={() => setVersion(v => v + 1)}>Try again</button>}
+
+      {data && tab === "enrollments" && profile.owner && <>
+        <section className="section">
+          <h2>Invite people to enroll</h2>
+          <p>Share this link by text or email. People sign in and choose the services they need. Signing up does not book or charge for a visit.</p>
+          {profile.environment === "staging" && <p className="quiet">This is currently a restricted staging link. Public invitations follow launch acceptance.</p>}
+          <label>Enrollment link<input readOnly value={enrollmentLink.href} /></label>
+          <button onClick={copyEnrollment}>Copy enrollment link</button>
+        </section>
+        <h2>People enrolled</h2>
+        <p>Only the Home owner can open this directory. Account-only entries have signed in but have not saved their service needs.</p>
+        {!data.enrollments.length && <p>No enrollments yet.</p>}
+        {data.enrollments.map(row => <article className="section" key={row.id}>
+          <h3>{row.name}</h3>
+          <p>{row.withdrawn ? "Service interest withdrawn — do not contact about enrollment" : row.service ? serviceNames[row.service] : "Account only — service needs not provided"}</p>
+          <p><a href={"mailto:" + row.email}>{row.email}</a>{row.phone && <> · <a href={"tel:" + row.phone}>{row.phone}</a></>}</p>
+          <p className="quiet">Joined {new Date(row.joinedAt).toLocaleDateString()}{row.updatedAt && " · Needs updated " + new Date(row.updatedAt).toLocaleDateString()}</p>
+        </article>)}
+        {data.nextCursor && <button disabled={busy} onClick={loadMore}>More people</button>}
+      </>}
 
       {data && tab === "visits" && (
         <>
