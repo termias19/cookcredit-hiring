@@ -58,6 +58,8 @@ Phone help in the design must not imply those authentication paths already exist
 | --- | --- |
 | `GET /health` | Public; `disabled` by default, database guard checked when enabled. Always reports payments unavailable. |
 | `GET /me` | Verified identity; syncs an inert Home customer identity, returns effective operator/owner access and canonical consent version/text. Never imports a Hiring role. |
+| `GET/PUT/DELETE /enrollment` | Verified customer's own service interest and optional contact phone. Changes require an idempotency key and explicit service-contact consent. No visit or payment is created. |
+| `GET /enrollments?cursor=...` | Home owner only; bounded, audited directory of Home account membership and service needs. No household addresses, health instructions or visit notes. |
 | `POST /visits` | Customer creates their own visit. Requires an `Idempotency-Key`. Returns `{id, version, status}`. |
 | `GET /visits?cursor=...` | Scoped list; at most 50 summaries and an opaque next cursor. Only owners/operators see the full queue. |
 | `GET /visits/{id}` | Owner of the visit, eligible assigned helper or Home operator. Unknown and inaccessible visits both return 404. |
@@ -406,12 +408,17 @@ exact deployed revision:
 Keep Home disabled or private while any required deployed acceptance is open.
 Do not publish household records, test identities, tokens or operational evidence
 in the source repository.
-# Customer enrollment
+## Customer enrollment
 
 `/#enroll` preserves its destination through the existing Google/email sign-in
 and verification flow. A verified customer chooses cooking, cleaning, both or
 help choosing, with an optional phone number and explicit service-contact consent.
 This does not create a booking or authorize a charge.
+
+Following **Arrange a visit** carries the selected cooking/cleaning service into
+the request form. This selection remains editable, is held only in memory and
+is cleared when the account changes. Approval of the resulting quote is separate
+from verified payment; an expired unpaid quote requires an updated offer.
 
 Enrollment metadata lives in the existing household preferences row. The existing
 unique Home welcome event identifies account membership; there is no second user,

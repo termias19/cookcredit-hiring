@@ -143,6 +143,7 @@ export default function Visit({ id, profile }) {
     p = visit.payment,
     closed = visit.status === "cancelled",
     held = visit.issueOpen;
+  const expiredBeforePayment = visit.status === "accepted" && q?.expired;
   return (
     <section className="page">
       <a href="#visits">← My visits</a>
@@ -169,7 +170,11 @@ export default function Visit({ id, profile }) {
           Refresh
         </button>
       </div>
-      <p className="lead">{statusCopy[visit.status]}</p>
+      <p className="lead">{expiredBeforePayment
+        ? "This quote has expired. CookCredit needs to update it before you can continue."
+        : visit.status === "accepted" && q?.approved
+          ? "The full quote is approved. Payment must be confirmed before this visit is arranged."
+          : statusCopy[visit.status]}</p>
       {held && (
         <p className="notice" role="status">
           An issue is open for CookCredit review. New helper transfers are on
@@ -277,7 +282,7 @@ export default function Visit({ id, profile }) {
                 receipt review.
               </p>
               <p className="quiet">
-                {q.approved
+                {q.approved && !expiredBeforePayment
                   ? "The customer approved this quote."
                   : q.expired
                     ? "This quote has expired. CookCredit needs to update it."

@@ -7,7 +7,7 @@ import {transformWithEsbuild} from 'vite'
 // Actual screen handlers under controlled failures; browser acceptance is separate.
 async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
   const states=[],effects=[];let index,tree,queued
-  const react={useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
+  const react={lazy:()=> 'lazy-screen',Suspense:'suspense',useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
     useRef(initial){const slot=index++;return states[slot]||=( {current:initial} )},
     useEffect(fn,deps){const slot=index++,old=effects[slot];if(!old||deps.some((d,i)=>d!==old.deps[i]))
@@ -102,4 +102,20 @@ test('arrange visit carries the saved enrollment choice without overriding later
   const unsure=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:'not_sure'})
   await unsure.settle()
   assert.equal(unsure.find(p=>p.name==='cleaning'),undefined)
+})
+
+test('approved unpaid quotes show the payment step; expired quotes explain why checkout is unavailable',async()=>{
+  const value={id:'visit',version:1,status:'accepted',service:'both',isCustomer:true,time:'10:00',
+    instructions:{preferences:[],cleaningTasks:[]},payment:{status:'unpaid'},
+    quote:{approved:true,helperAcceptedQuote:true,expired:false,labor:[],materials:[],expiresAt:'2030-01-01'}}
+  const api=async path=>path.endsWith('/receipts')?{receipts:[]}:value
+  const open=()=>screen('Visit',api,false,async()=>{},{id:'visit',profile:{paymentsAvailable:true}})
+  const approved=await open();await approved.settle()
+  assert.match(approved.text(),/full quote is approved\. Payment must be confirmed/)
+  const payButton=(p,n)=>n.type==='button'&&typeof p.children==='string'&&p.children.startsWith('Pay up to')
+  assert.ok(approved.find(payButton))
+  value.quote.expired=true
+  const expired=await open();await expired.settle()
+  assert.match(expired.text(),/quote has expired/)
+  assert.equal(expired.find(payButton),undefined)
 })
