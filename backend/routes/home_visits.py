@@ -308,6 +308,10 @@ def internal_dispatch():
     mail=dispatch_account_emails(limit=5) if os.getenv('HOME_EMAILS_ENABLED')=='1' else {'paused':True}
     from services.operations import report_queue_health
     healthy=report_queue_health('email') if os.getenv('HOME_EMAILS_ENABLED')=='1' else None
+    # Read durable state even while money processing is paused. A gate change
+    # must not hide an unresolved payment/reversal or abandoned financial lease.
+    financial_healthy=report_queue_health('home_financial')
+    events_healthy=report_queue_health('home_events')
     from services.home_dispatch import request_next
     # If the outbox is full and SMTP made no progress, do not wake every two
     # seconds while provider retries are delayed. Eligible account mail keeps
@@ -317,7 +321,8 @@ def internal_dispatch():
         if notifications.get('backpressured') and not (mail.get('sent',0) + mail.get('skipped',0)) else None)
     with db_session() as session:
         request_next(session, notifications_not_before=notice_retry)
-    return jsonify(events=events, operations=operations,notifications=notifications,mail=mail,healthy=healthy)
+    return jsonify(events=events, operations=operations,notifications=notifications,mail=mail,healthy=healthy,
+        financialHealthy=financial_healthy,eventsHealthy=events_healthy)
 
 
 @home_bp.get('/operations')

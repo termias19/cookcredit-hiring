@@ -124,8 +124,9 @@ calendar edits nor policy activation grants helper access or enables payments.
   Lists omit addresses and instructions. No employer API receives household data.
 - Cooking assignment requires an approved Home CookProfile and explicit cooking
   permission. Cleaning requires an explicit cleaning permission. A knife-skill
-  assessment is not evidence of cleaning suitability. Helper onboarding and its
-  operational approval checks remain a later interface gate.
+  assessment is not evidence of cleaning suitability. The existing helper
+  application and owner review screens implement these approval controls;
+  acceptance with a distinct deployed helper remains open.
 - Do not solicit diagnoses. Allergy and meal instructions can still be sensitive.
   Retention/export/deletion and support escalation need a reviewed Home policy
   before collecting real household information. Existing assessment retention is
@@ -140,7 +141,7 @@ Phone help in the design must not imply those authentication paths already exist
 
 | Method and path | Authorization and behavior |
 | --- | --- |
-| `GET /health` | Public; `disabled` by default, database guard checked when enabled. Always reports payments unavailable. |
+| `GET /health` | Public; `disabled` by default, database guard checked when enabled. `paymentsAvailable` reflects the explicit Home checkout gate; it is false while payments are off. |
 | `GET /me` | Verified identity; syncs an inert Home customer identity, returns effective operator/owner access and canonical consent version/text. Never imports a Hiring role. |
 | `GET/PUT /operating-rules`, `POST /operating-rules/activate` | Home owner only; versioned drafts and explicit activation with immutable audit. Activation never opens paid booking. |
 | `GET /slots?date=...&durationMinutes=...&state=GA` | Verified identity; bounded advisory preferred times. No household or helper identity is returned. No reservation is created. |
@@ -237,7 +238,8 @@ retry the same key after the indicated delay, not create a second request.
 
 All mutation routes above require an `Idempotency-Key`. Home's rate cards use the
 same immutable-version approach as Hiring's billing catalog, but do not change
-subscription plans or create Stripe products. No rate is active at startup.
+subscription plans or create Stripe products. Startup never seeds or activates
+rates; a previously activated rate remains active after a restart.
 Only the configured Home owner can save and activate pricing. Initial example
 request (illustrative values, not published prices):
 
@@ -315,7 +317,8 @@ An issue hold, revoked helper permission, changed scope, expired quote, wrong
 digest or stale visit version blocks acceptance. Reissuing an offer selects a
 new current quote and requires fresh helper/customer approvals. Previous offers
 and approvals remain immutable. If a payment reference exists, reissuing is
-blocked until stage 4 provides an explicit void/refund workflow.
+blocked. Stage 7's cancellation/refund handling does not provide a separate
+void-and-requote workflow and must not be treated as one.
 
 After service reaches `pending_confirmation` or `completed`, the operator can
 record actual materials by quote `lineId`, `actualCents` and an opaque UUID
@@ -349,8 +352,10 @@ domain. API requests stay on `/api/home`; no runtime-selected API address is
 accepted. A loopback Auth emulator is supported only in Vite development, with
 an explicit `VITE_HOME_AUTH_EMULATOR_URL`. Cloud startup rejects emulator config.
 No private address, allergy notes or form draft is put in browser storage.
-Only a validated return route is kept in session storage. Local previews and
-staging are `noindex`; this is not an authentication boundary.
+Session storage keeps the validated return route and bounded opaque command
+fingerprints/idempotency keys described below; it contains no raw command
+contents. Local previews and staging are `noindex`; this is not an authentication
+boundary.
 
 Home notices reuse the existing branded AccountEmail transport and durable
 retry implementation. A transactional event pointer prevents notification gaps;
@@ -437,6 +442,30 @@ mail/payment processing does not create a wakeup loop. If the outbox is full and
 SMTP makes no progress, unconverted notices back off for thirty seconds while
 verification/reset mail keeps its own earlier retry time. Queue failure/age
 logging reuses the existing privacy-safe reporter.
+
+### Durable Home queue monitoring acceptance
+
+The existing dispatch endpoint also reports `queue_health` summaries for
+`home_financial` and `home_events`, alongside the existing email summary. It
+reads the existing durable records even while financial processing is paused.
+Logs contain static categories, counts and ages, without household details,
+Stripe payloads, account identifiers or raw provider errors. No second queue or
+payment system is introduced.
+
+Actionable pending work alerts after ten minutes. Financial/event review states,
+held operations, disputed or review-required payments, and missing/expired
+running leases also report an error. A superseded reversal already recovered
+canonically is excluded from held-action alerts. A pre-mutation transfer with
+`funds_pending` has separate waiting count/age fields and a seven-day escalation
+window; an expired lease still alerts. That window is an operational alarm
+policy, not a guarantee of settlement timing or payment acceptance.
+
+The focused fake-session regression suite checks summary predicates, thresholds,
+privacy-safe fields, paused-worker observation and unchanged legacy queue
+contracts. Before promotion, verify the summaries from the exact deployed
+revision and confirm that its existing alert policy receives an actionable
+failure. Keep retries, recovery schedules and alerts enabled. These observations
+do not establish a real charge, refund, transfer or bank payout.
 
 `frontend/home/firebase.json` is the separate staging Hosting contract. It routes
 `/api/home/**` to Home before the SPA, pins the backend revision, preserves the
