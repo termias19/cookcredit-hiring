@@ -6,6 +6,7 @@ from models.home_service import HomeHousehold,HomeEvent
 from models.account_email import AccountEmail
 from services import database,home_mail
 from tests.test_home_visits import app,home_db,headers
+from tests.test_home_quotes import fully_approved
 
 def save(client,uid='customer',key=None,**extra):
     return client.put('/api/home/enrollment',headers=headers(uid,key or uuid.uuid4().hex),
@@ -72,3 +73,23 @@ def test_enrollment_directory_paginates_without_missing_or_duplicate_members(app
     second=c.get('/api/home/enrollments?cursor='+first['nextCursor'],headers=headers('owner')).json
     ids=[row['id'] for row in first['enrollments']+second['enrollments']]
     assert len(ids)==len(set(ids))==53 and second['nextCursor'] is None
+
+
+def test_assignment_notifies_the_helper_through_the_existing_private_outbox(app,monkeypatch):
+    monkeypatch.setenv('HOME_EMAILS_ENABLED','1')
+    c=app.test_client();row,_=fully_approved(c)
+    home_mail.convert_events()
+    with database.db_session() as session:
+        notice=session.execute(select(AccountEmail).where(AccountEmail.content['action'].astext=='assign')).scalar_one()
+        assert notice.recipient=='helper@example.test' and notice.user_id=='helper'
+        assert notice.content=={'action':'assign','bookingId':row['id']}
+
+
+def test_superseded_assignment_never_notifies_a_different_helper(app):
+    from sqlalchemy import update
+    c=app.test_client();row,_=fully_approved(c)
+    with database.db_session() as session:
+        event=session.execute(select(HomeEvent).where(HomeEvent.booking_id==uuid.UUID(row['id']),HomeEvent.action=='assign')).scalar_one()
+        # A change to no helper also makes the historic assignment obsolete.
+        session.execute(update(Booking).where(Booking.id==uuid.UUID(row['id'])).values(cook_id=None))
+        assert home_mail._recipients(session,event)==[]

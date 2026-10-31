@@ -21,6 +21,7 @@ SUPPORT = 'connectwithus@cookcredit.com'
 COPY = {
  'home_account_created':('Your CookCredit Home account is ready','Welcome to CookCredit Home','You can arrange cooking or cleaning, review your helper and full quote, and keep track of your visits.'),
  'visit_requested':('We received your Home visit request','Your request is with CookCredit','We will review your requirements and confirm availability. No payment has been taken for this request.'),
+ 'assign':('A Home visit needs your review','Review an assigned visit','CookCredit assigned a visit for your review. Open the private visit to review and accept the request, or contact CookCredit if you are unavailable. Do not begin work or purchase supplies before payment is confirmed.'),
  'quote_issued':('A Home visit quote needs your review','Review the work and earnings','A quote is ready for your assigned visit. Read the agreed work, materials and earnings before accepting.'),
  'helper_quote_accepted':('Your full Home visit quote is ready','Review your full quote','Your helper accepted the itemized work. Review every cost and materials allowance before approving or paying.'),
  'payment_verified':('Your CookCredit Home payment was received','Payment confirmed','Stripe confirmed your payment. View the approved amount and visit details in your account. Unused materials and tax allowance are refunded after review.'),
@@ -54,7 +55,9 @@ def _recipients(session,event):
     booking=session.execute(select(Booking.eater_id,Booking.cook_id).where(Booking.id==event.booking_id)).first()
     if not booking:
         return []
-    uid=booking.cook_id if event.action in ('quote_issued','helper_funds_transferred','helper_transfer_reversed') else booking.eater_id
+    if event.action=='assign' and (event.details or {}).get('helperId')!=booking.cook_id:
+        return []  # A superseded assignment must not notify a different helper.
+    uid=booking.cook_id if event.action in ('assign','quote_issued','helper_funds_transferred','helper_transfer_reversed') else booking.eater_id
     user=session.get(User,uid) if uid else None
     return [(user.email,user.id)] if user else []
 
