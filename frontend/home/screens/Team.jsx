@@ -159,6 +159,7 @@ export default function Team({ profile }) {
           <button onClick={copyEnrollment}>Copy enrollment link</button>
         </section>
         <h2>People enrolled</h2>
+        <button className="secondary" disabled={busy} onClick={() => setVersion(v => v + 1)}>Refresh people</button>
         <p>Only the Home owner can open this directory. Account-only entries have signed in but have not saved their service needs.</p>
         {!data.enrollments.length && <p>No enrollments yet.</p>}
         {data.enrollments.map(row => <article className="section" key={row.id}>
