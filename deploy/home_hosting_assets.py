@@ -34,6 +34,15 @@ def _checked_files(files):
     return result
 
 
+def immutable_bundle_paths(files):
+    """Known uploaded bundles eligible for immutable response headers.
+
+    Apply headers to these exact paths, never a wildcard that can cache a404
+    or SPA error document for an unavailable future chunk for a year.
+    """
+    return tuple(path for path in _checked_files(files) if _BUNDLE.fullmatch(path))
+
+
 def merge_release_assets(current,previous_builds,*,max_releases=8,max_retained_files=128):
     """Return current files plus selected previous builds' immutable JS/CSS.
 

@@ -24,3 +24,9 @@ test('Home policy supports branded Google login and protects private navigation'
   assert.match(headers['Content-Security-Policy'],/frame-src https:\/\/cookcredit\.com/)
   assert.doesNotMatch(headers['Content-Security-Policy'],/\*\.run\.app|\*\.firebaseapp\.com/)
 })
+
+test('unknown asset responses cannot inherit year-long wildcard caching',()=>{
+  assert.equal(headers['Cache-Control'],'no-store')
+  assert.ok(hosting.headers.every(row=>row.source==='**'||!row.source.includes('*')))
+  // The guarded publisher adds immutable caching for exact manifest paths only.
+})

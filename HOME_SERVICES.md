@@ -464,6 +464,24 @@ record; retrying the same upload reference remains safe. Keep the Home worker
 count within its configured memory budget instead of increasing workers to hide
 pixel-buffer pressure.
 
+Home uses hash navigation. Its Hosting fallback targets the root document only;
+missing JavaScript must return404 with no-store rather than a cached200 HTML
+document. The guarded publisher applies immutable cache headers to exact known
+bundle paths and retains hashed JavaScript/CSS from eight original published
+builds, bounded to128 additional files. Persist each original manifest separately;
+never reuse the merged retained set as an original or retention grows indefinitely.
+An unavailable historical content hash or immutable pathname collision blocks
+publication instead of releasing an incomplete asset graph.
+
+Every frontend promotion must check a representative already-open older tab,
+including a lazy-loaded request step, and verify its older bundle still returns
+JavaScript with the expected content hash. Also check an unknown asset returns404
+without immutable caching. Loading only the new homepage does not test this.
+Optional time suggestions have a scoped boundary so an interrupted module load
+keeps the manual request form available. Global recovery offers an explicit reload;
+it never automatically resubmits a booking or payment. Reloading clears unsent
+form entries, so check My visits before repeating an acknowledged request.
+
 Home reuses the existing bounded browser error reporter and confirmed file-save
 utility. Diagnostics contain categories and references, never account action
 codes, visit URLs, household details or raw error text. A download fallback is

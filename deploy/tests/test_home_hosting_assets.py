@@ -17,6 +17,14 @@ def files(*paths):
     return {path:digest(path)for path in paths}
 
 
+def test_immutable_cache_headers_target_only_known_hashed_bundles():
+    manifest=files('/index.html','/assets/index-New2026x.js','/assets/index-New2026x.css',
+        '/assets/manual.js','/assets/index-New2026x.js.map','/__/firebase/init.js')
+    assert set(assets.immutable_bundle_paths(manifest))=={
+        '/assets/index-New2026x.js','/assets/index-New2026x.css'}
+    assert '/assets/SuggestedTimes-Missing1.js' not in assets.immutable_bundle_paths(manifest)
+
+
 def test_old_open_request_can_still_import_suggested_times_and_its_shared_css():
     current={'/index.html':digest('new entry'),**files('/assets/index-New2026x.js')}
     previous={'/index.html':digest('old entry'),**files(
