@@ -634,20 +634,6 @@ summary {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.tabs {
-  gap: 22px;
-  border-bottom: 1px solid var(--line);
-  margin: 30px 0;
-}
-.tabs button {
-  font-size: 16px;
-  margin-bottom: 14px;
-  min-height: 44px;
-}
-.tabs .selected {
-  background: var(--ink);
-  color: white;
-}
 .operations {
   font: 14px/1.6 monospace;
   white-space: pre-wrap;
@@ -780,12 +766,6 @@ summary {
   .two {
     grid-template-columns: 1fr;
   }
-  .tabs {
-    gap: 10px 20px;
-  }
-  .tabs button {
-    margin-bottom: 7px;
-  }
   .notice {
     padding: 17px 20px;
   }
@@ -799,4 +779,180 @@ summary {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* The authenticated workspace follows Hiring's rail/content hierarchy. CSS
+   changes the layout at narrow widths without remounting an unsaved form. */
+.home-workspace {
+  min-height: 100svh;
+  padding-left: 248px;
+  background: #fffdf8;
+}
+.home-workspace-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  width: 248px;
+  height: 100svh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--line);
+  background: var(--paper);
+}
+.home-workspace-rail .brand { padding: 0 8px; }
+.home-workspace-rail .brand img { width: 32px; height: 44px; }
+.home-workspace-rail .brand span { font-size: 28px; }
+.home-workspace-rail .brand small { font-size: 11px; }
+.home-workspace-primary {
+  background: #934b33;
+  border-color: #934b33;
+  font-size: 15px;
+  padding: 12px;
+}
+.home-workspace-primary:hover { background: #793e2a; }
+.home-workspace-nav {
+  display: grid;
+  align-items: start;
+  gap: 22px;
+}
+.home-workspace-group { display: grid; gap: 3px; }
+.home-workspace-label {
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.home-workspace-group > .home-workspace-label { padding: 0 12px; }
+.home-workspace-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-left: 3px solid transparent;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: none;
+}
+.home-workspace-nav a:hover { background: #f0ebe2; }
+.home-workspace-nav a[aria-current="page"] {
+  border-color: #934b33;
+  background: #efe1d3;
+  color: #713a28;
+  font-weight: 600;
+}
+.home-workspace-account {
+  margin-top: auto;
+  padding: 18px 8px 0;
+  border-top: 1px solid var(--line);
+}
+.home-workspace-account p { margin: 4px 0; font-size: 13px; overflow-wrap: anywhere; }
+.home-workspace-account .text { font-size: 14px; }
+.home-workspace-main { min-width: 0; font-size: 16px; }
+.home-workspace-main > .page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 36px 72px;
+}
+.home-workspace-main > .narrow { margin: 0 auto; padding: 36px 0 72px; }
+.home-workspace-main h1 { font-size: 42px; margin: 6px 0 22px; }
+.home-workspace-main h2 { font-size: 29px; }
+.home-workspace-main h3 { font-size: 25px; }
+.home-workspace-main .heading { margin-top: 0; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.home-workspace footer { background: var(--paper); font-size: 12px; }
+.home-desk-heading { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.home-desk-heading .eyebrow { margin-top: 0; }
+.home-desk-heading > p:last-child { max-width: 760px; margin-bottom: 0; color: var(--muted); }
+.home-desk-navigation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  margin-bottom: 28px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.home-desk-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-desk-links button {
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.home-desk-links button.selected { background: #934b33; border-color: #934b33; color: white; }
+.home-desk-links button:hover { background: #efe1d3; color: var(--ink); }
+.home-desk-links button.selected:hover { background: #793e2a; color: white; }
+.home-desk-settings { padding: 0; border: 0; }
+.home-desk-settings summary { padding: 8px 0; font-size: 14px; }
+.home-desk-settings[open] summary { margin-bottom: 8px; }
+.home-desk-content { min-width: 0; }
+.home-desk-record, .home-desk-disclosure {
+  margin: 0 0 16px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  background: #fffdf8;
+}
+.home-desk-record > :first-child { margin-top: 0; }
+.home-desk-record > :last-child { margin-bottom: 0; }
+.home-desk-record p { margin: 10px 0; }
+.home-desk-record .home-desk-disclosure { margin: 16px 0 0; padding: 10px 16px; }
+.home-desk-disclosure summary { font-size: 16px; }
+.home-desk-disclosure summary .quiet { font-size: 13px; font-weight: 400; }
+
+@media (max-width: 899px) {
+  .home-workspace { padding-left: 0; }
+  .home-workspace-rail {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 18px 20px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .home-workspace-rail .brand { padding: 0; }
+  .home-workspace-primary { align-self: center; }
+  .home-workspace-nav {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+  .home-workspace-group { display: contents; }
+  .home-workspace-group > .home-workspace-label { display: none; }
+  .home-workspace-nav a { flex-shrink: 0; white-space: nowrap; }
+  .home-workspace-account {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    padding: 12px 0 0;
+  }
+  .home-workspace-account > div { min-width: 0; }
+  .home-workspace-account .text { flex-shrink: 0; }
+  .home-workspace-main > .page { padding: 26px 20px 56px; }
+  .home-workspace-main > .narrow { padding: 28px 0 56px; }
+  .home-desk-navigation { grid-template-columns: 1fr; gap: 14px; }
+}
+@media (max-width: 480px) {
+  .home-workspace-rail { grid-template-columns: minmax(0, 1fr); }
+  .home-workspace-main h1 { font-size: 36px; }
+  .home-workspace-primary { width: 100%; }
+  .home-desk-record, .home-desk-disclosure { padding: 16px; }
 }

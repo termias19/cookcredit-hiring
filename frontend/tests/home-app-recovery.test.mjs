@@ -110,3 +110,33 @@ test('signing in from callback recovery preserves that exact internal destinatio
     {signedOut:true,route:'#sign-in?next=callback'})
   assert.equal(s.find((p,n)=>n.type==='Account').props.next,'callback')
 })
+
+test('authenticated customers get three simple workspace destinations and one arrange action without operator links',async()=>{
+  const calls=[]
+  const s=await app(async path=>{calls.push(path);return {owner:false,operator:false,helper:false,name:'Synthetic customer'}},false,{route:'#visits'})
+  const nav=s.find(p=>p['aria-label']==='Your workspace')
+  const nodes=n=>!n||typeof n!=='object'?[]:[n,...(Array.isArray(n.props?.children)?n.props.children:[n.props?.children]).flatMap(nodes)]
+  assert.deepEqual(nodes(nav).filter(n=>n.type==='a').map(n=>n.props.href),['#visits','#enroll','#help'])
+  assert.equal(s.find(p=>p.href==='#visits').props['aria-current'],'page')
+  assert.equal(s.find(p=>p.className==='button home-workspace-primary').props.href,'#request')
+  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-workspace-main'))
+  s.navigate('#help');await s.settle()
+  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-workspace-main'))
+  assert.equal(s.find(p=>p.href==='#help').props['aria-current'],'page')
+  s.navigate('#enroll');await s.settle()
+  assert.deepEqual(calls,['/me'])
+  assert.equal(s.find(p=>p.href==='#team'),undefined)
+})
+
+test('operations and helper navigation stays permission-scoped while the public landing keeps its original header',async()=>{
+  const operator=await app(async()=>({owner:true,operator:true,helper:false}),false,{route:'#team'})
+  assert.equal(operator.find(p=>p.href==='#team').props['aria-current'],'page')
+  assert.equal(operator.find(p=>p.href==='#availability'),undefined)
+  const helper=await app(async()=>({owner:false,operator:false,helper:true}),false,{route:'#availability'})
+  assert.equal(helper.find(p=>p.href==='#availability').props['aria-current'],'page')
+  assert.ok(helper.find(p=>p.href==='#payout'));assert.equal(helper.find(p=>p.href==='#team'),undefined)
+  const publicHome=await app(async()=>assert.fail('Signed-out Home needs no private data'),false,{signedOut:true,route:'#home'})
+  assert.ok(publicHome.find((p,n)=>n.type==='header'))
+  assert.equal(publicHome.find((p,n)=>n.type==='aside'),undefined)
+  assert.ok(publicHome.find(p=>p.href==='#how'))
+})

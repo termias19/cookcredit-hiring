@@ -150,8 +150,10 @@ export default function App() {
         </a>
       </section>
     );
+  const workspace = Boolean(user?.emailVerified && profile &&
+    !["home", "how", "sign-in"].includes(route.split("?")[0]) && !route.startsWith("account/action"));
   return (
-    <>
+    <div className={workspace ? "home-workspace" : "home-public"}>
       {import.meta.env.DEV && import.meta.env.VITE_HOME_AUTH_EMULATOR_URL && (
         <div className="local-note">
           Local walkthrough · Example accounts and visits. No real messages,
@@ -168,7 +170,36 @@ export default function App() {
       >
         Skip to content
       </a>
-      <header>
+      {workspace ? <aside className="home-workspace-rail" aria-label="Home workspace">
+        <a className="brand" href="#home" aria-label="CookCredit Home">
+          <img src="/assets/cookcredit-mark-orange.svg" alt="" />
+          <span>CookCredit<small>At-home services</small></span>
+        </a>
+        <a className="button home-workspace-primary" href="#request">Arrange a visit</a>
+        <nav className="home-workspace-nav" aria-label="Your workspace">
+          {profile.operator && <div className="home-workspace-group">
+            <p className="home-workspace-label">CookCredit operations</p>
+            <a href="#team" aria-current={route === "team" ? "page" : undefined}>Service desk</a>
+          </div>}
+          <div className="home-workspace-group">
+            <p className="home-workspace-label">Your home</p>
+            <a href="#visits" aria-current={route === "visits" || route.startsWith("visit/") ? "page" : undefined}>My visits</a>
+            <a href="#enroll" aria-current={route === "enroll" ? "page" : undefined}>Service needs</a>
+          </div>
+          {profile.helper && <div className="home-workspace-group">
+            <p className="home-workspace-label">Your work</p>
+            <a href="#availability" aria-current={route === "availability" ? "page" : undefined}>Availability</a>
+            <a href="#payout" aria-current={route === "payout" ? "page" : undefined}>My earnings</a>
+          </div>}
+          <div className="home-workspace-group">
+            <a href="#help" aria-current={route === "help" || route === "callback" ? "page" : undefined}>Help</a>
+          </div>
+        </nav>
+        <div className="home-workspace-account">
+          <div><span className="home-workspace-label">Signed in as</span><p>{profile.name || user.email}</p></div>
+          <button className="text" disabled={sessionBusy} onClick={() => leaveAccount("home")}>Sign out</button>
+        </div>
+      </aside> : <header>
         <a className="brand" href="#home" aria-label="CookCredit Home">
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>
@@ -195,9 +226,9 @@ export default function App() {
             <a href="#sign-in">Sign in</a>
           )}
         </nav>
-      </header>
+      </header>}
       {sessionError && <p className="error" role="alert">{sessionError}</p>}
-      <main id="main" tabIndex="-1" ref={main}>
+      <main id="main" tabIndex="-1" ref={main} className={workspace ? "home-workspace-main" : undefined}>
         <Suspense fallback={<p role="status">Opening…</p>}>{content}</Suspense>
       </main>
       <footer>
@@ -209,7 +240,7 @@ export default function App() {
         <a href="https://cookcredit.com/privacy.html">Privacy</a>
         <a href="https://cookcredit.com/terms.html">Terms</a>
       </footer>
-    </>
+    </div>
   );
 }
 

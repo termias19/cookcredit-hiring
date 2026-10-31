@@ -6,11 +6,29 @@ import OperatingRulesDraft from "./OperatingRulesDraft";
 import Availability from "./Availability";
 import { visitSchedule, visitStatusLabel } from "../visitPresentation";
 
+const deskGroups = [
+  { title: "Daily work", sections: [
+    { id: "enrollments", title: "Customers", owner: true, intro: "See who has joined and the services they need. Open a visit to review its private details." },
+    { id: "visits", title: "Visits", intro: "Review requests, assign helpers and follow each visit through its approvals." },
+    { id: "callbacks", title: "Callbacks", intro: "Follow up with people who have asked CookCredit to call them." },
+    { id: "helpers", title: "Helpers", intro: "Review experience, service permissions and each helper’s own availability." },
+  ] },
+  { title: "Service settings", collapsible: true, sections: [
+    { id: "pricing", title: "Pricing", intro: "Manage prices for new quotes. Existing offers keep their original amounts." },
+    { id: "operating-rules", title: "Hours and scheduling", owner: true, intro: "Review operating hours, notice and travel buffers before activating a saved revision." },
+    { id: "operations", title: "Payment operations", owner: true, intro: "Review provider processing and any operations that need attention." },
+    { id: "audit", title: "Activity log", owner: true, intro: "Review the recorded changes and access activity for CookCredit Home." },
+  ] },
+];
+
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
   // cannot render against another tab's data shape or overwrite its result.
   const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : "visits", data: null });
   const { tab, data } = screen;
+  const groups = deskGroups.map(group => ({ ...group, sections: group.sections.filter(item => !item.owner || profile.owner) }));
+  const currentSection = groups.flatMap(group => group.sections).find(item => item.id === tab) ||
+    { title: "Home service desk", intro: "Choose an available section." };
   const setTab = (tab) => setScreen(current => current.tab === tab ? current : { tab, data: null });
   const setData = (data) =>
     setScreen((current) =>
@@ -119,29 +137,34 @@ export default function Team({ profile }) {
   };
 
   return (
-    <section className="page">
-      <p className="eyebrow">Private CookCredit operations</p>
-      <h1>Home service desk</h1>
-      <nav className="tabs" aria-label="Service desk">
-        {[
-          ...(profile.owner ? ["enrollments"] : []),
-          "visits",
-          "callbacks",
-          "helpers",
-          "pricing",
-          ...(profile.owner ? ["operating-rules", "operations", "audit"] : []),
-        ].map((value) => (
+    <section className="page home-desk">
+      <div className="home-desk-heading">
+        <p className="eyebrow">Home service desk</p>
+        <h1>{currentSection.title}</h1>
+        <p>{currentSection.intro}</p>
+      </div>
+      <nav className="home-desk-navigation" aria-label="Service desk">
+        {groups.map(group => {
+          const links = <div className="home-desk-links">{group.sections.map(item => (
           <button
             disabled={busy}
-            className={tab === value ? "selected" : "text"}
-            aria-current={tab === value ? "page" : undefined}
-            key={value}
-            onClick={() => setTab(value)}
+            className={tab === item.id ? "selected" : ""}
+            aria-current={tab === item.id ? "page" : undefined}
+            aria-controls="home-desk-content"
+            key={item.id}
+            onClick={() => setTab(item.id)}
           >
-            {value === "operating-rules" ? "Operating rules" : label(value)}
+            {item.title}
           </button>
-        ))}
+          ))}</div>;
+          return group.collapsible
+            ? <details className="home-desk-group home-desk-settings" key={group.title} open={group.sections.some(item => item.id === tab)}>
+                <summary>{group.title}</summary>{links}
+              </details>
+            : <div className="home-desk-group" key={group.title}><p className="home-workspace-label">{group.title}</p>{links}</div>;
+        })}
       </nav>
+      <section id="home-desk-content" className="home-desk-content" aria-label={currentSection.title}>
       {notice && (
         <p role="status" className="notice">
           {notice}
@@ -156,18 +179,18 @@ export default function Team({ profile }) {
       {error && !data && <button onClick={() => setVersion(v => v + 1)}>Try again</button>}
 
       {data && tab === "enrollments" && profile.owner && <>
-        <section className="section">
-          <h2>Invite people to enroll</h2>
+        <details className="home-desk-disclosure">
+          <summary>Invite people to enroll</summary>
           <p>Share this link by text or email. People sign in and choose the services they need. Signing up does not book or charge for a visit.</p>
           {profile.environment === "staging" && <p className="quiet">This is currently a restricted staging link. Public invitations follow launch acceptance.</p>}
           <label>Enrollment link<input readOnly value={enrollmentLink.href} /></label>
           <button onClick={copyEnrollment}>Copy enrollment link</button>
-        </section>
+        </details>
         <h2>People enrolled</h2>
         <button className="secondary" disabled={busy} onClick={() => setVersion(v => v + 1)}>Refresh people</button>
         <p>Only the Home owner can open this directory. Account-only entries have signed in but have not saved their service needs.</p>
         {!data.enrollments.length && <p>No enrollments yet.</p>}
-        {data.enrollments.map(row => <article className="section" key={row.id}>
+        {data.enrollments.map(row => <article className="home-desk-record" key={row.id}>
           <h3>{row.name}</h3>
           <p>{row.withdrawn ? "Service interest withdrawn — do not contact about enrollment" : row.service ? serviceNames[row.service] : "Account only — service needs not provided"}</p>
           <p><a href={"mailto:" + row.email}>{row.email}</a>{row.phone && <> · <a href={"tel:" + row.phone}>{row.phone}</a></>}</p>
@@ -209,7 +232,7 @@ export default function Team({ profile }) {
         <>
           {!data.callbacks.length && <p>No open callbacks.</p>}
           {data.callbacks.map((row) => (
-            <article className="section" key={row.id}>
+            <article className="home-desk-record" key={row.id}>
               <h2>{row.name}</h2>
               <p>
                 <a href={"tel:" + row.phone}>{row.phone}</a> ·{" "}
@@ -256,16 +279,18 @@ export default function Team({ profile }) {
         <>
           {!data.helpers.length && <p>No helper applications yet.</p>}
           {data.helpers.map((row) => (
-            <article className="section" key={row.id}>
+            <article className="home-desk-record" key={row.id}>
               <h2>{row.name}</h2>
               <p>{row.bio}</p>
-              <p>Requested services: {row.requestedServices.join(", ")}</p>
+              <p>Requested services: {row.requestedServices.map(value => serviceNames[value] || "Service review").join(", ")}</p>
               {row.enabled && <button type="button" className="secondary" aria-expanded={scheduleHelper === row.id}
                 onClick={() => setScheduleHelper(value => value === row.id ? null : row.id)}>
                 {scheduleHelper === row.id ? "Hide" : "View"} availability for {row.name}
               </button>}
               {scheduleHelper === row.id && <Availability key={row.id} helperId={row.id} />}
               {profile.owner ? (
+                <details className="home-desk-disclosure">
+                <summary>Review helper access</summary>
                 <form onSubmit={(event) => review(event, row.id)}>
                   <label className="check">
                     <input
@@ -297,6 +322,7 @@ export default function Team({ profile }) {
                   </label>
                   <button disabled={busy}>Save reviewed permissions</button>
                 </form>
+                </details>
               ) : (
                 <p>Owner review is required to grant or change access.</p>
               )}
@@ -353,13 +379,13 @@ export default function Team({ profile }) {
             </details>
           )}
           {data.versions.map((card) => (
-            <article className="section" key={card.id}>
-              <h2>
+            <details className="home-desk-disclosure" key={card.id} open={card.id === data.activeId}>
+              <summary>
                 {card.id === data.activeId
                   ? "Active prices"
-                  : "Saved pricing version"}
-              </h2>
-              <p>{new Date(card.createdAt).toLocaleString()}</p>
+                  : "Saved pricing version"}{" "}
+                <span className="quiet">· {new Date(card.createdAt).toLocaleString()}</span>
+              </summary>
               <dl>
                 <div>
                   <dt>Cooking / hour</dt>
@@ -394,7 +420,7 @@ export default function Team({ profile }) {
                     Activate these prices
                   </button>
                 )}
-            </article>
+            </details>
           ))}
         </>
       )}
@@ -408,7 +434,7 @@ export default function Team({ profile }) {
           </p>
           <div className="operation-list">
             {data.operations.map((row) => (
-              <article className="section" key={row.id}>
+              <article className="home-desk-record" key={row.id}>
                 <h3>{label(row.kind)}</h3>
                 <p>
                   {label(row.status)}
@@ -439,6 +465,7 @@ export default function Team({ profile }) {
           ))}
         </ol>
       )}
+      </section>
     </section>
   );
 }

@@ -177,7 +177,7 @@ test('owner visit list uses the same schedule and status labels after an explici
       timeZone:'America/New_York',durationMinutes:150,status:'pending_confirmation'}],nextCursor:null}
   })
   await s.settle()
-  s.find(p=>p.children==='visits').props.onClick();s.render();await s.settle()
+  s.find(p=>p.children==='Visits').props.onClick();s.render();await s.settle()
   assert.deepEqual(calls,['/enrollments','/visits'])
   assert.match(s.text(),/Cooking and cleaning/)
   assert.match(s.text(),/Saturday, November 7, 2026/)
@@ -260,9 +260,27 @@ test('clicking the selected service-desk tab keeps its loaded data and does not 
   const calls=[]
   const s=await screen('Team',async path=>{calls.push(path);return {enrollments:[]}})
   await s.settle();assert.match(s.text(),/People enrolled/)
-  s.find(p=>p.children==='enrollments').props.onClick();s.render();await s.settle()
+  s.find((p,n)=>n.type==='button'&&p.children==='Customers').props.onClick();s.render();await s.settle()
   assert.match(s.text(),/People enrolled/);assert.doesNotMatch(s.text(),/Loading/)
   assert.deepEqual(calls,['/enrollments'])
+})
+
+test('service desk groups settings behind disclosure and loads only the explicitly selected section',async()=>{
+  const calls=[]
+  const s=await screen('Team',async(path,options)=>{calls.push([path,options]);
+    return path==='/enrollments'?{enrollments:[]}:{activeId:null,versions:[]}})
+  await s.settle()
+  assert.ok(s.find(p=>p.children==='Customers'));assert.match(s.text(),/Daily work/)
+  const settings=()=>s.find((p,n)=>n.type==='details'&&p.className==='home-desk-group home-desk-settings')
+  assert.equal(settings().props.open,false)
+  const invite=s.find((p,n)=>n.type==='details'&&p.className==='home-desk-disclosure')
+  assert.equal(invite.props.open,undefined)
+  assert.deepEqual(calls.map(([path])=>path),['/enrollments'])
+  s.find(p=>p.children==='Pricing').props.onClick();s.render();await s.settle()
+  assert.equal(settings().props.open,true)
+  assert.deepEqual(calls.map(([path])=>path),['/enrollments','/pricing'])
+  assert.ok(calls.every(([,options])=>!options))
+  assert.equal(s.find(p=>p.children==='Refresh people'),undefined)
 })
 
 test('operator assignment excludes the customer even if they are an approved helper',async()=>{
@@ -470,7 +488,7 @@ test('incomplete and already active operating drafts cannot be reactivated throu
 test('owner can reload a changed policy after a failed mutation without replaying the mutation',async()=>{
   const calls=[];const rules={states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:60,weeklyHours:[]}
   const s=await screen('Team',async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{version:2,rules,activePolicy:null}})
-  await s.settle();s.find(p=>p.children==='Operating rules').props.onClick();s.render();await s.settle()
+  await s.settle();s.find(p=>p.children==='Hours and scheduling').props.onClick();s.render();await s.settle()
   let editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules)
   await editor.props.run(async()=>{throw new Error('Rules changed in another window')});s.render()
   assert.match(s.text(),/Rules changed in another window/)
