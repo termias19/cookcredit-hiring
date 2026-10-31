@@ -36,7 +36,7 @@ def main():
             # Application identity cannot rewrite audit or idempotency history.
             conn.exec_driver_sql('GRANT USAGE ON SCHEMA public TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT, INSERT, UPDATE ON users, bookings, home_visits, home_helper_permissions TO cookcredit_home_app')
-            conn.exec_driver_sql('GRANT SELECT ON cook_profiles, home_runtime_guard TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT SELECT ON cook_profiles, home_runtime_guard, home_schema_migrations TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT, INSERT ON home_events, home_commands TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT, UPDATE ON home_pricing_head TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT, INSERT ON home_rate_cards, home_quotes, home_quote_helper_acceptances, home_quote_approvals, home_material_reconciliations TO cookcredit_home_app')
