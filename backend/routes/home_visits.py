@@ -293,13 +293,18 @@ def internal_dispatch():
     from services.home_finance_worker import dispatch_events, dispatch_operations
     if not internal_request_authorized(request):
         return jsonify(error='Forbidden'), 403
-    events = dispatch_events(limit=5)
-    operations = dispatch_operations(limit=5)
+    events = dispatch_events(limit=5) if home_stripe.mode() != 'off' else {'paused':True}
+    operations = dispatch_operations(limit=5) if home_stripe.mode() != 'off' else {'paused':True}
     from services.home_mail import convert_events
     from services.account_email import dispatch_account_emails
     notifications=convert_events()
     mail=dispatch_account_emails(limit=5) if os.getenv('HOME_EMAILS_ENABLED')=='1' else {'paused':True}
-    return jsonify(events=events, operations=operations,notifications=notifications,mail=mail)
+    from services.operations import report_queue_health
+    healthy=report_queue_health('email') if os.getenv('HOME_EMAILS_ENABLED')=='1' else None
+    from services.home_dispatch import request_next
+    with db_session() as session:
+        request_next(session)
+    return jsonify(events=events, operations=operations,notifications=notifications,mail=mail,healthy=healthy)
 
 
 @home_bp.get('/operations')

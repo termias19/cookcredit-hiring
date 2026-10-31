@@ -94,8 +94,12 @@ def test_missing_receipt_generation_fails_closed(app):
 
 def test_welcome_outbox_is_deduplicated_and_contains_no_household_data(app,monkeypatch):
     monkeypatch.setenv('HOME_EMAILS_ENABLED','1')
+    from services import home_dispatch
+    wakeups=[]
+    monkeypatch.setattr(home_dispatch,'enqueue',lambda due:wakeups.append(due))
     c=app.test_client()
     for _ in range(3):assert c.get('/api/home/me',headers=headers()).status_code==200
+    assert len(wakeups)==1
     assert home_mail.convert_events()['converted']==1
     assert home_mail.convert_events()['converted']==0
     with database.db_session()as session:

@@ -38,9 +38,10 @@ COPY = {
 
 def ensure_welcome(session,principal):
     statement=insert(HomeEvent).values(id=uuid.uuid4(),actor_id=principal['uid'],action='home_account_created',details={})
-    session.execute(statement.on_conflict_do_nothing(index_elements=[HomeEvent.actor_id,HomeEvent.action],
+    inserted=session.execute(statement.on_conflict_do_nothing(index_elements=[HomeEvent.actor_id,HomeEvent.action],
         index_where=HomeEvent.action=='home_account_created'))
-    session.info['home_dispatch_due']=datetime.now(timezone.utc)
+    if inserted.rowcount:
+        session.info['home_dispatch_due']=datetime.now(timezone.utc)
 
 
 def _recipients(session,event):
