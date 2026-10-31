@@ -41,7 +41,9 @@ export default function App() {
   );
   useEffect(() => {
     let active = true;
-    if (user?.emailVerified)
+    if (user?.emailVerified) {
+      setProfile(null);
+      setProfileError("");
       api("/me")
         .then((value) => {
           if (active) setProfile(value);
@@ -49,6 +51,7 @@ export default function App() {
         .catch((error) => {
           if (active) setProfileError(error.message);
         });
+    }
     return () => {
       active = false;
     };
@@ -92,7 +95,9 @@ export default function App() {
       <section className="narrow">
         <h1>We couldn’t open your account.</h1>
         <p role="alert">{profileError}</p>
-        <button onClick={refresh}>Try again</button>
+        <button onClick={() => refresh().catch(() =>
+          setProfileError("We could not refresh your sign-in. Check your connection and try again."),
+        )}>Try again</button>
       </section>
     );
   else if (route === "enroll") content = <Enrollment profile={profile} onArrange={setVisitService} />;

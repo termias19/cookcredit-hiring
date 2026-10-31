@@ -394,7 +394,7 @@ def test_requote_and_helper_acceptance_do_not_deadlock_on_identity_fk(app, monke
 
 
 @pytest.mark.parametrize('migration', ['001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
-                                       '004_customer_service.sql', '005_helper_calendar.sql'])
+                                       '004_customer_service.sql', '005_helper_calendar.sql', '006_operating_rules_draft.sql'])
 def test_health_refuses_a_database_missing_the_required_home_migration(app, migration):
     client = app.test_client()
     assert client.get('/api/home/health').status_code == 200

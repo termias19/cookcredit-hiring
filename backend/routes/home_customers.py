@@ -16,6 +16,24 @@ from routes.home_visits import home_auth,is_owner,is_operator,principal,json_bod
 customer_bp=Blueprint('home_customers',__name__)
 
 
+@customer_bp.route('/operating-rules',methods=['GET','PUT'])
+@home_auth
+@limiter.limit('12 per minute',key_func=lambda:g.user_id)
+def operating_rules():
+    if not is_owner():
+        visits.fail('forbidden','Only the Home owner can manage operating rules.',403)
+    from services import home_operating_rules as rules
+    with db_session() as session:
+        if request.method=='GET':
+            result=rules.draft(session)
+            customers.audit(session,principal(),'operating_rules_viewed','draft')
+        else:
+            actor,body=principal(),json_body()
+            result=visits.command(session,actor,request.headers.get('Idempotency-Key'),'operating-rules',body,
+                lambda:rules.save(session,actor,body))
+    return jsonify(result)
+
+
 @customer_bp.route('/enrollment',methods=['GET','PUT','DELETE'])
 @home_auth
 @limiter.limit('20 per minute',key_func=lambda:g.user_id)

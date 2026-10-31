@@ -43,6 +43,16 @@ class HomeHelperPermission(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
 
+class HomeOperatingRules(Base):
+    """Owner's draft business settings; does not publish slots or grant access."""
+    __tablename__ = 'home_operating_rules'
+    id = Column(Integer, primary_key=True)
+    version = Column(Integer, nullable=False)
+    settings = Column(JSONB, nullable=False)
+    updated_by = Column(Text, ForeignKey('users.id'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
 class HomeEvent(Base):
     __tablename__ = 'home_events'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { api, dollars, label, money } from "../api";
 import { serviceNames } from "./Enrollment";
+import OperatingRulesDraft from "./OperatingRulesDraft";
 
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
@@ -125,7 +126,7 @@ export default function Team({ profile }) {
           "callbacks",
           "helpers",
           "pricing",
-          ...(profile.owner ? ["operations", "audit"] : []),
+          ...(profile.owner ? ["operating-rules", "operations", "audit"] : []),
         ].map((value) => (
           <button
             className={tab === value ? "selected" : "text"}
@@ -133,7 +134,7 @@ export default function Team({ profile }) {
             key={value}
             onClick={() => setTab(value)}
           >
-            {label(value)}
+            {value === "operating-rules" ? "Operating rules" : label(value)}
           </button>
         ))}
       </nav>
@@ -170,6 +171,8 @@ export default function Team({ profile }) {
         </article>)}
         {data.nextCursor && <button disabled={busy} onClick={loadMore}>More people</button>}
       </>}
+
+      {data && tab === "operating-rules" && profile.owner && <OperatingRulesDraft key={data.version} data={data} run={run} busy={busy} />}
 
       {data && tab === "visits" && (
         <>

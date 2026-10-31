@@ -21,7 +21,7 @@ from services.home_visits import HomeError
 from services.operations import emit_event
 
 REQUIRED_HOME_MIGRATIONS = ('001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
-                            '004_customer_service.sql', '005_helper_calendar.sql')
+                            '004_customer_service.sql', '005_helper_calendar.sql', '006_operating_rules_draft.sql')
 
 
 def check_home_schema(session):

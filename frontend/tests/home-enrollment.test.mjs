@@ -16,12 +16,13 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
-    './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}}}
+    './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
+    './OperatingRulesDraft':{__esModule:true,default:()=>null}}
   const source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
   const context={module:{exports:{}},require:id=>modules[id],URL,window:{scrollTo(){}},
     location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
-    FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}}}
+    FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}}}
   vm.runInNewContext(code,context)
   const Component=context.module.exports.default
   function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
@@ -118,4 +119,21 @@ test('approved unpaid quotes show the payment step; expired quotes explain why c
   const expired=await open();await expired.settle()
   assert.match(expired.text(),/quote has expired/)
   assert.equal(expired.find(payButton),undefined)
+})
+
+test('owner operating draft starts closed and saves versioned rules without an activation request',async()=>{
+  const calls=[]
+  const draft=await screen('OperatingRulesDraft',async(...args)=>{calls.push(args)},true,async()=>{},
+    {data:{version:0,rules:{states:['GA'],timeZone:'America/New_York',noticeHours:24,shortNoticeHours:6,bufferMinutes:null,weeklyHours:[]}},run:task=>task()})
+  assert.match(draft.text(),/All days are currently closed/)
+  assert.match(draft.text(),/does not publish appointment slots/)
+  assert.equal(draft.find(p=>p.name==='notice').props.defaultValue,24)
+  await draft.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
+    states:' ga, GA ',zone:'America/New_York',notice:'24',short:'6',buffer:'',mon:true,'mon-start':'09:00','mon-end':'00:00',
+  }})
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/operating-rules')
+  const body=calls[0][1].body
+  assert.equal(body.version,0);assert.equal(body.rules.bufferMinutes,null)
+  assert.equal(JSON.stringify(body.rules.weeklyHours),JSON.stringify([{day:'mon',startMinute:540,endMinute:1440}]))
+  assert.equal('published' in body,false);assert.equal('enabled' in body,false)
 })
