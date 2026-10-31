@@ -1,27 +1,10 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api } from "../api";
 import HomeErrorBoundary from "../HomeErrorBoundary";
+import { preferences, cleaningTasks as tasks } from "../visitPresentation";
 
 const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
 
-const preferences = [
-  ["allergies", "Food allergies or ingredients to avoid"],
-  ["provided_meal_instructions", "Follow meal instructions I already have"],
-  ["easy_to_chew", "Easy-to-chew meals"],
-  ["label_meals", "Label meals and dates"],
-  ["storage_help", "Help putting meals away"],
-  ["fragrance_free", "Avoid fragranced cleaning products"],
-  ["customer_supplies", "Use my cleaning supplies"],
-  ["phone_help", "Discuss my request by phone first"],
-];
-const tasks = [
-  ["kitchen", "Kitchen surfaces"],
-  ["dishes", "Dishes"],
-  ["bathroom", "Bathroom"],
-  ["floors", "Floors"],
-  ["laundry", "Laundry"],
-  ["general_tidy", "General tidying"],
-];
 function localDay(zone) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: zone,
     year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map(p => [p.type, p.value]));

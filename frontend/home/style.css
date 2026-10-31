@@ -521,6 +521,70 @@ dl .total {
   display: block;
   margin: 8px 0;
 }
+.visit-status {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3c5941;
+  margin: 0 0 8px;
+}
+.visit-detail .lead {
+  margin-top: 12px;
+}
+.visit-detail .columns {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  align-items: start;
+}
+.visit-detail .columns > *,
+.visit-facts dd {
+  min-width: 0;
+}
+.visit-facts > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.6fr);
+  gap: 18px;
+}
+.visit-facts dt {
+  color: var(--muted);
+}
+.visit-facts dd {
+  max-width: none;
+  text-align: left;
+}
+.visit-time {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+.visit-instructions {
+  padding-left: 23px;
+  margin: 0;
+}
+.visit-instructions li {
+  padding: 7px 0 7px 5px;
+}
+.visit-notes {
+  border-left: 2px solid var(--line);
+  padding-left: 20px;
+  margin-top: 28px;
+}
+.visit-notes h3 {
+  font-family: Inter, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.visit-next-steps {
+  padding-left: 24px;
+}
+.visit-next-steps li {
+  padding: 0 0 16px 6px;
+}
+.visit-review p {
+  margin: 8px 0 14px;
+}
+.visit-problem {
+  margin-top: 24px;
+}
 .cancel {
   margin-top: 28px;
   padding-top: 15px;
@@ -664,7 +728,12 @@ summary {
   .narrow {
     margin-top: 40px;
   }
-  .columns {
+  .columns,
+  .visit-detail .columns {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .visit-facts > div {
     grid-template-columns: 1fr;
     gap: 5px;
   }

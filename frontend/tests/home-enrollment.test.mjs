@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises'
 import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
 import {safeHomeRoute} from '../home/navigation.js'
+import * as visitPresentation from '../home/visitPresentation.js'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
 async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default',runtime={}) {
@@ -24,6 +25,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './Availability':{__esModule:true,default:()=>null},
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
+    '../visitPresentation':visitPresentation,
     '../../src/utils/errorReporting':{reportClientError(){}}}
   Object.assign(modules,runtime.modules)
   let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
@@ -289,6 +291,56 @@ test('an unknown provider transfer balance stays explicit and cannot be dismisse
     true,async()=>{},{visit:value,receipts:[]})
   await ops.settle();assert.match(ops.text(),/Reconcile the external transfer change/)
   assert.equal(ops.find(p=>p.children==='Resolve reviewed issue').props.disabled,true)
+})
+
+test('requested visit is a readable unconfirmed plan with shared preference labels and customer next steps',async()=>{
+  const calls=[]
+  const value={id:'visit',version:2,status:'requested',service:'cooking',isCustomer:true,
+    date:'2026-11-07',time:'10:00:00',timeZone:'America/New_York',durationMinutes:120,address:'Synthetic address',
+    instructions:{preferences:['allergies','phone_help','easy_to_chew'],cleaningTasks:[],visitNotes:'Example note'},
+    payment:{status:'unpaid'},quote:null}
+  const view=await screen('Visit',async(path,options)=>{calls.push([path,options]);return path.endsWith('/receipts')?{receipts:[]}:value},
+    false,async()=>{},{id:'visit',profile:{paymentsAvailable:false}})
+  await view.settle()
+  assert.match(view.text(),/Request received/)
+  assert.match(view.text(),/Saturday, November 7, 2026/)
+  assert.match(view.text(),/10:00 AM\s+·\s+Eastern time/)
+  assert.match(view.text(),/Requested date/)
+  assert.match(view.text(),/Food allergies or ingredients to avoid/)
+  assert.match(view.text(),/Discuss my request by phone first/)
+  assert.match(view.text(),/Easy-to-chew meals/)
+  assert.match(view.text(),/No payment due now/)
+  assert.match(view.text(),/No receipts yet/)
+  assert.doesNotMatch(view.text(),/helper fund release|JPEG|PNG|Time arranged/)
+  assert.equal(calls.some(([,options])=>options?.method==='POST'),false)
+  view.find(p=>p.children==='Report a problem').props.onClick();view.render()
+  assert.equal(calls.some(([,options])=>options?.method==='POST'),false)
+  assert.match(view.text(),/pauses visit progress/)
+  view.find(p=>p.children==='Keep this visit unchanged').props.onClick();view.render()
+  assert.equal(view.find(p=>p.children==='Send for review'),undefined)
+  view.find(p=>p.children==='Report a problem').props.onClick();view.render()
+  await view.find(p=>p.children==='Send for review').props.onClick();view.render()
+  const writes=calls.filter(([,options])=>options?.method==='POST')
+  assert.equal(writes.length,1)
+  assert.equal(writes[0][0],'/visits/visit/actions')
+  assert.equal(writes[0][1].body.action,'report_issue')
+  assert.equal(writes[0][1].body.version,2)
+})
+
+test('an open visit issue stays visible and blocked while customer copy omits ordinary helper payout details',async()=>{
+  const value={id:'visit',version:3,status:'requested',service:'cooking',isCustomer:true,issueOpen:true,time:'10:00',
+    instructions:{preferences:[],cleaningTasks:[]},payment:{status:'unpaid'},quote:null}
+  const api=async path=>path.endsWith('/receipts')?{receipts:[]}:value
+  const customer=await screen('Visit',api,false,async()=>{},{id:'visit',profile:{paymentsAvailable:false}})
+  await customer.settle()
+  assert.match(customer.text(),/CookCredit review is needed/)
+  assert.match(customer.text(),/An issue has been reported/)
+  assert.equal(customer.find(p=>p.children==='Report a problem'),undefined)
+  assert.doesNotMatch(customer.text(),/helper transfers remain on hold|helper fund release/)
+  assert.ok(customer.find(p=>p.href==='#help'))
+  const helper=await screen('Visit',api,false,async()=>{},{id:'visit',profile:{operator:true,paymentsAvailable:false}})
+  await helper.settle()
+  assert.match(helper.text(),/New helper transfers remain on hold/)
 })
 
 test('owner operating draft starts closed and saves versioned rules without an activation request',async()=>{

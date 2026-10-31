@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api, downloadReceipt, label, money, stripeLocation } from "../api";
+import { instructionLabel, visitSchedule, visitStatusLabel } from "../visitPresentation";
 const OperatorVisit = lazy(() => import("./operator/OperatorVisit"));
 
 const serviceNames = {
@@ -23,7 +24,8 @@ export default function Visit({ id, profile }) {
     [receipts, setReceipts] = useState([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [cancel, setCancel] = useState(false);
+    [cancel, setCancel] = useState(false),
+    [report, setReport] = useState(false);
   const [notice, setNotice] = useState(""),
     timer = useRef(null),
     mounted = useRef(true);
@@ -36,6 +38,9 @@ export default function Visit({ id, profile }) {
     mounted.current = true;
     setVisit(null);
     setError("");
+    setReceipts([]);
+    setReport(false);
+    setCancel(false);
     load().catch((e) => setError(e.message));
     api(`/visits/${id}/receipts`)
       .then((v) => setReceipts(v.receipts))
@@ -144,12 +149,18 @@ export default function Visit({ id, profile }) {
     closed = visit.status === "cancelled",
     held = visit.issueOpen;
   const expiredBeforePayment = visit.status === "accepted" && q?.expired;
+  const schedule = visitSchedule(visit.date, visit.time, visit.timeZone);
+  const requestedTime = ["requested", "accepted"].includes(visit.status);
+  const fundsVisible = visit.isAssignedHelper || profile.operator;
+  const transferReview = p.helperFunds === "provider_review_required" || p.helperTransferBalanceKnown === false;
+  const readyReceipts = receipts.filter(r => r.status === "ready");
+  const canUpload = !closed && (visit.isAssignedHelper || profile.operator) && q;
   return (
-    <section className="page">
+    <section className="page visit-detail">
       <a href="#visits">← My visits</a>
       <div className="heading">
         <div>
-          <p className="eyebrow">{label(visit.status)}</p>
+          <p className="visit-status">{visitStatusLabel(visit.status)}</p>
           <h1>{serviceNames[visit.service]} visit</h1>
         </div>
         <button
@@ -176,10 +187,12 @@ export default function Visit({ id, profile }) {
           ? "The full quote is approved. Payment must be confirmed before this visit is arranged."
           : statusCopy[visit.status]}</p>
       {held && (
-        <p className="notice" role="status">
-          An issue is open for CookCredit review. New helper transfers are on
-          hold.
-        </p>
+        <div className="notice visit-review" role="status">
+          <strong>CookCredit review is needed</strong>
+          <p>An issue has been reported for this visit. CookCredit needs to review it before the visit can move forward.</p>
+          {fundsVisible && <p>New helper transfers remain on hold.</p>}
+          <a href="#help">Contact us about this visit</a>
+        </div>
       )}
       {error && (
         <p role="alert" className="error">
@@ -194,17 +207,17 @@ export default function Visit({ id, profile }) {
       <div className="columns">
         <div>
           <section className="section">
-            <h2>The plan</h2>
-            <dl>
+            <h2>Your visit details</h2>
+            <dl className="visit-facts">
               <div>
-                <dt>Date and time</dt>
+                <dt>{requestedTime ? "Requested date" : "Visit date"}</dt>
                 <dd>
-                  {visit.date} at {visit.time.slice(0, 5)}
-                  <small>{visit.timeZone}</small>
+                  {schedule.date}
+                  <span className="visit-time">{schedule.time} · {schedule.zone}</span>
                 </dd>
               </div>
               <div>
-                <dt>Time arranged</dt>
+                <dt>Duration</dt>
                 <dd>
                   {visit.durationMinutes / 60}{" "}
                   {visit.durationMinutes === 60 ? "hour" : "hours"}
@@ -225,18 +238,20 @@ export default function Visit({ id, profile }) {
                 <dd>{visit.helperName || "Not assigned yet"}</dd>
               </div>
             </dl>
-            <h3>Your instructions</h3>
-            <ul>
-              {visit.instructions.preferences.map((v) => (
-                <li key={v}>{label(v)}</li>
-              ))}
-              {visit.instructions.cleaningTasks.map((v) => (
-                <li key={v}>{label(v)}</li>
-              ))}
-            </ul>
-            <p className="preserve">
-              {visit.instructions.visitNotes || "No additional instructions."}
-            </p>
+          </section>
+          <section className="section">
+            <h2>Your preferences</h2>
+            {visit.instructions.preferences.length ? <ul className="visit-instructions">
+              {visit.instructions.preferences.map(v => <li key={v}>{instructionLabel(v)}</li>)}
+            </ul> : <p>No preferences added.</p>}
+            {visit.instructions.cleaningTasks.length > 0 && <>
+              <h3>Cleaning requested</h3>
+              <ul className="visit-instructions">{visit.instructions.cleaningTasks.map(v => <li key={v}>{instructionLabel(v)}</li>)}</ul>
+            </>}
+            {visit.instructions.visitNotes && <div className="visit-notes">
+              <h3>Your note to CookCredit</h3>
+              <p className="preserve">{visit.instructions.visitNotes}</p>
+            </div>}
           </section>
           {q && (
             <section className="section">
@@ -375,13 +390,10 @@ export default function Visit({ id, profile }) {
           )}
           <section className="section">
             <h2>Receipts</h2>
-            <p>
-              Purchase evidence is private to this visit. JPEG and PNG photos
-              only, up to 8 MB each.
-            </p>
-            {receipts
-              .filter((r) => r.status === "ready")
-              .map((r) => (
+            <p>{readyReceipts.length
+              ? "Receipts for this visit are available below. They are shared only with people authorized to view this visit."
+              : "No receipts yet. Receipts for approved purchases will appear here."}</p>
+            {readyReceipts.map((r) => (
                 <button
                   key={r.id}
                   className="text receipt"
@@ -404,8 +416,9 @@ export default function Visit({ id, profile }) {
                   {new Date(r.createdAt).toLocaleDateString()}
                 </button>
               ))}
-            {!closed && (visit.isAssignedHelper || profile.operator) && q && (
+            {canUpload && (
               <form onSubmit={upload}>
+                <p className="quiet">Upload a JPEG or PNG photo, up to 8 MB. Receipts stay private to this visit.</p>
                 <label>
                   Receipt photo
                   <input
@@ -424,10 +437,17 @@ export default function Visit({ id, profile }) {
         </div>
         <aside>
           <section className="section">
-            <h2>Payment and next steps</h2>
-            <p>
-              Status: <strong>{label(p.status)}</strong>
-            </p>
+            <h2>What happens next</h2>
+            {visit.status === "requested" && <ol className="visit-next-steps">
+              <li>CookCredit reviews your request and helper availability.</li>
+              <li>You receive a full quote to review before payment.</li>
+              <li>Your visit is confirmed after approval and payment.</li>
+            </ol>}
+            <h3>Payment</h3>
+            <p>{p.status === "unpaid"
+              ? q?.approved ? "Quote approved. No payment has been received."
+                : q ? "Not paid. Review your quote before continuing." : "No payment due now. Your full quote comes first."
+              : <>Status: <strong>{label(p.status)}</strong></>}</p>
             {p.amountCents !== undefined && (
               <p>
                 Approved maximum: {money(p.amountCents)}
@@ -435,16 +455,16 @@ export default function Visit({ id, profile }) {
                 Verified refunds: {money(p.refundedCents)}
               </p>
             )}
-            <p>
-              {p.helperFunds === "provider_review_required" || p.helperTransferBalanceKnown === false
+            {(fundsVisible || transferReview) && <p>
+              {transferReview
                 ? "The helper transfer balance needs review with Stripe. No additional release will be made until it is reconciled."
                 : p.helperFunds === "transferred_to_stripe"
                 ? "Helper funds transferred to Stripe. This does not confirm a bank payout."
                 : p.helperFunds === "held_after_reversal"
                   ? "Helper funds returned for review."
                   : "A helper fund release has not been confirmed."}
-            </p>
-            {p.externalTransferAdjustment && <p className="quiet">A transfer was adjusted outside CookCredit.
+            </p>}
+            {(fundsVisible || transferReview) && p.externalTransferAdjustment && <p className="quiet">A transfer was adjusted outside CookCredit.
               Refresh checks Stripe for reconciliation. Verified recovery does not automatically release helper funds again.</p>}
             {!closed && !held && (
               <div className="stack">
@@ -480,13 +500,16 @@ export default function Visit({ id, profile }) {
               </div>
             )}
             {!closed && !held && (
-              <button
-                className="text"
-                disabled={busy}
-                onClick={() => action("report_issue")}
-              >
-                Report an issue for CookCredit review
-              </button>
+              <div className="visit-problem">
+                <button className="text" disabled={busy} onClick={() => setReport(!report)} aria-expanded={report}>
+                  Report a problem
+                </button>
+                {report && <div>
+                  <p>Send this visit for CookCredit review? This pauses visit progress and any new helper transfers until the issue is reviewed.</p>
+                  <button className="secondary" disabled={busy} onClick={() => action("report_issue")}>Send for review</button>
+                  <button className="text" disabled={busy} onClick={() => setReport(false)}>Keep this visit unchanged</button>
+                </div>}
+              </div>
             )}
             {!closed &&
               (visit.isCustomer || profile.operator) &&
