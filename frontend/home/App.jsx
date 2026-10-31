@@ -7,7 +7,8 @@ import Account from "./screens/Account";
 import RequestVisit from "./screens/RequestVisit";
 import Visit from "./screens/Visit";
 import SavedDetails from "./screens/SavedDetails";
-import Enrollment from "./screens/Enrollment";
+import Enrollment, { serviceNames } from "./screens/Enrollment";
+import { visitSchedule, visitStatusLabel } from "./visitPresentation";
 import "./style.css";
 
 const Team = lazy(() => import("./screens/Team"));
@@ -479,26 +480,24 @@ function Visits() {
           No visits yet. Start with a request and we’ll help arrange the rest.
         </p>
       )}
-      {state.rows.map((row) => (
+      {state.rows.map((row) => {
+        const schedule = visitSchedule(row.date, row.time, row.timeZone);
+        return (
         <a className="visit-row" key={row.id} href={"#visit/" + row.id}>
           <div>
-            <h2>
-              {row.service === "both"
-                ? "Cooking & cleaning"
-                : row.service === "cooking"
-                  ? "Cooking"
-                  : "Cleaning"}
-            </h2>
-            <p>
-              {row.date} · {row.time.slice(0, 5)} · {row.durationMinutes / 60}{" "}
-              {row.durationMinutes === 60 ? "hour" : "hours"}
+            <h2>{serviceNames[row.service] || "Home visit"}</h2>
+            <p className="visit-schedule">
+              <span>{schedule.date}</span>
+              <span>{schedule.time} · {schedule.zone} · {row.durationMinutes / 60}{" "}
+                {row.durationMinutes === 60 ? "hour" : "hours"}</span>
             </p>
           </div>
-          <span>
-            {row.status.replaceAll("_", " ")} <span aria-hidden="true">→</span>
+          <span className="visit-state">
+            {visitStatusLabel(row.status)} <span aria-hidden="true">→</span>
           </span>
         </a>
-      ))}
+        );
+      })}
       {state.loading ? (
         <p role="status">Loading visits…</p>
       ) : (

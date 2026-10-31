@@ -26,8 +26,10 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
     '../visitPresentation':visitPresentation,
+    './visitPresentation':visitPresentation,
     '../../src/utils/errorReporting':{reportClientError(){}}}
   Object.assign(modules,runtime.modules)
+  modules['./screens/Enrollment'] ||= modules['./Enrollment']
   let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   if(exportName!=='default')source+='\nexport { '+exportName+' };'
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
@@ -148,6 +150,41 @@ test('My visits retries its failed read only on request and restores the scoped 
   assert.ok(s.find(p=>p.href==='#visit/own-visit'))
   assert.doesNotMatch(s.text(),/Visits temporarily unavailable/)
   assert.equal(calls.length,2)
+})
+
+test('customer visit rows reuse readable service schedules and statuses without extra requests or raw record identifiers',async()=>{
+  const calls=[]
+  const rows=[{id:'private-visit-id',service:'both',date:'2026-11-07',time:'13:30:00',timeZone:'America/New_York',durationMinutes:150,status:'pending_confirmation'},
+    {id:'another-private-id',service:'new_service',date:null,time:null,timeZone:null,durationMinutes:60,status:'future_state'}]
+  const s=await screen('../App',async path=>{calls.push(path);return {visits:rows,nextCursor:null}},false,async()=>{},{},'Visits')
+  await s.settle()
+  assert.deepEqual(calls,['/visits'])
+  assert.match(s.text(),/Cooking and cleaning/)
+  assert.match(s.text(),/Saturday, November 7, 2026/)
+  assert.match(s.text(),/1:30 PM/);assert.match(s.text(),/Eastern time/)
+  assert.match(s.text(),/Ready for your review/)
+  assert.match(s.text(),/Date to be reviewed/);assert.match(s.text(),/Time to be reviewed/)
+  assert.match(s.text(),/Home visit/);assert.match(s.text(),/Visit update/)
+  assert.doesNotMatch(s.text(),/private-visit-id|another-private-id|pending_confirmation|future_state|new_service|2026-11-07|13:30:00|Invalid Date/)
+  assert.ok(s.find(p=>p.href==='#visit/private-visit-id'))
+})
+
+test('owner visit list uses the same schedule and status labels after an explicit tab change',async()=>{
+  const calls=[]
+  const s=await screen('Team',async path=>{
+    calls.push(path)
+    return path==='/enrollments'?{enrollments:[]}:{visits:[{id:'private-team-visit',service:'both',date:'2026-11-07',time:'13:30:00',
+      timeZone:'America/New_York',durationMinutes:150,status:'pending_confirmation'}],nextCursor:null}
+  })
+  await s.settle()
+  s.find(p=>p.children==='visits').props.onClick();s.render();await s.settle()
+  assert.deepEqual(calls,['/enrollments','/visits'])
+  assert.match(s.text(),/Cooking and cleaning/)
+  assert.match(s.text(),/Saturday, November 7, 2026/)
+  assert.match(s.text(),/1:30 PM/);assert.match(s.text(),/Eastern time/)
+  assert.match(s.text(),/Ready for your review/)
+  assert.doesNotMatch(s.text(),/private-team-visit|pending_confirmation|2026-11-07|13:30:00/)
+  assert.ok(s.find(p=>p.href==='#visit/private-team-visit'))
 })
 
 test('an acknowledged visit does not redirect or save household details after leaving the request screen',async()=>{

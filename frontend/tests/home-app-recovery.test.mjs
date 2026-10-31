@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises'
 import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
 import {safeHomeRoute} from '../home/navigation.js'
+import * as visitPresentation from '../home/visitPresentation.js'
 
 // Execute the real account gate. A successful retry must actually release it.
 async function app(api,refreshFailure=false,options={}) {
@@ -21,7 +22,7 @@ async function app(api,refreshFailure=false,options={}) {
     'firebase/auth':{onAuthStateChanged(_auth,callback){authChanged=callback;callback(user);return ()=>{}},signOut:async()=>{
       if(options.signOutFailure)throw new Error('offline');auth.currentUser=null;authChanged(null)
     }},
-    '../src/firebase':{auth},'./api':{api},'./navigation':{safeHomeRoute}}
+    '../src/firebase':{auth},'./api':{api},'./navigation':{safeHomeRoute},'./visitPresentation':visitPresentation}
   for(const name of ['Account','RequestVisit','Visit','SavedDetails','Enrollment'])modules['./screens/'+name]={__esModule:true,default:name}
   const source=await readFile(new URL('../home/App.jsx',import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,'App.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',define:{

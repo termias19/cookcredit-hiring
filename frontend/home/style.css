@@ -464,13 +464,25 @@ legend {
   margin: 0 0 5px;
   font-size: 31px;
 }
+.visit-row > div {
+  min-width: 0;
+}
+.visit-row .visit-schedule {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
 .visit-row p {
   font-size: 16px;
   margin: 0;
 }
 .visit-row > span {
   font-size: 16px;
-  white-space: nowrap;
+}
+.visit-row .visit-state {
+  max-width: 14rem;
+  flex-shrink: 0;
+  text-align: right;
 }
 .columns {
   display: grid;
@@ -754,6 +766,10 @@ summary {
     align-items: flex-start;
     flex-direction: column;
     gap: 14px;
+  }
+  .visit-row .visit-state {
+    max-width: none;
+    text-align: left;
   }
   .actions {
     align-items: stretch;

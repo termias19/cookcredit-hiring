@@ -4,6 +4,7 @@ import { api, dollars, label, money } from "../api";
 import { serviceNames } from "./Enrollment";
 import OperatingRulesDraft from "./OperatingRulesDraft";
 import Availability from "./Availability";
+import { visitSchedule, visitStatusLabel } from "../visitPresentation";
 
 export default function Team({ profile }) {
   // Change the tab and its payload together. A response from a previous tab
@@ -181,17 +182,21 @@ export default function Team({ profile }) {
       {data && tab === "visits" && (
         <>
           {data.visits.length === 0 && <p>No visit requests yet.</p>}
-          {data.visits.map((v) => (
+          {data.visits.map((v) => {
+            const schedule = visitSchedule(v.date, v.time, v.timeZone);
+            return (
             <a className="visit-row" href={"#visit/" + v.id} key={v.id}>
               <div>
-                <h2>{label(v.service)}</h2>
-                <p>
-                  {v.date} · {v.time.slice(0, 5)}
+                <h2>{serviceNames[v.service] || "Home visit"}</h2>
+                <p className="visit-schedule">
+                  <span>{schedule.date}</span>
+                  <span>{schedule.time} · {schedule.zone}</span>
                 </p>
               </div>
-              <span>{label(v.status)} →</span>
+              <span className="visit-state">{visitStatusLabel(v.status)} <span aria-hidden="true">→</span></span>
             </a>
-          ))}
+            );
+          })}
           {data.nextCursor && (
             <button disabled={busy} onClick={loadMore}>
               More requests
