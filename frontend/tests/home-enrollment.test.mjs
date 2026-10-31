@@ -72,6 +72,15 @@ test('only the owner screen requests the enrollment directory and failed copy st
   assert.equal(owner.find(p=>p.readOnly).props.value,'https://home.example.test/#enroll')
 })
 
+test('clicking the selected service-desk tab keeps its loaded data and does not strand the page on Loading',async()=>{
+  const calls=[]
+  const s=await screen('Team',async path=>{calls.push(path);return {enrollments:[]}})
+  await s.settle();assert.match(s.text(),/People enrolled/)
+  s.find(p=>p.children==='enrollments').props.onClick();s.render();await s.settle()
+  assert.match(s.text(),/People enrolled/);assert.doesNotMatch(s.text(),/Loading/)
+  assert.deepEqual(calls,['/enrollments'])
+})
+
 test('operator assignment excludes the customer even if they are an approved helper',async()=>{
   const s=await screen('operator/OperatorVisit',async path=>path==='/helpers'?{helpers:[
     {id:'customer',name:'Customer cannot be their own helper',enabled:true,cooking:true,cleaning:true},

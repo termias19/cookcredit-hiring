@@ -10,7 +10,7 @@ export default function Team({ profile }) {
   // cannot render against another tab's data shape or overwrite its result.
   const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : "visits", data: null });
   const { tab, data } = screen;
-  const setTab = (tab) => setScreen({ tab, data: null });
+  const setTab = (tab) => setScreen(current => current.tab === tab ? current : { tab, data: null });
   const setData = (data) =>
     setScreen((current) =>
       current.tab === tab ? { ...current, data } : current,
