@@ -214,6 +214,42 @@ def helper_allowed(session, uid, service, *, lock=False):
     return True
 
 
+def require_free_calendar(session, helper_id, booking, visit):
+    """Check an elapsed-time interval while holding the existing helper lock.
+
+    Call only after helper_allowed(..., lock=True). Its permission row already
+    serializes assignments for this helper across API workers; no second lock,
+    calendar store or process-local availability cache is needed. The query
+    never locks another visit, so two operators cannot form a visit-lock cycle.
+    """
+    start = datetime.combine(booking['scheduled_date'], booking['scheduled_start_time'],
+                             ZoneInfo(visit.time_zone)).astimezone(timezone.utc)
+    end = start + timedelta(minutes=int(booking['estimated_duration'] * 60))
+    # Date bounds keep the indexed candidate set small. Two days on either
+    # side cover IANA timezone offsets and Home's maximum eight-hour visit.
+    safe_isolation, conflict = session.execute(text("""
+        SELECT current_setting('transaction_isolation') = 'read committed', EXISTS (
+        SELECT 1 FROM bookings b
+        JOIN home_visits v ON v.booking_id = b.id
+        WHERE b.cook_id = :helper AND b.id <> :booking
+          AND b.status NOT IN ('cancelled', 'completed')
+          AND b.scheduled_date BETWEEN :first_day AND :last_day
+          AND ((b.scheduled_date + b.scheduled_start_time) AT TIME ZONE v.time_zone) < :ends
+          AND (((b.scheduled_date + b.scheduled_start_time) AT TIME ZONE v.time_zone)
+               + b.estimated_duration * INTERVAL '1 hour') > :starts
+        LIMIT 1)
+        """), {'helper': helper_id, 'booking': booking['id'], 'starts': start, 'ends': end,
+                'first_day': start.date() - timedelta(days=2), 'last_day': end.date() + timedelta(days=2)}).one()
+    if not safe_isolation:
+        # The query after a waited helper lock must see the last committed
+        # assignment. Reject a database configured to retain an older snapshot.
+        fail('calendar_unavailable', 'Scheduling is temporarily unavailable. Please contact CookCredit.', 503)
+    if conflict:
+        # Never identify the other household, address or visit in this error.
+        fail('helper_schedule_conflict',
+             'This helper already has a visit at that time. Choose another helper or contact CookCredit.', 409)
+
+
 def load_visit(session, booking_id, uid, operator, *, lock=False):
     try:
         booking_id = uuid.UUID(str(booking_id))
@@ -287,12 +323,14 @@ def transition(session, principal, booking_id, body, operator):
             fail('review_required', 'Review the visit before assigning a helper.', 409)
         if not helper_allowed(session, helper, visit.service, lock=True):
             fail('helper_ineligible', 'This helper is not approved for the requested services.', 409)
+        require_free_calendar(session, helper, booking, visit)
         changes['cook_id'] = helper
     elif action == 'accept':
         if booking['cook_id'] != uid or not helper_allowed(session, uid, visit.service, lock=True):
             fail('forbidden', 'Only the assigned helper can accept this visit.', 403)
         if status != 'requested' or not visit.reviewed_at or visit.helper_accepted_at:
             fail('invalid_transition', 'This visit cannot be accepted now.', 409)
+        require_free_calendar(session, uid, booking, visit)
         changes['status'], visit.helper_accepted_at = 'accepted', now
     elif action == 'cancel':
         if uid != booking['eater_id'] and not operator:

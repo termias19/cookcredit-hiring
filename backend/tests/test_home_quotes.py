@@ -393,11 +393,13 @@ def test_requote_and_helper_acceptance_do_not_deadlock_on_identity_fk(app, monke
         assert a.result() == 201 and b.result() == 409
 
 
-def test_health_refuses_a_database_missing_the_required_home_migration(app):
+@pytest.mark.parametrize('migration', ['001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
+                                       '004_customer_service.sql', '005_helper_calendar.sql'])
+def test_health_refuses_a_database_missing_the_required_home_migration(app, migration):
     client = app.test_client()
     assert client.get('/api/home/health').status_code == 200
     with database.db_session() as session:
-        session.execute(text("DELETE FROM home_schema_migrations WHERE filename='004_customer_service.sql'"))
+        session.execute(text('DELETE FROM home_schema_migrations WHERE filename=:migration'), {'migration': migration})
     response = client.get('/api/home/health')
     assert response.status_code == 503 and response.json['code'] == 'temporary_error'
     assert response.headers['X-Request-ID'] == response.json['reference']
@@ -421,7 +423,9 @@ def test_completed_visit_issue_can_hold_and_resume_receipt_review(app):
 def test_quote_cannot_be_attached_to_another_households_visit(app):
     client = app.test_client()
     row, card = fully_approved(client)
-    another = create(client, uid='another-customer').json
+    # Distinct households at non-overlapping times; this test exercises quote
+    # ownership, not bypassing the helper calendar guard.
+    another = create(client, {**payload(), 'time': '13:00'}, uid='another-customer').json
     another = change(client, another, 'review').json
     another = change(client, another, 'assign', helperId='helper').json
     another = change(client, another, 'accept', uid='helper').json

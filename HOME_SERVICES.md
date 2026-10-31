@@ -8,16 +8,31 @@ disabled by default and is not a public booking or payment service yet.
 
 | Stage | Deliverable | Acceptance gate |
 | --- | --- | --- |
-| 1. Architecture and contract | Reuse Firebase identity and the existing User, CookProfile and Booking models in a separate Home runtime/database. Contract below. | Hiring never registers Home routes or runs Home migrations. |
-| 2. Durable requests | Customer ownership, explicit visit consent, operator review, service-specific helper permissions, assignment, acceptance, cancellation, issue hold, audit and idempotency. Implemented in this branch. | PostgreSQL/API tests pass, including concurrent retries, stale writes, permission revocation and rollback. Provisioned runtime permissions still need staging acceptance. |
-| 3. Quotes | Implemented: owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and manual receipt-review accounting. All money uses integer cents. | Tax requires explicit operator review. Actual receipt attachments and deployed SQL grants remain staging/interface gates. Preview figures are examples, not published rates. |
-| 4. Payments and settlement | Implemented core: namespaced hosted checkout, signed durable inbox, canonical payment verification, leased financial operations, refunds, issue holds and transfer/reversal handling. | Deterministic provider/real SQL lifecycle passes. Actual live provider acceptance remains unpaid; checkout/refund/transfer/Connect have separate explicit gates. A return URL cannot mark paid. |
-| 5. Connected interfaces | Implemented first pass in `frontend/home`: customer request/quote/receipts, helper work and Stripe account setup, owner pricing/review and private service desk. Separate Vite output; no Hiring PWA changes. | Browser task completion and staging acceptance remain open. Account creation reuses Firebase; self-submitted helper experience never grants access. |
-| 6. Communications and accessibility | Implemented event pointers into the existing AccountEmail outbox/Google transport, private receipt photos, explicit household opt-in, family permission and no-account callback intake. Large controls and semantic forms. | Actual public-sender delivery, expired links and keyboard/screen-reader task completion remain open. No SMS provider exists; no SMS delivery is promised. Marketing is not enabled by service consent. |
-| 7. Release | Separate staging deployment, security/retention review, bounded capacity test and production rollback plan. | Customer, helper and operator complete the real journey; payment acceptance requires a separate authorized handoff. |
+| 1. Accounts and email | Reuse Firebase identity and the existing core models in an independent Home runtime/database. Existing verification/reset outbox and branded transport. | Fresh deployed signup, actual email receipt, verification and correct return; resend, expired links and reset recovery. Hiring never registers Home routes or runs Home migrations. |
+| 2. Enrollment and owner oversight | Service needs, optional phone, contact consent, withdrawal and bounded owner-only directory use existing records. | A separate customer saves needs and the owner retrieves them. Operators/helpers cannot read the directory. Existing-account acceptance is separate from fresh signup. |
+| 3. Operating rules and scheduling | Existing request/assignment state machine rejects overlapping helper assignments and acceptance, including concurrent operators. | Owner-approved service area/hours, lead time, durations, travel buffers, availability and blocked dates need connected controls. Instant booking also needs server-calculated slots, reservation expiry and explicit helper authorization for agreed standard work/rates. |
+| 4. Pricing and approval | Owner-controlled immutable rate cards, itemized capped offers, helper/customer approvals and receipt-review accounting. All money uses integer cents. | Approve actual rates/material allowances and tax handling. Prove quote integrity in the deployed journey. Preview figures are examples, not published rates; approval never marks paid. |
+| 5. Deployed customer/helper journey | Customer request/quote/receipts, helper work and owner service desk use one backend and separate Vite output. Consent, ownership, issue holds and immutable history remain enforced. | Separate participants complete deployed request, assignment and approvals; check cancellation, access revocation, receipt upload and confirmed file save. Verify post-payment completion after stage 7. Local fake-provider results do not close this gate. |
+| 6. Phones, accessibility and notifications | Existing AccountEmail outbox, private receipt photos, household opt-in, family permission and callback intake. Large controls and semantic forms. | Actual phone-browser and keyboard task completion, safe back/refresh, interrupted requests and received visit notices. Manual link sharing and service consent do not enable marketing or automatic SMS. |
+| 7. Controlled payment acceptance | Namespaced checkout, signed durable inbox, canonical payment verification, leased operations, refunds, issue holds and transfer/reversal handling. Separate default-off financial gates. | Separately authorized provider acceptance and receipt/reconciliation. Keep payments unpaid until that handoff. Checkout return, confirmed payment, refund, transfer and bank payout are distinct outcomes. |
+| 8. Production release | Separate staging, scoped runtime/database/storage grants, bounded capacity, monitoring and rollback. | Close required deployed acceptance against the exact release; approve operating rules, provision production without test data, connect the main-site entry and run a final production smoke test. |
 
 Advance through these gates in order. Local API tests do not establish email
 delivery, a working public interface, actual settlement or production readiness.
+
+### Calendar integrity
+
+Assignment and helper acceptance use the existing helper-permission row lock and
+a fresh READ COMMITTED query over active bookings in the dedicated Home database.
+An overlap returns 409 without changing the visit or exposing another household.
+Adjacent visits are allowed; travel buffers require explicit operating rules.
+Cancelled/completed visits release their time. Stored timezones and elapsed
+durations determine overlap, including visits crossing midnight. Unsupported
+transaction isolation fails closed. Readiness requires the complete Home migration
+history, including the bounded active-helper calendar index.
+
+This safeguard does not advertise available slots or provide instant confirmation.
+Until stage 3 is complete, customers request a preferred time for CookCredit review.
 
 ## Reuse and data boundaries
 

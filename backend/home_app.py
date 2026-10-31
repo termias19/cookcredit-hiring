@@ -20,14 +20,15 @@ from services import database
 from services.home_visits import HomeError
 from services.operations import emit_event
 
-REQUIRED_HOME_MIGRATION = '004_customer_service.sql'
+REQUIRED_HOME_MIGRATIONS = ('001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
+                            '004_customer_service.sql', '005_helper_calendar.sql')
 
 
 def check_home_schema(session):
     # A live database connection alone does not mean the new API can serve it.
     session.execute(text("SELECT product FROM home_runtime_guard WHERE product = 'home-services' "
-        "AND EXISTS (SELECT 1 FROM home_schema_migrations WHERE filename=:migration)"),
-        {'migration': REQUIRED_HOME_MIGRATION}).scalar_one()
+        "AND (SELECT count(*) FROM home_schema_migrations WHERE filename=ANY(:migrations))=:count"),
+        {'migrations': list(REQUIRED_HOME_MIGRATIONS), 'count': len(REQUIRED_HOME_MIGRATIONS)}).scalar_one()
 
 
 def database_url():
