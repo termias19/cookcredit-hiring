@@ -6,6 +6,7 @@ then finalize metadata. Failed/uncertain uploads remain attributable and retryab
 import hashlib
 import io
 import uuid
+from threading import BoundedSemaphore
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select, func
@@ -16,9 +17,22 @@ from services.firebase import get_storage_bucket
 from services import home_visits as visits, home_quotes as quotes
 
 MAX_BYTES = 8 * 1024 * 1024
+# A compressed 20 MP PNG can expand into several pixel buffers. Bound this
+# separately from request threads, before reserving a row or holding SQL.
+_decode_gate = BoundedSemaphore(1)
 
 
 def normalize(data):
+    if not _decode_gate.acquire(blocking=False):
+        visits.fail('receipt_processing_busy',
+                    'Another receipt is being prepared. Please wait two seconds and retry.', 429)
+    try:
+        return _normalize(data)
+    finally:
+        _decode_gate.release()
+
+
+def _normalize(data):
     if not data or len(data) > MAX_BYTES or not data.startswith((b'\xff\xd8\xff', b'\x89PNG\r\n\x1a\n')):
         visits.fail('invalid_receipt', 'Choose a JPEG or PNG receipt photo no larger than 8 MB.')
     try:
@@ -27,10 +41,11 @@ def normalize(data):
                 raise ValueError()
             check.verify()
         with Image.open(io.BytesIO(data)) as source:
-            image = ImageOps.exif_transpose(source)
+            ImageOps.exif_transpose(source, in_place=True)
+            image = source
             image.thumbnail((3200,3200), Image.Resampling.LANCZOS)
             if image.mode in ('RGBA','LA'):
-                rgba = image.convert('RGBA')
+                rgba = image if image.mode == 'RGBA' else image.convert('RGBA')
                 canvas = Image.new('RGB', rgba.size, 'white')
                 canvas.paste(rgba, mask=rgba.getchannel('A'))
                 image = canvas

@@ -76,6 +76,7 @@ export default function App() {
   )
     content = (
       <Account
+        key={route}
         user={user}
         refresh={refresh}
         next={route === "sign-in" ? "visits" : route}

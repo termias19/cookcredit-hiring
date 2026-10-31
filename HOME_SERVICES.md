@@ -366,6 +366,12 @@ as well. The current upstream `deepmerge` chain belongs to the existing Workbox
 build tooling, not the shipped Home browser bundle. Do not force npm's proposed
 downgrade to an obsolete PWA plugin to hide that finding.
 
+Receipt pixel processing is limited to one decoder per worker. A busy decoder
+returns 429 with a two-second Retry-After before reserving any SQL or storage
+record; retrying the same upload reference remains safe. Keep the Home worker
+count within its configured memory budget instead of increasing workers to hide
+pixel-buffer pressure.
+
 Home reuses the existing bounded browser error reporter and confirmed file-save
 utility. Diagnostics contain categories and references, never account action
 codes, visit URLs, household details or raw error text. A download fallback is

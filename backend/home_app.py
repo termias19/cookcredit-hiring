@@ -77,7 +77,10 @@ def create_app(config=None):
 
     @app.errorhandler(HomeError)
     def home_error(error):
-        return jsonify(error=error.message, code=error.code), error.status
+        response = jsonify(error=error.message, code=error.code)
+        if error.code == 'receipt_processing_busy':
+            response.headers['Retry-After'] = '2'
+        return response, error.status
 
     @app.errorhandler(Exception)
     def unexpected(error):

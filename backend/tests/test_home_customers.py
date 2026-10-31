@@ -156,3 +156,52 @@ def test_home_diagnostics_use_the_existing_bounded_private_report_contract(app,m
     assert c.post(path,json=report,headers={'Origin':'https://evil.example'}).status_code==403
     assert c.post(path,json={**report,'message':'private household detail'},headers={'Origin':'https://home.example.test'}).status_code==400
     assert c.post(path,json=report,headers={'Origin':'https://home.example.test'}).status_code==204
+
+
+def test_busy_receipt_decoder_retries_same_reference_without_extra_rows(app):
+    c=app.test_client();row,_=fully_approved(c);key=uuid.uuid4().hex
+    assert home_receipts._decode_gate.acquire(blocking=False)
+    try:
+        response=upload(c,row,key=key)
+        assert response.status_code==429 and response.json['code']=='receipt_processing_busy'
+        assert response.headers['Retry-After']=='2'
+        with database.db_session() as session:assert session.query(HomeReceipt).count()==0
+    finally:home_receipts._decode_gate.release()
+    first=upload(c,row,key=key)
+    assert first.status_code==201
+    assert upload(c,row,key=key).json==first.json
+    with database.db_session() as session:assert session.query(HomeReceipt).count()==1
+
+
+def test_receipt_pixel_work_is_bounded_and_validation_failure_releases_capacity(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from services.home_visits import HomeError
+    with pytest.raises(HomeError):home_receipts.normalize(b'')
+    entered,release=Event(),Event()
+    def decode(data):
+        entered.set()
+        assert release.wait(3)
+        return data
+    monkeypatch.setattr(home_receipts,'_normalize',decode)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        first=pool.submit(home_receipts.normalize,b'synthetic')
+        try:
+            assert entered.wait(2)
+            rest=[pool.submit(home_receipts.normalize,b'synthetic')for _ in range(3)]
+            for future in rest:
+                with pytest.raises(HomeError) as busy:future.result(timeout=2)
+                assert busy.value.code=='receipt_processing_busy' and busy.value.status==429
+        finally:release.set()
+        assert first.result(timeout=2)==b'synthetic'
+    assert home_receipts.normalize(b'synthetic')==b'synthetic'
+
+
+@pytest.mark.parametrize('mode', ['RGB','RGBA','LA'])
+def test_receipt_in_place_orientation_keeps_pixels_readable_and_drops_metadata(mode):
+    image=Image.new(mode,(60,40),'white')
+    exif=Image.Exif();exif[274]=6;exif[270]='SYNTHETIC_PRIVATE_METADATA'
+    stream=io.BytesIO();image.save(stream,'JPEG' if mode=='RGB' else 'PNG',exif=exif)
+    with Image.open(io.BytesIO(home_receipts.normalize(stream.getvalue()))) as result:
+        assert result.size==(40,60) and result.mode=='RGB'
+        assert not result.getexif()
