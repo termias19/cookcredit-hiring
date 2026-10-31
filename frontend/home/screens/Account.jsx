@@ -44,6 +44,11 @@ const friendly = (error) =>
     : error.message);
 
 export default function Account({ user, refresh, next }) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [mode, setMode] = useState("signin"),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -59,6 +64,8 @@ export default function Account({ user, refresh, next }) {
     safeHomeRoute(params.get("next") || readReturnRoute() || next),
   );
   const continueTo = () => {
+    // A completed popup must not pull someone back after they chose another page.
+    if (!mounted.current) return;
     const target = returnRoute.current;
     forgetReturnRoute();
     location.hash = target;
@@ -98,6 +105,7 @@ export default function Account({ user, refresh, next }) {
             return { ...value, id: value.userId };
           },
         });
+        if (!mounted.current) return;
         history.replaceState(null, "", location.pathname + "#sign-in");
         if (result.profile) continueTo();
         else
@@ -154,6 +162,7 @@ export default function Account({ user, refresh, next }) {
       if (resetCode) {
         await confirmPasswordReset(auth, resetCode, f.get("password"));
         setResetCode(null);
+        if (!mounted.current) return;
         history.replaceState(null, "", location.pathname + "#sign-in");
         setNotice("Your password is updated. Sign in to continue.");
         return;
