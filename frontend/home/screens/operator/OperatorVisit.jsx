@@ -127,6 +127,7 @@ export default function OperatorVisit({ visit, receipts, run, busy, action }) {
                 {helpers
                   .filter(
                     (h) =>
+                      h.id !== visit.customerId &&
                       h.enabled &&
                       (visit.service === "cleaning" || h.cooking) &&
                       (visit.service === "cooking" || h.cleaning),

@@ -104,6 +104,8 @@ def detail(booking_id):
         result['helperName']=helper_name
         result['isCustomer']=booking['eater_id']==g.user_id
         result['isAssignedHelper']=booking['cook_id']==g.user_id
+        if is_operator():
+            result['customerId']=booking['eater_id']
         if is_operator() or (booking['cook_id']==g.user_id and booking['eater_id']!=g.user_id):
             audit(session,principal(),'visit_viewed',booking['id'])
     return jsonify(result)

@@ -5,7 +5,7 @@ import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
-async function screen(name,api,owner=true,clipboard=async()=>{}) {
+async function screen(name,api,owner=true,clipboard=async()=>{},props={}) {
   const states=[],effects=[];let index,tree,queued
   const react={useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
@@ -14,6 +14,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{}) {
   const jsx=(type,props)=>({type,props})
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}}}
   const source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
@@ -22,7 +23,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{}) {
     FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}}}
   vm.runInNewContext(code,context)
   const Component=context.module.exports.default
-  function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'}});queued.forEach(fn=>fn())}
+  function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
   function nodes(node){if(node==null||node===false)return [];if(Array.isArray(node))return node.flatMap(nodes);
     return [node,...nodes(node.props?.children)]}
   const text=()=>nodes(tree).filter(n=>typeof n==='string'||typeof n==='number').join(' ')
@@ -65,4 +66,15 @@ test('only the owner screen requests the enrollment directory and failed copy st
   await owner.find(p=>p.children==='Copy enrollment link').props.onClick();owner.render()
   assert.match(owner.text(),/link was not copied/)
   assert.equal(owner.find(p=>p.readOnly).props.value,'https://home.example.test/#enroll')
+})
+
+test('operator assignment excludes the customer even if they are an approved helper',async()=>{
+  const s=await screen('operator/OperatorVisit',async path=>path==='/helpers'?{helpers:[
+    {id:'customer',name:'Customer cannot be their own helper',enabled:true,cooking:true,cleaning:true},
+    {id:'other',name:'Eligible helper',enabled:true,cooking:true,cleaning:true},
+  ]}:path==='/pricing'?{}:{events:[]},true,async()=>{},
+    {visit:{id:'visit',version:1,status:'requested',reviewed:true,customerId:'customer',service:'cooking'},receipts:[]})
+  await s.settle()
+  assert.doesNotMatch(s.text(),/Customer cannot be their own helper/)
+  assert.match(s.text(),/Eligible helper/)
 })

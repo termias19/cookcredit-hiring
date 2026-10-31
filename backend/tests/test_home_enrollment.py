@@ -93,3 +93,11 @@ def test_superseded_assignment_never_notifies_a_different_helper(app):
         # A change to no helper also makes the historic assignment obsolete.
         session.execute(update(Booking).where(Booking.id==uuid.UUID(row['id'])).values(cook_id=None))
         assert home_mail._recipients(session,event)==[]
+
+
+def test_operator_can_filter_customer_from_helper_choices_without_exposing_id_to_other_roles(app):
+    c=app.test_client();row,_=fully_approved(c)
+    path='/api/home/visits/'+row['id']
+    assert c.get(path,headers=headers('owner')).json['customerId']=='customer'
+    for uid in ('customer','helper'):
+        assert 'customerId' not in c.get(path,headers=headers(uid)).json
