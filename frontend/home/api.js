@@ -111,6 +111,7 @@ export async function downloadReceipt(visit, id) {
       }
     },
     {
+      downloadOnly: true,
       suggestedName: `cookcredit-receipt-${id}.jpg`,
       types: [
         { description: "Receipt photo", accept: { "image/jpeg": [".jpg"] } },

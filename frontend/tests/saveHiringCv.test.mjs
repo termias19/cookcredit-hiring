@@ -47,3 +47,15 @@ test('activity JSON shares the confirmed-save path with explicit file metadata',
   assert.equal(await saveHiringFile(async () => 'activity', options, browser, {}, {}), 'saved')
   assert.equal(written, 'activity')
 })
+
+test('an explicit receipt download never opens a save picker or claims a confirmed write', async () => {
+  const order = [], link = {click: () => order.push('download'), remove: () => order.push('remove')}
+  const browser = {showSaveFilePicker: () => assert.fail('unrequested save dialog'), setTimeout: () => {}}
+  const doc = {createElement: () => link, body: {appendChild: () => order.push('append')}}
+  const urls = {createObjectURL: () => 'blob:private-receipt'}
+  const result = await saveHiringFile(async () => {order.push('authorized fetch'); return 'jpeg'},
+    {downloadOnly: true, suggestedName: 'cookcredit-receipt.jpg'}, browser, doc, urls)
+  assert.equal(result, 'requested')
+  assert.equal(link.download, 'cookcredit-receipt.jpg')
+  assert.deepEqual(order, ['authorized fetch', 'append', 'download', 'remove'])
+})

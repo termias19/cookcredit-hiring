@@ -383,6 +383,7 @@ export default function Visit({ id, profile }) {
                   disabled={busy}
                   onClick={() =>
                     run(async () => {
+                      setNotice("Preparing your receipt download…");
                       const result = await downloadReceipt(id, r.id);
                       setNotice(
                         result === "saved"
