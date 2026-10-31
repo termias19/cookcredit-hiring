@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../src/firebase";
 import { api } from "./api";
+import { safeHomeRoute } from "./navigation";
 import Account from "./screens/Account";
 import RequestVisit from "./screens/RequestVisit";
 import Visit from "./screens/Visit";
@@ -15,7 +16,11 @@ const Availability = lazy(() => import("./screens/Availability"));
 const navigate = (route) => {
   location.hash = route;
 };
-const readRoute = () => location.hash.slice(1) || "home";
+const publicRoutes = ["home", "how", "help", "callback"];
+const readRoute = () => {
+  const route = location.hash.slice(1) || "home", page = route.split("?")[0];
+  return publicRoutes.includes(page) ? page : route;
+};
 
 export default function App() {
   const [route, setRoute] = useState(readRoute),
@@ -23,6 +28,8 @@ export default function App() {
     [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(""),
     [sessionVersion, setSessionVersion] = useState(0);
+  const [profileErrorCode, setProfileErrorCode] = useState("");
+  const [sessionBusy, setSessionBusy] = useState(false), [sessionError, setSessionError] = useState("");
   const [visitService, setVisitService] = useState(null);
   const main = useRef();
   useEffect(() => {
@@ -36,6 +43,7 @@ export default function App() {
         setUser(next);
         setProfile(null);
         setProfileError("");
+        setProfileErrorCode("");
         setVisitService(null);
       }),
     [],
@@ -45,12 +53,13 @@ export default function App() {
     if (user?.emailVerified) {
       setProfile(null);
       setProfileError("");
+      setProfileErrorCode("");
       api("/me")
         .then((value) => {
           if (active) setProfile(value);
         })
         .catch((error) => {
-          if (active) setProfileError(error.message);
+          if (active) { setProfileError(error.message); setProfileErrorCode(error.code || ""); }
         });
     }
     return () => {
@@ -67,18 +76,31 @@ export default function App() {
     setUser(auth.currentUser);
     setSessionVersion((v) => v + 1);
   };
+  const leaveAccount = async (target) => {
+    setSessionBusy(true); setSessionError("");
+    try {
+      await signOut(auth);
+      navigate(target);
+    } catch {
+      setSessionError("We could not sign you out. Check your connection and try again.");
+    } finally {
+      setSessionBusy(false);
+    }
+  };
   const requiresAccount =
-    !["home", "how", "help", "callback"].includes(route.split("?")[0]) &&
+    !publicRoutes.includes(route) &&
     !route.startsWith("account/action");
   let content;
   if (user === undefined && requiresAccount)
     content = <p role="status">Checking your account…</p>;
   else if (route === "home") content = <Home />;
   else if (route === "how") content = <How />;
-  else if (route === "help" || route === "callback") content = <Help />;
+  else if (route === "help" || route === "callback") content = <Help key={route} user={user} profile={profile}
+    accessErrorCode={profileErrorCode} busySwitching={sessionBusy} returnTo={route}
+    switchAccount={() => leaveAccount("sign-in?next=" + encodeURIComponent(route))} />;
   else if (
     route.startsWith("account/action") ||
-    route === "sign-in" ||
+    route.split("?")[0] === "sign-in" ||
     (requiresAccount && (!user || !user.emailVerified))
   )
     content = (
@@ -86,7 +108,7 @@ export default function App() {
         key={route}
         user={user}
         refresh={refresh}
-        next={route === "sign-in" ? "visits" : route}
+        next={route.split("?")[0] === "sign-in" ? safeHomeRoute(new URLSearchParams(route.split("?")[1] || "").get("next")) : route}
       />
     );
   else if (user === undefined || (!profile && !profileError))
@@ -94,11 +116,17 @@ export default function App() {
   else if (profileError)
     content = (
       <section className="narrow">
-        <h1>We couldn’t open your account.</h1>
-        <p role="alert">{profileError}</p>
+        <h1>{profileErrorCode === "private_acceptance" ? "This account can’t open Home yet." : "We couldn’t open your account."}</h1>
+        {user?.email && <p>Signed in as <strong>{user.email}</strong>.</p>}
+        {profileErrorCode === "private_acceptance" && <p>Your sign-in worked. Access to this Home environment is currently limited to enabled accounts.</p>}
+        <p role="alert">{profileErrorCode === "private_acceptance" ? "Contact CookCredit to request access, or choose a different account." : profileError}</p>
         <button onClick={() => refresh().catch(() =>
           setProfileError("We could not refresh your sign-in. Check your connection and try again."),
         )}>Try again</button>
+        <button className="secondary" disabled={sessionBusy} onClick={() => leaveAccount(route)}>
+          Use a different account
+        </button>
+        <p><a href="#help">Get help</a> or <a href="#home">return to Home</a>.</p>
       </section>
     );
   else if (route === "enroll") content = <Enrollment profile={profile} onArrange={setVisitService} />;
@@ -156,10 +184,8 @@ export default function App() {
           {user ? (
             <button
               className="text"
-              onClick={async () => {
-                await signOut(auth);
-                navigate("home");
-              }}
+              disabled={sessionBusy}
+              onClick={() => leaveAccount("home")}
             >
               Sign out
             </button>
@@ -168,6 +194,7 @@ export default function App() {
           )}
         </nav>
       </header>
+      {sessionError && <p className="error" role="alert">{sessionError}</p>}
       <main id="main" tabIndex="-1" ref={main}>
         <Suspense fallback={<p role="status">Opening…</p>}>{content}</Suspense>
       </main>
@@ -286,11 +313,14 @@ function How() {
     </section>
   );
 }
-function Help() {
+function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = false, returnTo = "callback" }) {
   const [sent, setSent] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     id = useRef(crypto.randomUUID());
+  const [denial, setDenial] = useState("");
+  const restricted = accessErrorCode === "private_acceptance" || denial === "private_acceptance";
+  const needsSignIn = denial === "sign_in_required" || (profile?.environment === "staging" && !user?.emailVerified);
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -311,7 +341,9 @@ function Help() {
       });
       setSent(true);
     } catch (e) {
-      setError(e.message);
+      if (e.code === "private_acceptance") setDenial("private_acceptance");
+      else if (e.status === 401 || e.code === "email_unverified") setDenial("sign_in_required");
+      else setError(e.message);
     } finally {
       setBusy(false);
     }
@@ -324,7 +356,19 @@ function Help() {
         Request a call to discuss a visit or get help with your account. This
         service is not for emergencies.
       </p>
-      {sent ? (
+      {restricted || needsSignIn ? (
+        <div className="notice" role="status">
+          <h2>{restricted ? "This account cannot send a callback request here yet." : "Sign in before sending this callback request."}</h2>
+          <p>{restricted
+            ? "Your sign-in worked, but this private Home site only accepts enabled accounts. No callback request was submitted."
+            : "This Home site requires a verified account for callback requests. No callback request was submitted."}</p>
+          {user?.email && <p>Signed in as <strong>{user.email}</strong>.</p>}
+          {restricted && user && switchAccount
+            ? <button disabled={busySwitching} onClick={switchAccount}>Use a different account</button>
+            : <a className="button" href={"#sign-in?next=" + encodeURIComponent(safeHomeRoute(returnTo))}>Sign in to continue</a>}
+          <p>You can also email CookCredit using the address below.</p>
+        </div>
+      ) : sent ? (
         <div role="status" className="notice">
           <h2>Your callback request is received.</h2>
           <p>
@@ -332,6 +376,9 @@ function Help() {
             not been booked.
           </p>
           <a href="#home">Return to Home</a>
+          <button className="secondary" onClick={() => {
+            id.current = crypto.randomUUID(); setSent(false); setError("");
+          }}>Request another call</button>
         </div>
       ) : (
         <form onSubmit={submit}>

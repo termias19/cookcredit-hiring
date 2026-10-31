@@ -9,6 +9,8 @@ test("Home email continuation accepts only internal task routes", () => {
     "helping",
     "payout",
     "availability",
+    "help",
+    "callback",
     "visit/11111111-1111-4111-8111-111111111111",
   ])
     assert.equal(safeHomeRoute(route), route);

@@ -18,6 +18,19 @@ def photo():
     image.save(stream,'JPEG',exif=exif);return stream.getvalue()
 
 
+def test_help_and_callback_account_returns_allow_only_exact_internal_routes():
+    # No database, identity or mail delivery is needed to validate continuation.
+    from services.home_customers import return_route
+    from services.home_visits import HomeError
+    for target in ('help', 'callback'):
+        assert return_route(target) == target
+    for target in ('https://evil.example', '//evil.example', 'callback?next=team',
+                   'help/../team', 'callback#team', {'route': 'callback'}):
+        with pytest.raises(HomeError) as rejected:
+            return_route(target)
+        assert rejected.value.code == 'invalid_return'
+
+
 def upload(client,row,uid='helper',key=None,data=None):
     return client.post(f"/api/home/visits/{row['id']}/receipts",headers=headers(uid,key or uuid.uuid4().hex),
         data={'file':(io.BytesIO(data or photo()),'receipt.jpg')})

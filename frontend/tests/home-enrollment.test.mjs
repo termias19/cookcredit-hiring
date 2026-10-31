@@ -3,32 +3,35 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
+import {safeHomeRoute} from '../home/navigation.js'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
-async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default') {
+async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default',runtime={}) {
   const states=[],effects=[];let index,tree,queued
   const react={lazy:()=> 'lazy-screen',Suspense:'suspense',useState(initial){const slot=index++;if(!(slot in states))states[slot]=initial;
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
     useRef(initial){const slot=index++;return states[slot]||=( {current:initial} )},
     useEffect(fn,deps){const slot=index++,old=effects[slot];if(!old||deps.some((d,i)=>d!==old.deps[i]))
       queued.push(()=>{old?.cleanup?.();effects[slot]={deps,cleanup:fn()}})}}
-  const jsx=(type,props)=>({type,props})
+  const jsx=(type,props,key)=>({type,props,key})
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    './navigation':{safeHomeRoute},
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
     './OperatingRulesDraft':{__esModule:true,default:()=>null},
     './Availability':{__esModule:true,default:()=>null},
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../../src/utils/errorReporting':{reportClientError(){}}}
+  Object.assign(modules,runtime.modules)
   let source=await readFile(new URL(`../home/screens/${name}.jsx`,import.meta.url),'utf8')
   if(exportName!=='default')source+='\nexport { '+exportName+' };'
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
-  const context={module:{exports:{}},require:id=>modules[id],URL,window:{scrollTo(){}},
+  const context={module:{exports:{}},require:id=>modules[id],URL,URLSearchParams,crypto,window:{scrollTo(){}},
     location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
     FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}
-      getAll(key){return Array.isArray(this.values[key])?this.values[key]:[]}}}
+      getAll(key){return Array.isArray(this.values[key])?this.values[key]:[]}},...runtime.context}
   vm.runInNewContext(code,context)
   const Component=context.module.exports[exportName]
   function render(){index=0;queued=[];tree=Component({profile:{owner,email:'member@example.test'},...props});queued.forEach(fn=>fn())}
@@ -48,6 +51,62 @@ test('enrollment load errors retry instead of displaying empty or successful enr
   assert.equal(s.find((p,n)=>n.type==='form'),undefined)
   fail=false;s.find(p=>p.children==='Try again').props.onClick();s.render();await s.settle()
   assert.ok(s.find((p,n)=>n.type==='form'))
+})
+
+test('Google account recovery opens the chooser in the click and returns to the callback instead of another dashboard',async()=>{
+  const events=[];let provider
+  class GoogleAuthProvider { setCustomParameters(value){this.parameters=value} }
+  const s=await screen('Account',async()=>assert.fail('Popup click must not need an extra API'),false,async()=>{},
+    {user:null,next:'callback',refresh:async()=>{events.push('refresh')}},'default',{
+      modules:{'firebase/auth':{GoogleAuthProvider,signInWithPopup(_auth,value){provider=value;events.push('popup');return Promise.resolve()}},
+        '../../src/firebase':{auth:{}},'../../src/utils/verifyAccountLink':{},
+        '../navigation':{safeHomeRoute,readReturnRoute:()=>null,rememberReturnRoute(){},forgetReturnRoute(){events.push('forget')}}},
+      context:{location:{hash:'#sign-in?next=callback'}},
+    })
+  s.find(p=>p.className==='google').props.onClick()
+  assert.deepEqual(events,['popup'])
+  assert.equal(JSON.stringify(provider.parameters),JSON.stringify({prompt:'select_account'}))
+  await s.settle()
+  assert.equal(s.location.hash,'callback')
+  assert.deepEqual(events,['popup','refresh','forget'])
+})
+
+test('known private Home denial offers account recovery and contact without another doomed callback submission',async()=>{
+  let switched=0
+  const s=await screen('../App',async()=>assert.fail('Blocked callback must not submit'),false,async()=>{},
+    {user:{email:'fixture@example.test',emailVerified:true},accessErrorCode:'private_acceptance',
+      returnTo:'callback',switchAccount:()=>{switched++}},'Help')
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  assert.match(s.text(),/sign-in worked/);assert.match(s.text(),/No callback request was submitted/)
+  assert.match(s.text(),/fixture@example.test/)
+  assert.ok(s.find(p=>p.href==='mailto:connectwithus@cookcredit.com'))
+  s.find(p=>p.children==='Use a different account').props.onClick();assert.equal(switched,1)
+})
+
+test('anonymous public callbacks stay available while an actual authentication rejection offers a return to Help',async()=>{
+  let calls=0
+  const s=await screen('../App',async()=>{calls++;throw Object.assign(new Error('Missing authorization'),{status:401})},
+    false,async()=>{},{user:null,returnTo:'callback'},'Help')
+  const form=s.find((p,n)=>n.type==='form');assert.ok(form)
+  await form.props.onSubmit({preventDefault(){},currentTarget:{name:'Example',phone:'4045550123',time:'Afternoon',consent:'on'}})
+  s.render()
+  assert.match(s.text(),/Sign in before sending/);assert.doesNotMatch(s.text(),/callback request is received/)
+  assert.ok(s.find(p=>p.href==='#sign-in?next=callback'))
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  s.render();assert.equal(calls,1)
+})
+
+test('enabled staging customers may submit and a second callback is only created after an explicit new request',async()=>{
+  const calls=[]
+  const s=await screen('../App',async(path,options)=>{calls.push([path,options]);return {received:true}},false,async()=>{},
+    {user:{emailVerified:true},profile:{environment:'staging'},returnTo:'help'},'Help')
+  const event={preventDefault(){},currentTarget:{name:'Example',phone:'4045550123',time:'Afternoon',consent:'on'}}
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  assert.match(s.text(),/callback request is received/);assert.match(s.text(),/visit has not been booked/)
+  s.find(p=>p.children==='Request another call').props.onClick();s.render()
+  assert.equal(calls.length,1);assert.ok(s.find((p,n)=>n.type==='form'))
+  await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
+  assert.equal(calls.length,2);assert.notEqual(calls[0][1].body.requestId,calls[1][1].body.requestId)
 })
 
 test('My visits retries its failed read only on request and restores the scoped list',async()=>{

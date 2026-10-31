@@ -148,7 +148,9 @@ export default function Account({ user, refresh, next }) {
   };
   const google = () => {
     // Start the popup in the actual click handler, before any await or App Check.
-    const pending = signInWithPopup(auth, new GoogleAuthProvider());
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const pending = signInWithPopup(auth, provider);
     run(async () => {
       await pending;
       await refresh();
