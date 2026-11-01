@@ -56,6 +56,7 @@ export default function Account({ user, refresh, next, enrollmentOnly = false })
   const [cooldown, setCooldown] = useState(0),
     [resetCode, setResetCode] = useState(null),
     started = useRef(null);
+  const [showPassword, setShowPassword] = useState(false);
   const action = location.hash.startsWith("#account/action"),
     params = new URLSearchParams(location.hash.split("?")[1] || "");
   const code = params.get("oobCode"),
@@ -283,11 +284,13 @@ export default function Account({ user, refresh, next, enrollmentOnly = false })
           </label>
         )}
         {(resetCode || mode !== "reset") && (
+          <>
           <label>
             Password
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               name="password"
+              id="home-account-password"
               autoComplete={
                 resetCode || mode === "signup"
                   ? "new-password"
@@ -301,6 +304,9 @@ export default function Account({ user, refresh, next, enrollmentOnly = false })
               <small>At least 10 characters.</small>
             )}
           </label>
+          <button type="button" className="text" aria-controls="home-account-password" aria-pressed={showPassword}
+            onClick={() => setShowPassword(value => !value)}>{showPassword ? "Hide password" : "Show password"}</button>
+          </>
         )}
         {error && (
           <p className="error" role="alert">

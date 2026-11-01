@@ -4,6 +4,7 @@ import { api, dollars, label, money } from "../api";
 import { serviceNames } from "./Enrollment";
 import OperatingRulesDraft from "./OperatingRulesDraft";
 import Availability from "./Availability";
+import Outreach from "./Outreach";
 import { visitSchedule, visitStatusLabel } from "../visitPresentation";
 
 const deskGroups = [
@@ -11,6 +12,7 @@ const deskGroups = [
     { id: "enrollments", title: "Customers", owner: true, intro: "See who has joined and the services they need." },
     { id: "visits", title: "Visits", intro: "Review requests, assign helpers and follow each visit through its approvals." },
     { id: "callbacks", title: "Callbacks", intro: "Follow up with people who have asked CookCredit to call them." },
+    { id: "outreach", title: "Outreach", owner: true, intro: "Prepare clear food invitations for email, text and print." },
     { id: "helpers", title: "Helpers", intro: "Review experience, service permissions and each helper’s own availability." },
   ] },
   { title: "Service settings", collapsible: true, sections: [
@@ -29,7 +31,7 @@ export default function Team({ profile }) {
   const groups = deskGroups.map(group => ({ ...group,
     title: group.title,
     sections: group.sections.filter(item => (!item.owner || profile.owner) &&
-      (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit"].includes(item.id) || (profile.owner && ["pricing", "operations"].includes(item.id)))),
+      (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit", "outreach"].includes(item.id) || (profile.owner && ["pricing", "operations"].includes(item.id)))),
   })).filter(group => group.sections.length);
   const currentSection = groups.flatMap(group => group.sections).find(item => item.id === tab) ||
     { title: "Home service desk", intro: "Choose an available section." };
@@ -181,6 +183,11 @@ export default function Team({ profile }) {
       )}
       {!data && !error && <p role="status">Loading…</p>}
       {error && !data && <button onClick={() => setVersion(v => v + 1)}>Try again</button>}
+
+      {data && tab === "outreach" && profile.owner && <Outreach data={data} profile={profile} reload={async (cursor) => {
+        const value = await api("/outreach" + (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""));
+        setData(cursor ? { ...value, drafts: [...data.drafts, ...value.drafts] } : value);
+      }} />}
 
       {data && tab === "enrollments" && profile.owner && <>
         <details className="home-desk-disclosure">

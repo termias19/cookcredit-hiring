@@ -22,7 +22,7 @@ from services.operations import emit_event
 
 REQUIRED_HOME_MIGRATIONS = ('001_booking_workflow.sql', '002_quotes.sql', '003_payments.sql',
                             '004_customer_service.sql', '005_helper_calendar.sql', '006_operating_rules_draft.sql',
-                            '007_helper_availability.sql', '008_active_operating_policy.sql')
+                            '007_helper_availability.sql', '008_active_operating_policy.sql', '009_outreach.sql')
 
 # This is a product-scope gate, not an authorization replacement. Every allowed
 # endpoint retains its existing identity, owner/operator, App Check, origin,
@@ -38,6 +38,9 @@ ENROLLMENT_ONLY_ENDPOINTS = {
     'home_customers.callbacks': frozenset(('GET',)),
     'home_customers.callback_update': frozenset(('POST',)),
     'home_customers.access_audit': frozenset(('GET',)),
+    'home_outreach.drafts': frozenset(('GET',)),
+    'home_outreach.save': frozenset(('POST','PUT')),
+    'home_outreach.email_preview': frozenset(('POST',)),
     'observability.client_error': frozenset(('POST',)),
     'home_visits.internal_dispatch': frozenset(('POST',)),
     'home_visits.stripe_webhook': frozenset(('POST',)),
@@ -202,6 +205,8 @@ def create_app(config=None):
         app.register_blueprint(home_bp, url_prefix='/api/home')
         from routes.home_customers import customer_bp
         app.register_blueprint(customer_bp,url_prefix='/api/home')
+        from routes.home_outreach import outreach_bp
+        app.register_blueprint(outreach_bp,url_prefix='/api/home')
         from routes.observability import observability_bp
         app.register_blueprint(observability_bp,url_prefix='/api/home/observability')
     return app

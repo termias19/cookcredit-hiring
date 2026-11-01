@@ -740,3 +740,32 @@ Private staging and localhost keep their own overview for isolated walkthroughs.
 Help and the legacy callback alias share one form for a given signed-in identity,
 so following a Help link does not erase entries or replace an unknown request's
 retry ID. An account change resets that form's private contact details.
+
+## Owner outreach
+
+The Home service desk has an owner-only **Outreach** section for food invitations
+by email, manually shared text/WhatsApp messages and printed flyers. It uses the
+existing campaign column definitions in a separate `home_campaigns` table in the
+Home database, plus Home's existing identity, audit and idempotency controls.
+The runtime may select/insert/update drafts, but cannot delete them or rewrite
+audit history. Trash is recoverable. No Hiring campaign routes or delivery code
+are changed, and no second queue, SMTP transport, analytics pixel or SMS provider
+is created. The database only permits draft/trashed states; these records cannot
+schedule delivery. Preparing or saving does not enqueue or send email.
+
+Only contact people who permitted the outreach; enrollment follow-up consent is
+not advertising consent. Manual email preparation requires a valid postal address
+for its email footer, identifies the advertisement and provides a customer-service
+unsubscribe reply/link. The owner must maintain permissions and promptly honor
+opt-out replies. A registered business mailbox can avoid using a home address.
+The address stays in the owner's private draft and exported email, never in the
+public overview or public source. Select the existing verified customer-service
+Send-as alias in the email client before sending. Automatic mailing, contact
+imports and automated SMS are not enabled by this workspace.
+
+Original AI-generated food assets have no embedded names or credits. Asset
+provenance is recorded alongside them. They illustrate possible meals, not a
+completed service or medical/allergy suitability. Campaign text is plain text,
+HTML exports escape it, and buttons accept only fixed internal destinations:
+service needs, callback help or the signed-in visit list. Advertising cannot skip
+identity checks, helper/quote approvals or payment confirmation.
