@@ -24,7 +24,7 @@ export function homeScreenCategory(hash = '') {
 export function reportClientError(code) {
   if (!settings?.enabled || globalThis.navigator?.onLine === false) return ''
   const allowed = ['render_error', 'unhandled_error', 'unhandled_rejection',
-    'api_network_error', 'api_timeout', 'api_response_invalid', 'google_signin_error']
+    'api_network_error', 'api_timeout', 'api_response_invalid', 'google_signin_error', 'app_check_timeout']
   if (!allowed.includes(code)) return ''
   try {
     const screen = settings.product === 'home' ? homeScreenCategory(globalThis.location?.hash) : screenCategory(globalThis.location?.pathname)

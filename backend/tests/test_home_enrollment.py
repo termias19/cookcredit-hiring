@@ -34,7 +34,7 @@ def test_enrollment_is_owner_only_deduplicated_and_does_not_create_a_booking(app
         messages=session.execute(select(AccountEmail)).scalars().all()
         assert len(messages)==2
         notice=next(m for m in messages if m.content['action']=='service_interest_saved')
-        assert notice.recipient==home_mail.SUPPORT
+        assert notice.recipient=='owner@example.test'
         assert notice.content=={'action':'service_interest_saved','bookingId':None}
 
 def test_enrollment_and_saved_household_preserve_each_other_and_withdrawal_clears_contact(app):

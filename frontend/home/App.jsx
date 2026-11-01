@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "../src/firebase";
+import { auth, getAppCheckHeaders } from "../src/firebase";
 import { api } from "./api";
 import { safeHomeRoute } from "./navigation";
 import Account from "./screens/Account";
@@ -373,6 +373,12 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
   const restricted = accessErrorCode === "private_acceptance" || denial === "private_acceptance";
   const checkingIdentity = privateAcceptance && user === undefined;
   const needsSignIn = denial === "sign_in_required" || ((privateAcceptance || profile?.environment === "staging") && !user?.emailVerified);
+  useEffect(() => {
+    if (checkingIdentity || restricted || needsSignIn || sent) return;
+    // Warm the existing attestation while the person fills in the form. This
+    // sends no callback details and never submits a request in the background.
+    getAppCheckHeaders().catch(() => {});
+  }, [checkingIdentity, restricted, needsSignIn, sent]);
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);

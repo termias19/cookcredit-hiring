@@ -467,6 +467,22 @@ logging reuses the existing privacy-safe reporter.
 
 ### Durable Home queue monitoring acceptance
 
+Internal callback, enrollment and other operator follow-up notices use the
+configured `HOME_OWNER_EMAILS` recipients. The public sender and support address
+stay separate. Existing event/recipient outbox keys deduplicate notices; changing
+the recipient configuration does not replay already converted events. Emails link
+to the authenticated service desk and exclude phone numbers and household details.
+
+The callback form warms the existing Firebase App Check token while the customer
+fills it in, without submitting contact details. Protected actions allow up to 45
+seconds for initial attestation, then start a separate 15-second API deadline.
+Cancellation still prevents a late token from starting a request. Safe diagnostics
+distinguish `app_check_timeout` from an API timeout, using fixed categories and
+opaque references only. Home's CSP must allow the installed SDK's exact
+`content-firebaseappcheck.googleapis.com` exchange origin; a regression checks
+the SDK endpoint against `connect-src`. Never replace this with wildcard origins,
+debug tokens, disabled enforcement or reduced score thresholds to pass acceptance.
+
 The existing dispatch endpoint also reports `queue_health` summaries for
 `home_financial` and `home_events`, alongside the existing email summary. It
 reads the existing durable records even while financial processing is paused.

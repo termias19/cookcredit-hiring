@@ -51,7 +51,10 @@ def ensure_welcome(session,principal):
 
 def _recipients(session,event):
     if event.action in OPERATOR_ACTIONS:
-        return [(SUPPORT,None)]
+        # Internal follow-up goes to the configured owner, never to the public
+        # sender by accident. The same event/recipient outbox key deduplicates it.
+        owners=sorted({email.strip().casefold() for email in os.getenv('HOME_OWNER_EMAILS','').split(',') if email.strip()})
+        return [(email,None) for email in owners] or [(SUPPORT,None)]
     if event.action=='home_account_created':
         user=session.get(User,event.actor_id)
         return [(user.email,user.id)] if user else []

@@ -7,7 +7,7 @@ from services.operations import emit_event
 
 observability_bp = Blueprint('observability', __name__)
 CODES = {'render_error', 'unhandled_error', 'unhandled_rejection', 'api_network_error',
-         'api_timeout', 'api_response_invalid', 'google_signin_error'}
+         'api_timeout', 'api_response_invalid', 'google_signin_error', 'app_check_timeout'}
 SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other', 'home_customer', 'home_helper', 'home_operator'}
 
 

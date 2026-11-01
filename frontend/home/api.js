@@ -36,7 +36,7 @@ export async function api(
   const startedAt = Date.now();
   let reference;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), form ? 30000 : 15000);
+  let timer = setTimeout(() => controller.abort(), protectedAccount ? 45000 : form ? 30000 : 15000);
   let preparingSecurity = false;
   try {
     const user = auth.currentUser;
@@ -46,6 +46,10 @@ export async function api(
       preparingSecurity = true;
       Object.assign(headers, await waitForRequest(getAppCheckHeaders, controller.signal));
       preparingSecurity = false;
+      // Initial provider script/attestation has its own bounded budget. Keep
+      // the API deadline short instead of spending it before fetch can start.
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(), form ? 30000 : 15000);
     }
     if (method !== "GET") {
       const callback = method === "POST" && path === "/callbacks" && body && !form;
@@ -97,10 +101,10 @@ export async function api(
     return value;
   } catch (error) {
     if (error.name === "AbortError") {
-      reportClientError("api_timeout");
+      reportClientError(preparingSecurity ? "app_check_timeout" : "api_timeout");
       throw new Error(
         preparingSecurity
-          ? "The security check did not finish. Please retry, or open CookCredit in Chrome, Edge or Safari."
+          ? "The security check did not finish. No request was sent. Please retry, or email connectwithus@cookcredit.com for help."
           : reference?.durable === false
             ? "This is taking longer than expected. Keep this page open and retry to check the same request."
             : "This is taking longer than expected. Retry to check the same request safely.",

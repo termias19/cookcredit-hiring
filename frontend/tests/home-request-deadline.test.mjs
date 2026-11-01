@@ -8,19 +8,19 @@ import vm from 'node:vm'
 const source=readFileSync(new URL('../home/api.js',import.meta.url),'utf8')
   .replace(/^import .*;\r?\n/gm,'').replace(/export /g,'')
 function client(prepare,overrides={}) {
-  const calls=[],reports=[]
+  const calls=[],reports=[],deadlines=[]
   let expire,cleared=false
   const sandbox={
     auth:{currentUser:null},getAppCheckHeaders:prepare,waitForRequest,createPendingRequests,
     reportClientError:code=>reports.push(code),saveHiringFile:()=>{},
     AbortController,DOMException,TypeError,crypto,
-    setTimeout:callback=>{expire=callback;return 1},clearTimeout:()=>{cleared=true},
+    setTimeout:(callback,delay)=>{deadlines.push(delay);expire=callback;return 1},clearTimeout:()=>{cleared=true},
     fetch:async(...args)=>{calls.push(args);if(overrides.offline)throw new TypeError('offline');
       return overrides.response?overrides.response(...args):{ok:true,json:async()=>({ok:true})}},
   }
   if(overrides.storage)sandbox.createPendingRequests=()=>createPendingRequests({storage:()=>overrides.storage})
   vm.runInNewContext(source+';globalThis.request=api;',sandbox)
-  return {request:sandbox.request,calls,reports,expire:()=>expire(),cleared:()=>cleared}
+  return {request:sandbox.request,calls,reports,deadlines,expire:()=>expire(),cleared:()=>cleared}
 }
 
 test('actual Home client never submits a mutation after security preparation times out',async()=>{
@@ -33,8 +33,9 @@ test('actual Home client never submits a mutation after security preparation tim
   finish({'X-Firebase-AppCheck':'late-synthetic-token'})
   await Promise.resolve();await Promise.resolve()
   assert.equal(clientUnderTest.calls.length,0)
-  assert.deepEqual(clientUnderTest.reports,['api_timeout'])
+  assert.deepEqual(clientUnderTest.reports,['app_check_timeout'])
   assert.equal(clientUnderTest.cleared(),true)
+  assert.deepEqual(clientUnderTest.deadlines,[45000])
 })
 
 test('actual Home client keeps rejected attestation private and does not submit',async()=>{
@@ -72,6 +73,7 @@ test('actual Home client attaches completed attestation before the existing API 
   const [url,options]=clientUnderTest.calls[0]
   assert.equal(url,'/api/home/callbacks')
   assert.equal(options.headers['X-Firebase-AppCheck'],'synthetic-token')
+  assert.deepEqual(clientUnderTest.deadlines,[45000,15000])
   assert.match(options.headers['Idempotency-Key'],/^[a-f0-9-]{36}$/)
   assert.equal(clientUnderTest.cleared(),true)
 })

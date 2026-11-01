@@ -18,6 +18,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './api':{api,label:v=>v,money:v=>String(v),dollars:Number},
+    '../src/firebase':{auth:{},getAppCheckHeaders:async()=>({})},
     './navigation':{safeHomeRoute},
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
