@@ -170,6 +170,8 @@ def activity(booking_id):
 @home_auth
 @limiter.limit('30 per minute', key_func=lambda: g.user_id)
 def pricing():
+    if current_app.config.get('HOME_ENROLLMENT_ONLY',False) and not is_owner():
+        visits.fail('forbidden', 'Only the Home owner can manage prices here.', 403)
     if not is_operator():
         visits.fail('forbidden', 'CookCredit operator access is required.', 403)
     with db_session() as session:
@@ -339,4 +341,5 @@ def financial_operations():
         rows = session.execute(select(HomeFinancialOperation).order_by(HomeFinancialOperation.created_at.desc()).limit(100)).scalars().all()
         result = [{'id': str(row.id), 'kind': row.kind, 'status': row.status, 'lastError': row.last_error,
                    'bookingId': str(row.booking_id) if row.booking_id else None, 'createdAt': row.created_at.isoformat()} for row in rows]
-    return jsonify(operations=result)
+    return jsonify(operations=result, configuration=home_stripe.configuration(),
+                   enrollmentOnly=current_app.config.get('HOME_ENROLLMENT_ONLY',False))

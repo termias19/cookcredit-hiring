@@ -41,6 +41,12 @@ ENROLLMENT_ONLY_ENDPOINTS = {
     'observability.client_error': frozenset(('POST',)),
     'home_visits.internal_dispatch': frozenset(('POST',)),
     'home_visits.stripe_webhook': frozenset(('POST',)),
+    # Owner setup is available during enrollment. These existing handlers
+    # retain identity, App Check, owner authorization and immutable rate cards.
+    'home_visits.pricing': frozenset(('GET',)),
+    'home_visits.save_pricing': frozenset(('POST',)),
+    'home_visits.activate_pricing': frozenset(('POST',)),
+    'home_visits.financial_operations': frozenset(('GET',)),
 }
 
 
@@ -70,6 +76,9 @@ def database_url():
 
 def create_app(config=None):
     app = Flask(__name__)
+    if (os.getenv('K_SERVICE') and os.getenv('COOKCREDIT_ENVIRONMENT')=='production'
+            and os.getenv('HOME_SERVICES_ENABLED')=='1' and 'HOME_ENROLLMENT_ONLY' not in os.environ):
+        raise RuntimeError('Production Home requires an explicit enrollment/booking scope')
     enrollment_flag=os.getenv('HOME_ENROLLMENT_ONLY','0')
     if enrollment_flag not in ('0','1'):
         raise RuntimeError('HOME_ENROLLMENT_ONLY must be explicitly 0 or 1')
@@ -104,6 +113,7 @@ def create_app(config=None):
         response.headers['X-Request-ID'] = g.request_id
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
         if response.status_code == 503:
             response.headers['Retry-After'] = '5'
         if response.status_code >= 500:
@@ -149,9 +159,8 @@ def create_app(config=None):
             raw = database_url()
             if os.getenv('K_SERVICE') and os.getenv('FIREBASE_AUTH_EMULATOR_HOST'):
                 raise RuntimeError('Auth emulator is forbidden in a deployed Home service')
-            from services.home_stripe import mode, client
-            if mode() != 'off':
-                client()  # Validate key mode only; no provider network request.
+            from services.home_stripe import validate_configuration
+            validate_configuration()
             ZoneInfo(os.getenv('HOME_SERVICE_TIMEZONE', 'America/New_York'))
             if make_url(raw).username != 'cookcredit_home_app':
                 raise RuntimeError('Home runtime cannot use the migration role')

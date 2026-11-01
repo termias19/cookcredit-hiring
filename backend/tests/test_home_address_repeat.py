@@ -81,3 +81,10 @@ def test_saved_address_round_trip_and_forget_clear_the_existing_private_fields(a
     with database.db_session() as session:
         assert tuple(session.execute(select(EaterProfile.address_street,EaterProfile.address_city,
             EaterProfile.address_state,EaterProfile.address_zip)).one()) == (None,None,None,None)
+
+
+def test_customer_cannot_submit_a_structured_address_outside_the_default_service_state(app):
+    client=app.test_client();address={**ADDRESS,'state':'CA','postalCode':'90001'}
+    response=create(client,{**payload(),'addressDetails':address,'address':'100 Example Street, Unit 2, Atlanta, CA 90001'})
+    assert response.status_code==400 and response.json['code']=='invalid_address'
+    assert client.get('/api/home/visits',headers=headers()).json['visits']==[]

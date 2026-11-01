@@ -8,6 +8,37 @@ from urllib.parse import urlsplit
 import stripe
 
 PRODUCT = 'home_services'
+WEBHOOK_EVENTS = ('checkout.session.completed', 'checkout.session.expired',
+    'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed',
+    'charge.refunded', 'charge.dispute.created', 'charge.dispute.closed',
+    'refund.updated', 'refund.failed', 'transfer.reversed')
+
+
+def configuration():
+    """Owner-safe configuration facts, never credentials or provider payloads."""
+    return {'mode': mode(), 'checkoutEnabled': checkout_allowed(),
+        'webhookConfigured': os.getenv('HOME_STRIPE_WEBHOOK_SECRET', '').startswith('whsec_'),
+        'transfersEnabled': transfer_allowed(),
+        'refundsEnabled': os.getenv('HOME_LIVE_REFUNDS_ENABLED') == '1',
+        'connectEnabled': os.getenv('HOME_CONNECT_ENABLED') == '1'}
+
+
+def validate_configuration():
+    """Fail a deployed payment release before accepting an unfulfillable charge."""
+    selected = mode()
+    flags = ('HOME_CHECKOUT_ENABLED', 'HOME_CONNECT_ENABLED', 'HOME_TRANSFERS_ENABLED', 'HOME_LIVE_REFUNDS_ENABLED')
+    if any(os.getenv(flag, '0') not in ('0', '1') for flag in flags):
+        raise RuntimeError('Home money flags must be 0 or 1')
+    if selected == 'off' and any(os.getenv(flag) == '1' for flag in flags):
+        raise RuntimeError('Home money gates require an explicit payment mode')
+    if selected != 'off':
+        client()  # Validate key mode; no provider request.
+        base_url()
+    if checkout_allowed():
+        if not os.getenv('HOME_STRIPE_WEBHOOK_SECRET', '').startswith('whsec_'):
+            raise RuntimeError('Home checkout requires its webhook signing secret')
+        if selected == 'live' and os.getenv('HOME_LIVE_REFUNDS_ENABLED') != '1':
+            raise RuntimeError('Home live checkout requires cancellation refunds')
 
 
 def mode():
@@ -67,7 +98,7 @@ class StripeHome:
             'customer_email': payload['email'], 'client_reference_id': payload['paymentId'],
             'line_items': [{'price_data': {'currency': 'usd', 'unit_amount': payload['amountCents'],
                 'product_data': {'name': 'CookCredit Home visit — approved maximum'}}, 'quantity': 1}],
-            'metadata': meta, 'payment_intent_data': {'metadata': meta,
+            'metadata': meta, 'payment_intent_data': {'metadata': meta, 'receipt_email': payload['email'],
                 'transfer_group': 'home:' + payload['paymentId']},
             'expires_at': payload['expiresAt'],
             'success_url': base_url() + '/#visit/' + payload['bookingId'],

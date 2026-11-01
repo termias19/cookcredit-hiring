@@ -16,11 +16,10 @@ QUOTE='22222222-2222-4222-8222-222222222222'
 RECEIPT='33333333-3333-4333-8333-333333333333'
 BLOCKED=[('GET','/visits'),('POST','/visits'),('GET',f'/visits/{VISIT}'),
     ('POST',f'/visits/{VISIT}/actions'),('GET',f'/visits/{VISIT}/activity'),
-    ('PUT','/helpers/helper/permission'),('GET','/pricing'),('POST','/pricing'),
-    ('POST',f'/pricing/{QUOTE}/activate'),('POST',f'/visits/{VISIT}/quotes'),
+    ('PUT','/helpers/helper/permission'),('POST',f'/visits/{VISIT}/quotes'),
     ('GET',f'/visits/{VISIT}/quotes/{QUOTE}'),('POST',f'/visits/{VISIT}/quotes/{QUOTE}/approve'),
     ('POST',f'/visits/{VISIT}/quotes/{QUOTE}/accept'),('POST',f'/visits/{VISIT}/materials/reconcile'),
-    ('POST',f'/visits/{VISIT}/checkout'),('POST',f'/visits/{VISIT}/payment/refresh'),('GET','/operations'),
+    ('POST',f'/visits/{VISIT}/checkout'),('POST',f'/visits/{VISIT}/payment/refresh'),
     ('GET','/operating-rules'),('PUT','/operating-rules'),('POST','/operating-rules/activate'),
     ('GET','/slots'),('GET','/availability'),('PUT','/availability'),('GET','/helpers/helper/availability'),
     ('GET','/household'),('PUT','/household'),('DELETE','/household'),('POST','/helpers/apply'),
@@ -209,3 +208,36 @@ def test_malformed_scope_flag_cannot_silently_open_full_home(flag,monkeypatch):
 def test_enrollment_only_startup_refuses_any_money_gate(launch,monkeypatch,setting,value):
     monkeypatch.setenv(setting,value)
     with pytest.raises(RuntimeError,match='money gates off'):create_app({'TESTING':True})
+
+
+@pytest.mark.parametrize('actor',['customer','helper','operator'])
+def test_enrollment_owner_setup_is_not_granted_by_self_selected_roles(launch,actor):
+    for method,path in [('GET','/pricing'),('POST','/pricing'),('POST','/pricing/'+QUOTE+'/activate'),('GET','/operations')]:
+        response=launch.client.open('/api/home'+path,method=method,headers=headers(actor),json={})
+        assert response.status_code==403,(method,path,response.json)
+        assert response.json['code']=='forbidden'
+    assert not launch.touched
+
+
+def test_owner_can_read_existing_pricing_and_safe_payment_configuration(launch,monkeypatch):
+    from services import home_quotes
+    monkeypatch.setattr(home_quotes,'pricing',lambda _:{'activeId':None,'versions':[]})
+    pricing=launch.client.get('/api/home/pricing',headers=headers('owner'))
+    assert pricing.status_code==200 and pricing.json=={'activeId':None,'versions':[]}
+    status=launch.client.get('/api/home/operations',headers=headers('owner'))
+    assert status.status_code==200 and status.json['enrollmentOnly']is True
+    assert status.json['configuration']['mode']=='off'
+    assert set(status.json['configuration'])=={'mode','checkoutEnabled','webhookConfigured','transfersEnabled','refundsEnabled','connectEnabled'}
+    assert 'noindex'in status.headers['X-Robots-Tag']
+
+
+def test_owner_price_setup_does_not_change_booking_or_money_gates(launch,monkeypatch):
+    from services import home_quotes
+    monkeypatch.setattr(home_quotes,'save_rates',lambda *args:{'rateCardId':QUOTE,'active':False})
+    monkeypatch.setattr(home_quotes,'activate_rates',lambda *args:{'rateCardId':QUOTE,'active':True})
+    monkeypatch.setattr(visits,'command',lambda session,actor,key,operation,body,execute:execute())
+    assert launch.client.post('/api/home/pricing',json={},headers=headers('owner')).status_code==201
+    assert launch.client.post('/api/home/pricing/'+QUOTE+'/activate',json={},headers=headers('owner')).json['active']is True
+    assert launch.client.post('/api/home/visits',json={},headers=headers('owner')).json['code']=='enrollment_only'
+    health=launch.client.get('/api/home/health').json
+    assert health['enrollmentOnly']is True and health['paymentsAvailable']is False

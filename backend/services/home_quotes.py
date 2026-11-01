@@ -11,7 +11,7 @@ from sqlalchemy import select, update
 from models import Booking
 from models.home_service import (HomeRateCard, HomePricingHead, HomeQuote,
     HomeQuoteHelperAcceptance, HomeQuoteApproval, HomeMaterialReconciliation)
-from services import home_visits as visits
+from services import home_visits as visits, home_stripe
 
 
 def now():
@@ -61,7 +61,7 @@ def pricing(session):
     head = session.get(HomePricingHead, 1)
     cards = session.execute(select(HomeRateCard).order_by(HomeRateCard.created_at.desc(), HomeRateCard.id.desc()).limit(50)).scalars().all()
     return {'activeId': str(head.rate_card_id) if head and head.rate_card_id else None,
-            'versions': [rate_dict(card) for card in cards], 'paymentsAvailable': False}
+            'versions': [rate_dict(card) for card in cards], 'paymentsAvailable': home_stripe.checkout_allowed()}
 
 
 def save_rates(session, principal, body):
@@ -256,7 +256,7 @@ def accept_quote(session, principal, booking_id, quote_id, body, operator, *, he
                  booking['id'], visit.version, quoteId=str(quote.id))
     session.flush()
     return {'id': str(booking['id']), 'quoteId': str(quote.id), 'version': visit.version,
-            'status': booking['status'], 'paymentAvailable': False}
+            'status': booking['status'], 'paymentAvailable': home_stripe.checkout_allowed()}
 
 
 def quote_for_visit(session, booking, visit, uid, operator, quote_id=None):
@@ -280,7 +280,7 @@ def quote_for_visit(session, booking, visit, uid, operator, quote_id=None):
         expiresAt=quote.expires_at.isoformat(), expired=now() >= quote.expires_at,
         helperAcceptedQuote=helper_acceptance is not None, approved=approval is not None,
         approvedAt=approval.created_at.isoformat() if approval else None,
-        current=quote.id == visit.quote_id, paymentsAvailable=False)
+        current=quote.id == visit.quote_id, paymentsAvailable=home_stripe.checkout_allowed())
     if operator or uid == quote.helper_id:
         result['helperEarnings'] = {'laborNetCents': s['helperLaborNetCents'], 'commissionCents': s['helperCommissionCents'],
             'materialsMaximumCents': s['materialsCapCents'], 'maximumPayCents': s['helperLaborNetCents'] + s['materialsCapCents']}
@@ -342,4 +342,4 @@ def reconcile_materials(session, principal, booking_id, body, operator, *, evide
     from services.home_payments import ensure_settlement
     ensure_settlement(session, booking, visit)
     return {'id': str(booking['id']), 'quoteId': str(quote.id), 'version': visit.version,
-            'status': booking['status'], 'paymentAvailable': False}
+            'status': booking['status'], 'paymentAvailable': home_stripe.checkout_allowed()}

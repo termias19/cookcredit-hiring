@@ -333,12 +333,14 @@ test('service desk groups settings behind disclosure and loads only the explicit
   assert.equal(s.find(p=>p.children==='Refresh people'),undefined)
 })
 
-test('public enrollment desk exposes only customer, callback and owner audit sections without booking API reads',async()=>{
+test('public enrollment desk exposes owner setup without opening customer booking',async()=>{
   const calls=[]
   const owner=await screen('Team',async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{events:[]}},true,async()=>{},
     {profile:{owner:true,operator:true,enrollmentOnly:true}})
   await owner.settle()
-  assert.doesNotMatch(owner.text(),/Helpers|Pricing|Hours and scheduling|Payment operations/)
+  assert.doesNotMatch(owner.text(),/Helpers|Hours and scheduling/)
+  assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Pricing'))
+  assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Payment operations'))
   assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Callbacks'))
   assert.equal(owner.find((p,n)=>n.type==='button'&&p.children==='Visits'),undefined)
   owner.find((p,n)=>n.type==='button'&&p.children==='Activity log').props.onClick();owner.render();await owner.settle()
@@ -696,4 +698,22 @@ test('postal fields and weekly preference use one existing visit command and one
   assert.deepEqual(calls[1][1].body.addressDetails,calls[2][1].body.addressDetails);
   assert.equal('repeatPreference' in calls[2][1].body,false);
   assert.equal(s.location.hash,'visit/saved-visit');
+});
+
+
+test('owner price creation preserves cent precision and failed parsing creates no pricing request',async()=>{
+  const calls=[];
+  const actual=await readFile(new URL('../home/api.js',import.meta.url),'utf8');
+  const dollars=vm.runInNewContext('('+actual.match(/export function dollars\(value\) \{[\s\S]*?\n\}/)[0].replace('export ', '')+')');
+  const s=await screen('Team',async(path,options)=>{calls.push([path,options]);return path==='/enrollments'?{enrollments:[]}:{activeId:null,versions:[]}},true,async()=>{},
+    {profile:{owner:true,operator:true,enrollmentOnly:true}},'default',{modules:{'../api':{api:async(path,options)=>{calls.push([path,options]);return path==='/enrollments'?{enrollments:[]}:{activeId:null,versions:[]}},dollars,label:v=>v,money:String}}});
+  await s.settle();s.find((p,n)=>n.type==='button'&&p.children==='Pricing').props.onClick();s.render();await s.settle();
+  const submit=values=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:values});
+  submit({cooking:'45.25',cleaning:'35.10',fee:'10.00',commission:'15.00',cap:'100.00',validity:'1440'});await s.settle();
+  const saved=calls.find(([path,options])=>path==='/pricing'&&options?.method==='POST');
+  assert.equal(saved[1].body.rates.cookingHourlyCents,4525);assert.equal(saved[1].body.rates.cleaningHourlyCents,3510);
+  const count=calls.filter(([,options])=>options?.method==='POST').length;
+  submit({cooking:'45.999',cleaning:'35.10',fee:'10',commission:'15',cap:'100',validity:'1440'});await s.settle();
+  assert.equal(calls.filter(([,options])=>options?.method==='POST').length,count);
+  assert.match(s.text(),/no more than two decimal places/);
 });

@@ -27,9 +27,9 @@ export default function Team({ profile }) {
   const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : profile.enrollmentOnly ? "callbacks" : "visits", data: null });
   const { tab, data } = screen;
   const groups = deskGroups.map(group => ({ ...group,
-    title: profile.enrollmentOnly && group.collapsible ? "Records" : group.title,
+    title: group.title,
     sections: group.sections.filter(item => (!item.owner || profile.owner) &&
-      (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit"].includes(item.id))),
+      (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit"].includes(item.id) || (profile.owner && ["pricing", "operations"].includes(item.id)))),
   })).filter(group => group.sections.length);
   const currentSection = groups.flatMap(group => group.sections).find(item => item.id === tab) ||
     { title: "Home service desk", intro: "Choose an available section." };
@@ -339,8 +339,9 @@ export default function Team({ profile }) {
         <>
           <p>
             New prices affect new quotes. Existing quotes and approvals keep
-            their original amounts.
+            their original amounts. Save a version, then activate it when you are ready to use those prices.
           </p>
+          {profile.enrollmentOnly && <p className="notice">You can prepare and activate prices here. Customers are currently enrolling and requesting calls. Saving prices does not charge anyone or open visit booking.</p>}
           {profile.owner && (
             <details>
               <summary>Create a pricing version</summary>
@@ -348,11 +349,11 @@ export default function Team({ profile }) {
                 <div className="two">
                   <label>
                     Cooking per hour, USD
-                    <input name="cooking" inputMode="decimal" required />
+                    <input name="cooking" inputMode="decimal" placeholder="45.00" maxLength="12" required />
                   </label>
                   <label>
                     Cleaning per hour, USD
-                    <input name="cleaning" inputMode="decimal" required />
+                    <input name="cleaning" inputMode="decimal" placeholder="35.00" maxLength="12" required />
                   </label>
                   <label>
                     Customer service fee, %
@@ -431,6 +432,18 @@ export default function Team({ profile }) {
 
       {data && tab === "operations" && (
         <>
+          {data.configuration && <section className="section" aria-label="Payment configuration">
+            <h2>Payment setup</h2>
+            <dl className="visit-facts">
+              <div><dt>Stripe mode</dt><dd>{label(data.configuration.mode)}</dd></div>
+              <div><dt>Secure checkout</dt><dd>{data.configuration.checkoutEnabled ? "Enabled for approved quotes" : "Disabled"}</dd></div>
+              <div><dt>Signed webhook</dt><dd>{data.configuration.webhookConfigured ? "Configured" : "Needs setup"}</dd></div>
+              <div><dt>Cancellation refunds</dt><dd>{data.configuration.refundsEnabled ? "Enabled" : "Disabled"}</dd></div>
+              <div><dt>Helper transfers</dt><dd>{data.configuration.transfersEnabled ? "Enabled after completion and review" : "Disabled"}</dd></div>
+            </dl>
+            <p>These are configuration checks. A completed customer payment, received confirmation and helper payout must be verified separately.</p>
+            {data.enrollmentOnly && <p>Visit booking is closed. You can prepare prices before opening it.</p>}
+          </section>}
           <p>
             Provider operations are reviewed here. A Stripe transfer is not a
             confirmed bank payout. Uncertain operations require provider

@@ -222,7 +222,8 @@ def create_visit(session, principal, body):
     policy=rules.active(session,lock=True,required=False)
     data = validate_request(body,time_zone=policy['rules']['timeZone'] if policy else None)
     postal = data['instructions'].get('addressDetails')
-    if policy and postal and postal['state'] not in policy['rules']['states']:
+    states = policy['rules']['states'] if policy else rules.defaults()['states']
+    if postal and postal['state'] not in states:
         fail('invalid_address', 'This service address is outside the current service area.')
     begin=datetime.combine(data['day'],data['start'],ZoneInfo(data['time_zone'])).astimezone(timezone.utc)
     rules.require_window(policy,begin,begin+timedelta(minutes=data['minutes']))
@@ -327,6 +328,7 @@ def load_visit(session, booking_id, uid, operator, *, lock=False):
 
 
 def serialize(booking, visit, *, detail=False):
+    from services import home_stripe
     result = {'id': str(booking['id']), 'status': booking['status'], 'version': visit.version,
         'service': visit.service, 'date': booking['scheduled_date'].isoformat(),
         'time': booking['scheduled_start_time'].isoformat(),
@@ -335,7 +337,7 @@ def serialize(booking, visit, *, detail=False):
         'reviewed': visit.reviewed_at is not None, 'assigned': booking['cook_id'] is not None,
         'helperAccepted': visit.helper_accepted_at is not None, 'issueOpen': visit.issue_open,
         'quoteId': str(visit.quote_id) if visit.quote_id else None,
-        'quote': None, 'paymentAvailable': False}
+        'quote': None, 'paymentAvailable': home_stripe.checkout_allowed()}
     if detail:
         result.update(address=booking['eater_address'], instructions=visit.instructions,
             serviceMinutes=visit.service_minutes, arrangingFor=visit.recipient,

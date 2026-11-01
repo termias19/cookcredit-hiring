@@ -4,6 +4,7 @@ Claim/commit -> bounded provider I/O -> fenced apply. Never hold a database
 connection over Stripe calls; ambiguous old mutations require review, not a new key.
 """
 import uuid
+import re
 from datetime import timedelta
 from sqlalchemy import select, update, or_, and_
 from sqlalchemy.dialects.postgresql import insert
@@ -344,9 +345,21 @@ def _transfer_binding(payment, transfer, value):
 
 
 def receive_event(session, event):
-    if bool(event.get('livemode')) != (home_stripe.mode() == 'live'):
+    # A valid signature does not make every JSON shape a supported event. Reject
+    # malformed envelopes before SQL; never log raw event bodies or secrets.
+    if not isinstance(event,dict):
+        visits.fail('invalid_event','Invalid Home payment event.',400)
+    data = event.get('data')
+    obj = data.get('object') if isinstance(data,dict) else None
+    if (type(event.get('livemode')) is not bool
+        or not isinstance(event.get('id'),str) or not re.fullmatch(r'evt_[A-Za-z0-9_]{1,180}',event['id'])
+        or not isinstance(event.get('type'),str) or not isinstance(obj,dict)
+        or not isinstance(obj.get('id'),str) or not re.fullmatch(r'[A-Za-z0-9_]{1,200}',obj['id'])):
+        visits.fail('invalid_event','Invalid Home payment event.',400)
+    if event['livemode'] != (home_stripe.mode() == 'live'):
         visits.fail('mode_mismatch', 'Webhook mode does not match Home.', 400)
-    obj = ((event.get('data') or {}).get('object') or {})
+    if event['type'] not in home_stripe.WEBHOOK_EVENTS:
+        return {'accepted':True,'ignored':True}
     meta = _metadata(obj)
     payment = None
     if meta.get('cookcredit_product') == home_stripe.PRODUCT and isinstance(meta.get('home_payment_id'),str):
@@ -376,6 +389,8 @@ def receive_event(session, event):
     if payment is None:
         reference = obj.get('payment_intent')
         reference = reference.get('id') if isinstance(reference, dict) else reference
+        if reference and (not isinstance(reference,str) or not re.fullmatch(r'pi_[A-Za-z0-9_]{1,180}',reference)):
+            visits.fail('invalid_event','Invalid Home payment reference.',400)
         if reference:
             payment = session.execute(select(HomePayment).where(HomePayment.payment_intent_id == reference)).scalar_one_or_none()
     if payment is None:
