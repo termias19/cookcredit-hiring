@@ -29,8 +29,7 @@ h1,h2,h3,.wordmark,.research-outcome strong{font-family:'Cormorant Garamond',Geo
 .homepage .site-header{background:var(--ink);color:var(--text)}
 .homepage .site-header :is(a,summary),.entry-page .site-header :is(a,summary){color:var(--text)}
 
-/* Keep the Home entry and sign-in menu within narrow phone headers. */
+/* Keep the sign-in menu within narrow phone headers. */
 @media(max-width:640px){
-  .homepage .site-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
   .homepage .signin-menu>div{left:auto;right:0;max-width:calc(100vw - 44px)}
 }

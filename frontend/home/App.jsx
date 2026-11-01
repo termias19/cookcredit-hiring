@@ -32,6 +32,7 @@ export default function App() {
   const [profileErrorCode, setProfileErrorCode] = useState("");
   const [sessionBusy, setSessionBusy] = useState(false), [sessionError, setSessionError] = useState("");
   const [visitService, setVisitService] = useState(null);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const enrollmentOnly = profile ? profile.enrollmentOnly === true : import.meta.env.VITE_HOME_ENROLLMENT_ONLY === "1";
   const main = useRef();
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function App() {
     };
   }, [user, sessionVersion]);
   useEffect(() => {
+    setWorkspaceMenuOpen(false);
     main.current?.focus();
     window.scrollTo(0, 0);
   }, [route]);
@@ -179,6 +181,9 @@ export default function App() {
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>CookCredit<small>At-home services</small></span>
         </a>
+        <button className="secondary home-workspace-menu-toggle" aria-expanded={workspaceMenuOpen} aria-controls="home-workspace-links"
+          onClick={() => setWorkspaceMenuOpen(value => !value)}>{workspaceMenuOpen ? "Close menu" : "Menu & help"}</button>
+        <div id="home-workspace-links" className={"home-workspace-links" + (workspaceMenuOpen ? " is-open" : "")}>
         <a className="button home-workspace-primary" href={enrollmentOnly ? "#enroll" : "#request"}>{enrollmentOnly ? "Choose service needs" : "Arrange a visit"}</a>
         <nav className="home-workspace-nav" aria-label="Your workspace">
           {profile.operator && <div className="home-workspace-group">
@@ -202,6 +207,7 @@ export default function App() {
         <div className="home-workspace-account">
           <div><span className="home-workspace-label">Signed in as</span><p>{profile.name || user.email}</p></div>
           <button className="text" disabled={sessionBusy} onClick={() => leaveAccount("home")}>Sign out</button>
+        </div>
         </div>
       </aside> : <header>
         <a className="brand" href="#home" aria-label="CookCredit Home">

@@ -806,6 +806,8 @@ summary {
 .home-workspace-rail .brand img { width: 32px; height: 44px; }
 .home-workspace-rail .brand span { font-size: 28px; }
 .home-workspace-rail .brand small { font-size: 11px; }
+.home-workspace-menu-toggle { display: none; }
+.home-workspace-links { display: flex; flex-direction: column; gap: 24px; flex: 1; min-width: 0; }
 .home-workspace-primary {
   background: #934b33;
   border-color: #934b33;
@@ -917,24 +919,26 @@ summary {
     overflow: visible;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 16px;
-    padding: 18px 20px;
+    gap: 12px;
+    padding: 14px 16px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
   .home-workspace-rail .brand { padding: 0; }
-  .home-workspace-primary { align-self: center; }
+  .home-workspace-rail .brand span { font-size: 25px; }
+  .home-workspace-rail .brand img { width: 27px; height: 37px; }
+  .home-workspace-menu-toggle { display: block; padding: 8px 10px; min-height: 44px; font-size: 14px; align-self: center; }
+  .home-workspace-links { display: none; grid-column: 1 / -1; gap: 16px; }
+  .home-workspace-links.is-open { display: flex; }
+  .home-workspace-primary { width: 100%; }
   .home-workspace-nav {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
-    padding-bottom: 4px;
   }
   .home-workspace-group { display: contents; }
   .home-workspace-group > .home-workspace-label { display: none; }
-  .home-workspace-nav a { flex-shrink: 0; white-space: nowrap; }
+  .home-workspace-nav a { white-space: normal; min-width: 0; }
   .home-workspace-account {
     grid-column: 1 / -1;
     display: flex;
@@ -947,12 +951,24 @@ summary {
   .home-workspace-account > div { min-width: 0; }
   .home-workspace-account .text { flex-shrink: 0; }
   .home-workspace-main > .page { padding: 26px 20px 56px; }
-  .home-workspace-main > .narrow { padding: 28px 0 56px; }
+  .home-workspace-main > .narrow { width: calc(100% - 32px); padding: 24px 0 48px; }
   .home-desk-navigation { grid-template-columns: 1fr; gap: 14px; }
 }
 @media (max-width: 480px) {
-  .home-workspace-rail { grid-template-columns: minmax(0, 1fr); }
-  .home-workspace-main h1 { font-size: 36px; }
+  .home-workspace-main h1 { font-size: clamp(30px, 8vw, 36px); line-height: 1.15; }
   .home-workspace-primary { width: 100%; }
   .home-desk-record, .home-desk-disclosure { padding: 16px; }
+}
+
+.service-address { margin: 12px 0 32px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.service-address h2 { margin-bottom: 8px; }
+.service-address .quiet { margin-top: 0; }
+.visit-facts dd small { display: block; font-size: 14px; font-weight: 400; margin-top: 5px; }
+input, select, textarea, .two > label { min-width: 0; max-width: 100%; }
+@media (max-width: 480px) {
+  .home-workspace-main .actions > button { flex: 1 1 140px; }
+  .home-workspace-main .actions { gap: 10px; }
+  header { min-height: 0; padding: 16px; align-items: flex-start; }
+  header nav { width: 100%; gap: 4px 20px; }
+  .hero h1 { font-size: clamp(38px, 11vw, 52px); }
 }

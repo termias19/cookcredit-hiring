@@ -57,9 +57,32 @@ def choices(values, allowed, name):
     return sorted(set(values))
 
 
+def address_details(value):
+    """Customer-entered postal fields, not a geocoded or verified location.
+
+    Keep the private snapshot in the existing instructions JSON. The existing
+    booking address remains the canonical display used by quote fingerprints.
+    """
+    strict_object(value, ('street', 'unit', 'city', 'state', 'postalCode', 'country'))
+    cleaned = {key: bounded_text(value[key], 'your address', limit, required=key != 'unit')
+               for key, limit in (('street', 160), ('unit', 60), ('city', 100),
+                                  ('state', 2), ('postalCode', 10), ('country', 2))}
+    if any('\n' in text or '\t' in text for text in cleaned.values()):
+        fail('invalid_address', 'Enter each part of your address in its own field.')
+    cleaned['state'] = cleaned['state'].upper()
+    cleaned['country'] = cleaned['country'].upper()
+    from services.home_operating_rules import STATES
+    if (cleaned['state'] not in STATES or cleaned['country'] != 'US'
+            or not re.fullmatch(r'\d{5}(?:-\d{4})?', cleaned['postalCode'])):
+        fail('invalid_address', 'Enter a US address with a two-letter state and a valid ZIP code.')
+    formatted = ', '.join(part for part in (cleaned['street'], cleaned['unit'],
+        f"{cleaned['city']}, {cleaned['state']} {cleaned['postalCode']}") if part)
+    return cleaned, formatted
+
+
 def validate_request(body, *, time_zone=None):
     strict_object(body, ('service', 'date', 'time', 'durationMinutes', 'address', 'instructions', 'consent'),
-                  ('serviceMinutes','arrangingFor','timeZone'))
+                  ('serviceMinutes','arrangingFor','timeZone','addressDetails','repeatPreference'))
     if body['service'] not in ('cooking', 'cleaning', 'both'):
         fail('invalid_service', 'Choose cooking, cleaning or both.')
     try:
@@ -111,11 +134,24 @@ def validate_request(body, *, time_zone=None):
     strict_object(consent, ('version', 'shareWithAssignedHelper'))
     if consent['version'] != CONSENT_VERSION or consent['shareWithAssignedHelper'] is not True:
         fail('consent_required', 'Please confirm sharing these visit details with CookCredit and your assigned helper.')
+    address = bounded_text(body['address'], 'your address', 400, required=True)
+    private_details = {}
+    if 'addressDetails' in body:
+        private_details['addressDetails'], formatted = address_details(body['addressDetails'])
+        if address != formatted:
+            fail('invalid_address', 'Review your service address before sending the request.')
+    if 'repeatPreference' in body:
+        repeat = body['repeatPreference']
+        if not isinstance(repeat, str) or repeat not in ('once', 'weekly', 'fortnightly', 'every_four_weeks'):
+            fail('invalid_repeat_preference', 'Choose how often you would like help.')
+        # A preference on this one request creates no future reservations,
+        # payment authorization or recurring background jobs.
+        private_details['repeatPreference'] = repeat
     return dict(service=body['service'], day=day, start=start, minutes=minutes, time_zone=zone.key,
                 service_minutes=service_minutes, recipient=recipient,
-                address=bounded_text(body['address'], 'your address', 400, required=True),
+                address=address,
                 instructions=dict(preferences=preferences, cleaningTasks=tasks,
-                    visitNotes=bounded_text(instructions['visitNotes'], 'visit instructions', 1000)))
+                    visitNotes=bounded_text(instructions['visitNotes'], 'visit instructions', 1000), **private_details))
 
 
 def sync_identity(session, principal, *, refresh=True):
@@ -185,6 +221,9 @@ def create_visit(session, principal, body):
     from services import home_operating_rules as rules
     policy=rules.active(session,lock=True,required=False)
     data = validate_request(body,time_zone=policy['rules']['timeZone'] if policy else None)
+    postal = data['instructions'].get('addressDetails')
+    if policy and postal and postal['state'] not in policy['rules']['states']:
+        fail('invalid_address', 'This service address is outside the current service area.')
     begin=datetime.combine(data['day'],data['start'],ZoneInfo(data['time_zone'])).astimezone(timezone.utc)
     rules.require_window(policy,begin,begin+timedelta(minutes=data['minutes']))
     rules.require_notice(policy,begin)

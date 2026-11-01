@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api } from "../api";
 import HomeErrorBoundary from "../HomeErrorBoundary";
 import { preferences, cleaningTasks as tasks } from "../visitPresentation";
+import { formatServiceAddress, readServiceAddress, repeatLabels } from "../serviceAddress";
 
 const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
 
@@ -51,6 +52,7 @@ export default function RequestVisit({ profile, initialService }) {
     setBusy(true);
     setError("");
     const f = new FormData(form);
+    const addressDetails = readServiceAddress(f);
     const cooking = service === "cleaning" ? 0 : Number(f.get("cooking")),
       cleaning = service === "cooking" ? 0 : Number(f.get("cleaning"));
     const instructions = {
@@ -65,7 +67,9 @@ export default function RequestVisit({ profile, initialService }) {
       timeZone,
       durationMinutes: cooking + cleaning,
       serviceMinutes: { cooking, cleaning },
-      address: f.get("address"),
+      address: formatServiceAddress(addressDetails),
+      addressDetails,
+      repeatPreference: f.get("repeatPreference"),
       instructions,
       consent: {
         version: profile.consentVersion,
@@ -87,7 +91,7 @@ export default function RequestVisit({ profile, initialService }) {
       if (f.get("remember") === "on")
         await api("/household", {
           method: "PUT",
-          body: { address: body.address, instructions, remember: true },
+          body: { address: body.address, addressDetails, instructions, remember: true },
         }).catch(() => {});
       if (mounted.current) location.hash = "visit/" + value.id;
     } catch (e) {
@@ -247,18 +251,26 @@ export default function RequestVisit({ profile, initialService }) {
         </fieldset>
         <fieldset hidden={step !== 2}>
           <legend>Your visit details</legend>
-          <label>
-            Service address
-            <textarea
-              key={useSaved ? "saved-address" : "new-address"}
-              name="address"
-              autoComplete="street-address"
-              maxLength="400"
-              rows="3"
-              defaultValue={useSaved ? saved?.address : ""}
-              required={step === 2}
-            />
-          </label>
+          <section className="service-address" aria-labelledby="service-address-title" key={useSaved ? "saved-address" : "new-address"}>
+            <h2 id="service-address-title">Service address</h2>
+            <p className="quiet" id="address-help">Use your browser’s saved address, or enter it below. We’ll confirm coverage before arranging your visit.</p>
+            {useSaved && saved?.address && !saved.addressDetails && <p className="notice">Your saved address: {saved.address}. Please check each field below.</p>}
+            <label>Street address<input name="street" autoComplete="section-visit address-line1" maxLength="160"
+              defaultValue={useSaved ? (saved?.addressDetails?.street || saved?.address) : ""} required={step === 2} aria-describedby="address-help" /></label>
+            <label>Apartment, suite or unit <small>Optional</small><input name="unit" autoComplete="section-visit address-line2" maxLength="60"
+              defaultValue={useSaved ? saved?.addressDetails?.unit : ""} /></label>
+            <label>City<input name="city" autoComplete="section-visit address-level2" maxLength="100"
+              defaultValue={useSaved ? saved?.addressDetails?.city : ""} required={step === 2} /></label>
+            <div className="two address-region">
+              <label>State<select name="state" autoComplete="section-visit address-level1" defaultValue={useSaved ? (saved?.addressDetails?.state || serviceStates[0]) : serviceStates[0]}
+                onChange={event => setServiceState(event.target.value)}>
+                {serviceStates.map(value => <option value={value} key={value}>{value === "GA" ? "Georgia" : value}</option>)}
+              </select></label>
+              <label>ZIP code<input name="postalCode" autoComplete="section-visit postal-code" inputMode="numeric" maxLength="10" pattern="[0-9]{5}(-[0-9]{4})?"
+                defaultValue={useSaved ? saved?.addressDetails?.postalCode : ""} required={step === 2} /></label>
+            </div>
+          </section>
+          <h2>Your preferred time</h2>
           <div className="two">
             <label>
               Preferred date
@@ -287,9 +299,10 @@ export default function RequestVisit({ profile, initialService }) {
             Times are in {timeZone}. Your requested time is subject to
             availability.
           </p>
-          {serviceStates.length > 1 && <label>State for the time check<select value={serviceState} onChange={event => setServiceState(event.target.value)}>
-            {serviceStates.map(value => <option value={value} key={value}>{value}</option>)}
-          </select></label>}
+          <label>How often would you like help?<select name="repeatPreference" defaultValue="once" aria-describedby="repeat-help">
+            {Object.entries(repeatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+          <p className="quiet" id="repeat-help">This requests your first visit. If you want regular help, we’ll contact you to agree future dates and prices. Each visit needs confirmation; nothing repeats or charges automatically.</p>
           {step === 2 && <HomeErrorBoundary fallback={({ reference }) => <section className="section" aria-label="Suggested visit times">
             <h2>Suggested times are unavailable.</h2>
             <p role="status">Choose your preferred date and time above for CookCredit review. No time has been verified or reserved.</p>

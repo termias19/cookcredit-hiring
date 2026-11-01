@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api, downloadReceipt, label, money, stripeLocation } from "../api";
 import { instructionLabel, visitSchedule, visitStatusLabel } from "../visitPresentation";
+import { repeatLabels } from "../serviceAddress";
 const OperatorVisit = lazy(() => import("./operator/OperatorVisit"));
 
 const serviceNames = {
@@ -227,6 +228,11 @@ export default function Visit({ id, profile }) {
                 <dt>Address</dt>
                 <dd>{visit.address}</dd>
               </div>
+              {visit.instructions.repeatPreference && visit.instructions.repeatPreference !== "once" && <div>
+                <dt>Regular help requested</dt>
+                <dd>{repeatLabels[visit.instructions.repeatPreference]}
+                  <small>Future visits need agreed dates and prices.</small></dd>
+              </div>}
               {visit.arrangingFor && (
                 <div>
                   <dt>Arranged for</dt>

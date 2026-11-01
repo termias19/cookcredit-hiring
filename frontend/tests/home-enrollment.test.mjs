@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
 import {safeHomeRoute} from '../home/navigation.js'
 import * as visitPresentation from '../home/visitPresentation.js'
+import * as serviceAddress from '../home/serviceAddress.js'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
 async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default',runtime={}) {
@@ -27,6 +28,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
     '../visitPresentation':visitPresentation,
+    '../serviceAddress':serviceAddress,
     './visitPresentation':visitPresentation,
     '../../src/utils/errorReporting':{reportClientError(){}}}
   Object.assign(modules,runtime.modules)
@@ -231,7 +233,7 @@ test('an acknowledged visit does not redirect or save household details after le
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
   const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
-    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+    cooking:'120',date:'2030-01-07',time:'10:00',street:'100 Example Street',unit:'Unit 2',city:'Atlanta',state:'GA',postalCode:'30315',repeatPreference:'once',notes:'',consent:'on',remember:'on',
   }})
   s.unmount();s.location.hash='home'
   acknowledge({id:'saved-visit'});await pending
@@ -252,7 +254,7 @@ test('leaving during an explicitly requested household save does not pull the cu
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
   const pending=s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{
-    cooking:'120',date:'2030-01-07',time:'10:00',address:'Private service address',notes:'',consent:'on',remember:'on',
+    cooking:'120',date:'2030-01-07',time:'10:00',street:'100 Example Street',unit:'Unit 2',city:'Atlanta',state:'GA',postalCode:'30315',repeatPreference:'once',notes:'',consent:'on',remember:'on',
   }})
   await new Promise(resolve=>setImmediate(resolve))
   assert.equal(calls.at(-1)[1].method,'PUT')
@@ -646,7 +648,7 @@ test('visit steps preserve a preferred time, submit only on Send, and require a 
   choice=s.find(p=>typeof p.onTimeZone==='function');choice.props.onTimeZone('UTC');s.render()
   assert.equal(s.find(p=>p.name==='time').props.value,'');assert.match(s.text(),/Choose your preferred start time again/)
   s.find(p=>p.name==='time').props.onChange({target:{value:'15:00'}});s.render()
-  await submit({cooking:'120',date:'2026-12-01',time:'15:00',address:'Synthetic address',notes:'',preferences:[],consent:'on'})
+  await submit({cooking:'120',date:'2026-12-01',time:'15:00',street:'100 Example Street',unit:'Unit 2',city:'Atlanta',state:'GA',postalCode:'30315',repeatPreference:'once',notes:'',preferences:[],consent:'on'})
   s.render();assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
   assert.equal(calls[1][1].body.timeZone,'UTC');assert.equal(calls[1][1].body.time,'15:00')
   assert.equal(s.location.hash,'visit/'+id)
@@ -672,8 +674,26 @@ test('optional suggestion fallback leaves manual request fields outside the boun
   assert.equal(calls.length,1)
   assert.equal(s.find(p=>p.name==='date').props.value,'2030-01-07')
   assert.equal(s.find(p=>p.name==='time').props.value,'14:00')
-  await submit({cooking:'120',date:'2030-01-07',time:'14:00',address:'Synthetic service address',notes:'',preferences:[],consent:'on'})
+  await submit({cooking:'120',date:'2030-01-07',time:'14:00',street:'100 Example Street',unit:'Unit 2',city:'Atlanta',state:'GA',postalCode:'30315',repeatPreference:'once',notes:'',preferences:[],consent:'on'})
   assert.equal(calls.length,2);assert.equal(calls[1][0],'/visits')
   assert.equal(calls[1][1].body.time,'14:00')
   assert.equal(s.location.hash,'visit/saved-visit')
 })
+
+
+test('postal fields and weekly preference use one existing visit command and one explicit household save',async()=>{
+  const calls=[];
+  const s=await screen('RequestVisit',async(path,options)=>{calls.push([path,options]);return options?{id:'saved-visit'}:{household:null}},false);
+  await s.settle();
+  const submit=values=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:values});
+  await submit({});s.render();await submit({});s.render();
+  assert.equal(s.find(p=>p.name==='street').props.autoComplete,'section-visit address-line1');
+  assert.equal(s.find(p=>p.name==='postalCode').props.inputMode,'numeric');
+  await submit({cooking:'120',date:'2030-01-07',time:'10:00',street:'100 Example Street',unit:'Unit 2',city:'Atlanta',state:'GA',postalCode:'30315',repeatPreference:'weekly',notes:'',consent:'on',remember:'on'});
+  assert.deepEqual(calls.map(([path,options])=>[path,options?.method]),[['/household',undefined],['/visits','POST'],['/household','PUT']]);
+  assert.equal(calls[1][1].body.address,'100 Example Street, Unit 2, Atlanta, GA 30315');
+  assert.equal(calls[1][1].body.repeatPreference,'weekly');
+  assert.deepEqual(calls[1][1].body.addressDetails,calls[2][1].body.addressDetails);
+  assert.equal('repeatPreference' in calls[2][1].body,false);
+  assert.equal(s.location.hash,'visit/saved-visit');
+});

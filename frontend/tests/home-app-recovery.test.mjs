@@ -176,3 +176,17 @@ test('public enrollment build gives landing and account entry enrollment copy wi
   const account=s.find((p,n)=>n.type==='Account')
   assert.equal(account.props.next,'enroll');assert.equal(account.props.enrollmentOnly,true)
 })
+
+
+test('compact workspace menu toggles and closes on navigation without fetching another account',async()=>{
+  const calls=[];
+  const s=await app(async path=>{calls.push(path);return {owner:false,operator:false,helper:false}});
+  const toggle=()=>s.find(p=>p['aria-controls']==='home-workspace-links');
+  assert.equal(toggle().props['aria-expanded'],false);
+  toggle().props.onClick();s.render();
+  assert.equal(toggle().props['aria-expanded'],true);
+  assert.match(s.find(p=>p.id==='home-workspace-links').props.className,/is-open/);
+  s.navigate('#enroll');s.render();
+  assert.equal(toggle().props['aria-expanded'],false);
+  assert.deepEqual(calls,['/me']);
+});

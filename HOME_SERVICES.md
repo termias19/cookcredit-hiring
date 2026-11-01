@@ -636,3 +636,30 @@ allergy preferences and free-text visit instructions are excluded from directory
 responses and notification emails. The service desk provides the canonical link
 for manual sharing by text or email; it does not send marketing or SMS messages.
 
+
+
+### Postal addresses and regular-help requests
+
+The private visit form collects street, optional unit, city, state and ZIP with
+browser address autofill. The server validates this bounded US postal object
+and its canonical display string. These are customer-entered details, not a
+verified house location. No map SDK, geocoding request or paid location API is
+added. Coverage, access instructions and the exact property still need review.
+
+Reuse `Booking.eater_address` for the quote's display address and the existing
+`HomeVisit.instructions` JSON for the private `addressDetails` snapshot. An
+explicit household save also reuses `HomeHousehold` and `EaterProfile` postal
+columns. Legacy free-text addresses remain readable; a legacy save clears stale
+structured metadata. Forgetting household details clears the saved postal
+fields while preserving existing visit snapshots and enrollment records.
+Addresses remain excluded from visit lists, public APIs and event details.
+
+`repeatPreference` accepts once, weekly, fortnightly or every_four_weeks on the
+same visit request. It is visible only with authorized visit details and is
+covered by the existing quote fingerprint. It creates one visit, with the same
+idempotency and permission checks. It does not generate future appointments,
+reserve helper capacity, establish a subscription or authorize recurring charges.
+A full series scheduler must separately handle each occurrence's capacity,
+notice, DST, price, cancellation, consent and payment acceptance before activation.
+Public Home remains enrollment/callback only until that broader booking release
+passes acceptance; the existing payment gates remain off.

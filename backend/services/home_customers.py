@@ -30,7 +30,7 @@ def audit(session,principal,action,subject):
 def household(session,uid):
     row=session.execute(select(EaterProfile.address_street,HomeHousehold).join(HomeHousehold,HomeHousehold.user_id==EaterProfile.user_id)
         .where(EaterProfile.user_id==uid)).first()
-    return None if not row or not row[0] else {'address':row[0], 'instructions':{
+    return None if not row or not row[0] else {'address':row[0], 'addressDetails':row[1].instructions.get('addressDetails'), 'instructions':{
         key:row[1].instructions[key] for key in ('preferences','cleaningTasks','visitNotes')}}
 
 
@@ -119,7 +119,7 @@ def normalize_phone(value,*,required=True):
 
 
 def save_household(session,principal,body):
-    visits.strict_object(body,('address','instructions','remember'))
+    visits.strict_object(body,('address','instructions','remember'),('addressDetails',))
     if body['remember'] is not True:
         visits.fail('consent_required','Confirm that you want these details saved for future visits.')
     instructions=body['instructions']
@@ -128,9 +128,19 @@ def save_household(session,principal,body):
         'cleaningTasks':visits.choices(instructions['cleaningTasks'],visits.CLEANING_TASKS,'cleaning tasks'),
         'visitNotes':visits.bounded_text(instructions['visitNotes'],'household instructions',1000)}
     address=visits.bounded_text(body['address'],'your address',400,required=True)
+    details = None
+    if 'addressDetails' in body:
+        details, formatted = visits.address_details(body['addressDetails'])
+        if address != formatted:
+            visits.fail('invalid_address','Review your service address before saving it.')
+    # Explicitly replace the old snapshot, including when an older client saves
+    # free text. Never retain stale structured fields from a previous address.
+    value['addressDetails'] = details
+    profile_values = {'address_street':address, 'address_city':details['city'] if details else None,
+        'address_state':details['state'] if details else None,'address_zip':details['postalCode'] if details else None}
     _lock_household(session,principal['uid'])
-    session.execute(insert(EaterProfile.__table__).values(user_id=principal['uid'],address_street=address)
-        .on_conflict_do_update(index_elements=[EaterProfile.user_id],set_={'address_street':address}))
+    session.execute(insert(EaterProfile.__table__).values(user_id=principal['uid'],**profile_values)
+        .on_conflict_do_update(index_elements=[EaterProfile.user_id],set_=profile_values))
     session.execute(insert(HomeHousehold).values(user_id=principal['uid'],instructions=value)
         .on_conflict_do_update(index_elements=[HomeHousehold.user_id],set_={'instructions':HomeHousehold.instructions.op('||')(value),'consented_at':datetime.now(timezone.utc)}))
     visits.event(session,principal['uid'],'household_saved')
@@ -145,7 +155,8 @@ def remove_household(session,principal,body):
         row.instructions={'preferences':[],'cleaningTasks':[],'visitNotes':'','enrollment':row.instructions['enrollment']}
     else:
         session.execute(delete(HomeHousehold).where(HomeHousehold.user_id==principal['uid']))
-    session.execute(update(EaterProfile.__table__).where(EaterProfile.user_id==principal['uid']).values(address_street=None))
+    session.execute(update(EaterProfile.__table__).where(EaterProfile.user_id==principal['uid']).values(
+        address_street=None,address_city=None,address_state=None,address_zip=None))
     visits.event(session,principal['uid'],'household_removed')
     return {'removed':True}
 

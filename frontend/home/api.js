@@ -10,7 +10,7 @@ const pending = createPendingRequests();
 // rejection. Keep every uncertain, auth, busy, upload or provider outcome keyed.
 const finalRejections = {
   400: new Set([
-    "invalid_fields", "invalid_input", "invalid_service", "invalid_schedule",
+    "invalid_fields", "invalid_input", "invalid_service", "invalid_schedule", "invalid_address", "invalid_repeat_preference",
     "invalid_duration", "scope_mismatch", "recipient_permission_required",
     "consent_required", "invalid_version", "invalid_operating_rules",
     "operating_rules_review_required", "operating_rules_incomplete",
