@@ -394,8 +394,9 @@ delivery, never persisted. `HOME_EMAILS_ENABLED=1` requires App Check and the
 existing authenticated CookCredit Workspace mail transport. The agreed public
 inquiry/Reply-To address is `connectwithus@cookcredit.com`. An existing verified
 Google Send-as authorization can be selected explicitly with
-`GOOGLE_SMTP_VERIFIED_FROM=connectwithus@cookcredit.com`. That selects visible
+`GOOGLE_SMTP_VERIFIED_FROM=no-replys@cookcredit.com`. That selects visible
 and envelope From while `GOOGLE_SMTP_USER` remains the authenticated login.
+Setting this variable does not create or verify the provider's Send-as grant.
 The default transport keeps its current sender when this setting is absent.
 Reuse the existing credential; never treat a Reply-To change or an unverified
 address as a verified sending identity. Confirm the real received From header

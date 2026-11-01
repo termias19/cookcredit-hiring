@@ -166,7 +166,7 @@ def test_provider_switch_does_not_send_stale_jobs(monkeypatch):
 
 
 @pytest.mark.parametrize('kind', ['verify', 'reset', 'welcome'])
-@pytest.mark.parametrize('public_alias', [None, 'connectwithus@cookcredit.com'])
+@pytest.mark.parametrize('public_alias', [None, 'connectwithus@cookcredit.com','no-replys@cookcredit.com'])
 def test_google_smtp_sends_the_matching_branded_message(monkeypatch, kind, public_alias):
     import ssl
     if public_alias:

@@ -10,7 +10,7 @@ def google_smtp_sender():
     # This is an operator attestation of an existing Google Send-as grant,
     # never a caller-supplied header or a substitute for provider verification.
     if (any(c.isspace() for c in login + public)
-            or (public != login and public != 'connectwithus@cookcredit.com')):
+            or (public != login and public not in ('connectwithus@cookcredit.com','no-replys@cookcredit.com'))):
         raise RuntimeError('email_sender_not_approved')
     return login, public
 
@@ -20,8 +20,8 @@ def send_google_smtp(recipient, subject, plain, markup, *, headers=None):
     login, sender = google_smtp_sender()
     password = ''.join(os.environ['GOOGLE_SMTP_APP_PASSWORD'].split())
     message = EmailMessage()
-    # Default to the login mailbox; Home may explicitly use the existing,
-    # verified customer-service alias without changing SMTP credentials.
+    # Default to the login mailbox; Home may explicitly use an existing,
+    # verified CookCredit alias without changing SMTP credentials.
     message['From'] = formataddr(('CookCredit', sender))
     message['To'] = recipient
     message['Reply-To'] = 'CookCredit <connectwithus@cookcredit.com>'
