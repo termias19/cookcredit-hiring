@@ -21,6 +21,7 @@ SUPPORT = 'connectwithus@cookcredit.com'
 COPY = {
  'home_account_created':('Your CookCredit Home account is ready','Welcome to CookCredit Home','You can arrange cooking or cleaning, review your helper and full quote, and keep track of your visits.'),
  'visit_requested':('We received your Home visit request','Your request is with CookCredit','We will review your requirements and confirm availability. No payment has been taken for this request.'),
+ 'visit_requested_review':('A Home visit request was received','Review a Home visit request','A customer sent a Home visit request. Open the private visit to review the requirements, availability and current status.'),
  'assign':('A Home visit needs your review','Review an assigned visit','CookCredit assigned a visit for your review. Open the private visit to review and accept the request, or contact CookCredit if you are unavailable. Do not begin work or purchase supplies before payment is confirmed.'),
  'quote_issued':('A Home visit quote needs your review','Review the work and earnings','A quote is ready for your assigned visit. Read the agreed work, materials and earnings before accepting.'),
  'helper_quote_accepted':('Your full Home visit quote is ready','Review your full quote','Your helper accepted the itemized work. Review every cost and materials allowance before approving or paying.'),
@@ -37,7 +38,7 @@ COPY = {
  'service_interest_saved':('A Home enrollment needs follow-up','Someone shared their service needs','Open the private enrollment list to review the services requested. Contact details remain inside CookCredit.'),
  'helper_application_received':('A Home helper application needs review','Review a helper application','A helper submitted their Home service experience. Review their profile and capabilities before granting access.'),
 }
-OPERATOR_ACTIONS = frozenset(('callback_requested','service_interest_saved',
+OPERATOR_ACTIONS = frozenset(('callback_requested','service_interest_saved','visit_requested_review',
     'helper_application_received','report_issue','payment_review_required','helper_transfer_reconciled'))
 
 
@@ -49,12 +50,16 @@ def ensure_welcome(session,principal):
         session.info['home_dispatch_due']=datetime.now(timezone.utc)
 
 
+def _owner_recipients():
+    # Internal follow-up goes to the configured owner, never to the public
+    # sender by accident. The same event/recipient outbox key deduplicates it.
+    owners=sorted({email.strip().casefold() for email in os.getenv('HOME_OWNER_EMAILS','').split(',') if email.strip()})
+    return [(email,None) for email in owners] or [(SUPPORT,None)]
+
+
 def _recipients(session,event):
     if event.action in OPERATOR_ACTIONS:
-        # Internal follow-up goes to the configured owner, never to the public
-        # sender by accident. The same event/recipient outbox key deduplicates it.
-        owners=sorted({email.strip().casefold() for email in os.getenv('HOME_OWNER_EMAILS','').split(',') if email.strip()})
-        return [(email,None) for email in owners] or [(SUPPORT,None)]
+        return _owner_recipients()
     if event.action=='home_account_created':
         user=session.get(User,event.actor_id)
         return [(user.email,user.id)] if user else []
@@ -65,7 +70,13 @@ def _recipients(session,event):
         return []  # A superseded assignment must not notify a different helper.
     uid=booking.cook_id if event.action in ('assign','quote_issued','helper_funds_transferred','helper_transfer_reversed') else booking.eater_id
     user=session.get(User,uid) if uid else None
-    return [(user.email,user.id)] if user else []
+    recipients=[(user.email,user.id)] if user else []
+    if event.action=='visit_requested':
+        # Fan out the existing request event. A customer who is also an owner
+        # keeps one customer confirmation instead of two copies of one event.
+        seen={email.casefold() for email,_ in recipients}
+        recipients.extend((email,uid) for email,uid in _owner_recipients() if email.casefold() not in seen)
+    return recipients
 
 
 def convert_events(limit=20):
@@ -87,8 +98,12 @@ def convert_events(limit=20):
                     for recipient,uid in _recipients(session,event):
                         key=hashlib.sha256(f'home:{event.id}:{recipient}'.encode()).hexdigest()
                         if reserve_email_slot(session,key,maximum=90):
+                            # The owner receives review copy, while the customer
+                            # keeps the confirmation. Neither email stores the
+                            # household address or private service instructions.
+                            action='visit_requested_review' if event.action=='visit_requested' and uid is None else event.action
                             session.add(AccountEmail(dedupe_key=key,kind='home_notice',recipient=recipient,user_id=uid,
-                                content={'action':event.action,'bookingId':str(event.booking_id) if event.booking_id else None}))
+                                content={'action':action,'bookingId':str(event.booking_id) if event.booking_id else None}))
                 cursor.status='done'
                 count+=1
         except EmailQueueBusy:

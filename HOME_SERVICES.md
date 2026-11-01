@@ -663,8 +663,9 @@ idempotency and permission checks. It does not generate future appointments,
 reserve helper capacity, establish a subscription or authorize recurring charges.
 A full series scheduler must separately handle each occurrence's capacity,
 notice, DST, price, cancellation, consent and payment acceptance before activation.
-Public Home remains enrollment/callback only until that broader booking release
-passes acceptance; the existing payment gates remain off.
+Enrollment-only mode keeps visit requests and payments unavailable. A reviewed
+quoted-payment release uses its explicit configuration and the acceptance gates
+below; regular-help preferences never enable automatic recurring charges.
 
 
 ### Payment release and security checks
@@ -681,6 +682,39 @@ A key alone does not enable a charge. Connect and helper transfers keep their
 separate gates and existing completion, receipt, issue-hold and account checks.
 The verified customer's email is passed as the payment receipt address; Home's
 existing payment-confirmed outbox message remains a separate notification.
+
+#### Owner setup and human payment handoff
+
+The owner opens the Home service desk at `/#team`. On a narrow screen, use
+**Menu & help** to reach **Service desk**, then **Service settings**.
+
+1. **Pricing → Create a pricing version:** enter the actual rates, fees, materials
+   limit and quote validity; **Save a new version**, then **Activate these prices**.
+   The UI placeholders are examples. Existing quotes retain their amounts.
+2. **Hours and scheduling:** review service states, timezone, notice, travel buffer
+   and hours. **Save operating draft**, confirm the saved rules, then
+   **Activate saved rules**. Review exact address and helper coverage for each visit.
+3. **Helpers:** review applications submitted through `/#helping`, grant only
+   reviewed service permissions, and save. Each helper sets **Availability** and
+   completes personal Stripe onboarding through **My earnings**.
+4. **Visits:** review a genuine customer request, assign an approved helper and
+   wait for acceptance. Prepare the itemized quote, including reviewed materials
+   and tax. The helper accepts earnings before the customer approves and pays.
+5. Confirm the actual payment and received receipt. After the real service,
+   verify customer completion, expense reconciliation, any unused-allowance
+   refund and helper transfer. Verify a bank payout separately in Stripe.
+
+The existing request event creates one customer confirmation and one owner
+review notice through AccountEmail. Recipients are deduplicated; when the owner
+is also the customer, one customer confirmation is sent. Owner notices link to
+the private visit and contain no address or household instructions. Queue
+backpressure retains the pending event atomically instead of losing half of a
+notification fan-out. Previously completed notification cursors are not replayed.
+
+Use **Payment operations** for current gate configuration and durable processing
+states. An enabled configuration or successful unpaid diagnostic is not proof of
+a charge, delivered receipt, refund, transfer or bank payout. Complete the human
+payment handoff before declaring the full paid service accepted.
 
 The Home webhook subscribes only to `home_stripe.WEBHOOK_EVENTS`. A valid
 signature must also carry a supported, well-formed event envelope and matching
