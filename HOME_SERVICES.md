@@ -26,6 +26,12 @@ Enrollment-only launch acceptance is separate from the full booking/payment
 gates below. Publishing enrollment must not be described as accepting confirmed
 visits, paid services or instant reservations.
 
+The main-site Home entry opens this same portal; its sign-in link preserves
+`next=enroll`. Publish those navigation changes only after fresh customer
+signup/verification, enrollment/owner retrieval, callback-email receipt and
+phone acceptance pass against the deployed enrollment release. Preserve the
+main site's other assets and hosting policy when adding the entry.
+
 ## Stages and acceptance gates
 
 | Stage | Deliverable | Acceptance gate |
