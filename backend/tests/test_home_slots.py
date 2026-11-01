@@ -56,8 +56,12 @@ def freeze_clock(monkeypatch,now):
 def stable_clock(monkeypatch):
     # Travel fixtures write wall times directly into SQL. Stay outside the
     # repeated/skipped Eastern hour; dedicated cases below cover DST notice.
-    now=datetime.now(timezone.utc).replace(hour=12,minute=0,second=0,microsecond=0)
+    # Keep database-created requests before activation regardless of when CI
+    # runs, and freeze assignment's past-start check to the same test instant.
+    now=(datetime.now(timezone.utc)+timedelta(days=1)).replace(hour=12,minute=0,second=0,microsecond=0)
     freeze_clock(monkeypatch,now)
+    from services import home_visits
+    monkeypatch.setattr(home_visits,'datetime',rules.datetime)
     return now
 
 
