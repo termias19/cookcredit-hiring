@@ -730,3 +730,13 @@ source; it does not create another account, pricing or booking system. The porta
 account and private visit pages retain noindex, and Home API responses explicitly
 send `X-Robots-Tag: noindex, nofollow, noarchive`. Never make account data crawlable
 to fix a public marketing-page indexing problem.
+
+Production Home logos and **Home services** links return to that one public
+overview; **CookCredit.com** separately returns to the company homepage.
+**My visits** opens the existing scoped customer list and signs in only when
+needed. Existing portal root, `/#home` and `/#how` bookmarks forward to fixed
+public overview destinations without forwarding private fragments or parameters.
+Private staging and localhost keep their own overview for isolated walkthroughs.
+Help and the legacy callback alias share one form for a given signed-in identity,
+so following a Help link does not erase entries or replace an unknown request's
+retry ID. An account change resets that form's private contact details.

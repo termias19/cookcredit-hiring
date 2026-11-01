@@ -10,7 +10,11 @@ test('public Home discovery is static, canonical and linked once in the sitemap'
   assert.match(page,/<meta name="robots" content="index,follow/);
   assert.match(page,/<link rel="canonical" href="https:\/\/cookcredit.com\/home\/">/);
   assert.match(page,/<h1[^>]*>Good food/);
-  assert.match(page,/href="https:\/\/cookcredit-home.web.app\/#callback"/);
+  assert.match(page,/<a class="brand" href="\/home\/" aria-label="CookCredit Home">/);
+  assert.match(page,/<a href="\/">CookCredit.com<\/a>/);
+  assert.match(page,/href="https:\/\/cookcredit-home.web.app\/#helping">Work with us/);
+  assert.match(page,/href="https:\/\/cookcredit-home.web.app\/#visits">My visits/);
+  assert.match(page,/href="https:\/\/cookcredit-home.web.app\/#help"/);
   assert.doesNotMatch(page,/<script|eassefa@|683|home_payment_id|quoteId/);
   assert.equal((source('../../public-site/sitemap.xml').match(/https:\/\/cookcredit.com\/home\//g)||[]).length,1);
   assert.equal((source('../../public-site/index.html').match(/href="\/home\/">Help at home/g)||[]).length,2);

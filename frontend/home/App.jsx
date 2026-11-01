@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, getAppCheckHeaders } from "../src/firebase";
 import { api } from "./api";
-import { safeHomeRoute } from "./navigation";
+import { safeHomeRoute, homeSiteLinks, legacyHomeDestination } from "./navigation";
 import Account from "./screens/Account";
 import RequestVisit from "./screens/RequestVisit";
 import Visit from "./screens/Visit";
@@ -20,8 +20,9 @@ const navigate = (route) => {
 const publicRoutes = ["home", "how", "help", "callback"];
 const readRoute = () => {
   const route = location.hash.slice(1) || "home", page = route.split("?")[0];
-  return publicRoutes.includes(page) ? page : route;
+  return page === "callback" ? "help" : page === "main" ? "home" : publicRoutes.includes(page) ? page : route;
 };
+const siteLinks = homeSiteLinks(import.meta.env);
 
 export default function App() {
   const [route, setRoute] = useState(readRoute),
@@ -36,7 +37,11 @@ export default function App() {
   const enrollmentOnly = profile ? profile.enrollmentOnly === true : import.meta.env.VITE_HOME_ENROLLMENT_ONLY === "1";
   const main = useRef();
   useEffect(() => {
-    const change = () => setRoute(readRoute());
+    const change = () => {
+      const destination = legacyHomeDestination(location.hash, import.meta.env);
+      if (destination) location.replace(destination);
+      else setRoute(readRoute());
+    };
     addEventListener("hashchange", change);
     return () => removeEventListener("hashchange", change);
   }, []);
@@ -99,7 +104,7 @@ export default function App() {
     content = <p role="status">Checking your account…</p>;
   else if (route === "home") content = <Home enrollmentOnly={enrollmentOnly} />;
   else if (route === "how") content = <How enrollmentOnly={enrollmentOnly} />;
-  else if (route === "help" || route === "callback") content = <Help key={route} user={user} profile={profile}
+  else if (route === "help" || route === "callback") content = <Help key={"help:" + (user?.uid || user?.email || "anonymous")} user={user} profile={profile}
     accessErrorCode={profileErrorCode} busySwitching={sessionBusy} returnTo={route}
     privateAcceptance={import.meta.env.VITE_HOME_PRIVATE_ACCEPTANCE === "1"}
     enrollmentOnly={enrollmentOnly}
@@ -133,7 +138,7 @@ export default function App() {
         <button className="secondary" disabled={sessionBusy} onClick={() => leaveAccount(route)}>
           Use a different account
         </button>
-        <p><a href="#help">Get help</a> or <a href="#home">return to Home</a>.</p>
+        <p><a href="#help">Get help</a> or <a href={siteLinks.overview}>return to Home services</a>.</p>
       </section>
     );
   else if (profile.enrollmentOnly && safeHomeRoute(route, true) !== route) content = <EnrollmentEntry />;
@@ -151,8 +156,8 @@ export default function App() {
     content = (
       <section className="narrow">
         <h1>Page not found</h1>
-        <a className="button" href="#home">
-          Back to Home
+        <a className="button" href={siteLinks.overview}>
+          Back to Home services
         </a>
       </section>
     );
@@ -177,7 +182,7 @@ export default function App() {
         Skip to content
       </a>
       {workspace ? <aside className="home-workspace-rail" aria-label="Home workspace">
-        <a className="brand" href="#home" aria-label="CookCredit Home">
+        <a className="brand" href={siteLinks.overview} aria-label="CookCredit Home">
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>CookCredit<small>At-home services</small></span>
         </a>
@@ -210,14 +215,14 @@ export default function App() {
         </div>
         </div>
       </aside> : <header>
-        <a className="brand" href="#home" aria-label="CookCredit Home">
+        <a className="brand" href={siteLinks.overview} aria-label="CookCredit Home">
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>
             CookCredit<small>At-home services</small>
           </span>
         </a>
         <nav aria-label="Main">
-          <a href="#how">How it works</a>
+          <a href={siteLinks.how}>How it works</a>
           {!enrollmentOnly && <a href="#visits">My visits</a>}
           <a href="#enroll">Service needs</a>
           {profile?.operator && <a href="#team">Team</a>}
@@ -242,7 +247,8 @@ export default function App() {
         <Suspense fallback={<p role="status">Opening…</p>}>{content}</Suspense>
       </main>
       <footer>
-        <a href="#home">CookCredit Home</a>
+        <a href={siteLinks.overview}>Home services</a>
+        <a href={siteLinks.cookcredit}>CookCredit.com</a>
         {!enrollmentOnly && <a href="#helping">Work with us</a>}
         <a href="mailto:connectwithus@cookcredit.com">
           connectwithus@cookcredit.com
@@ -259,7 +265,7 @@ function EnrollmentEntry() {
     <p className="eyebrow">CookCredit Home</p>
     <h1>Start with your service needs.</h1>
     <p>Enrollment and call requests are open. Visit booking, scheduling and payments are not available in this launch.</p>
-    <div className="actions"><a className="button" href="#enroll">Choose service needs</a><a className="button secondary" href="#callback">Request a call</a></div>
+    <div className="actions"><a className="button" href="#enroll">Choose service needs</a><a className="button secondary" href="#help">Request a call</a></div>
   </section>;
 }
 
@@ -290,7 +296,7 @@ function Home({ enrollmentOnly = false } = {}) {
             {enrollmentOnly ? "Enrollment is free. Visit booking, scheduling and payments are not available in this launch." : "No charge for sending a request. You approve your helper and full price before paying."}
           </p>
           {!enrollmentOnly && <a href="#enroll">Not ready to book? Tell us what you need.</a>}
-          <a href="#callback">Prefer help by phone? Request a call.</a>
+          <a href="#help">Prefer help by phone? Request a call.</a>
         </div>
       </section>
       <section className="intro">
@@ -438,7 +444,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
             CookCredit will contact you at the number you provided. A visit has
             not been booked.
           </p>
-          <a href="#home">Return to Home</a>
+          <a href={siteLinks.overview}>Return to Home services</a>
           <button className="secondary" onClick={() => {
             id.current = crypto.randomUUID(); setSent(false); setError("");
           }}>Request another call</button>

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
-import {safeHomeRoute} from '../home/navigation.js'
+import * as homeNavigation from '../home/navigation.js'
+const {safeHomeRoute}=homeNavigation
 import * as visitPresentation from '../home/visitPresentation.js'
 
 // Execute the real account gate. A successful retry must actually release it.
@@ -22,13 +23,14 @@ async function app(api,refreshFailure=false,options={}) {
     'firebase/auth':{onAuthStateChanged(_auth,callback){authChanged=callback;callback(user);return ()=>{}},signOut:async()=>{
       if(options.signOutFailure)throw new Error('offline');auth.currentUser=null;authChanged(null)
     }},
-    '../src/firebase':{auth},'./api':{api},'./navigation':{safeHomeRoute},'./visitPresentation':visitPresentation}
+    '../src/firebase':{auth},'./api':{api},'./navigation':homeNavigation,'./visitPresentation':visitPresentation}
   for(const name of ['Account','RequestVisit','Visit','SavedDetails','Enrollment'])modules['./screens/'+name]={__esModule:true,default:name}
   const source=await readFile(new URL('../home/App.jsx',import.meta.url),'utf8')
   const {code}=await transformWithEsbuild(source,'App.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',define:{
-    'import.meta.env':JSON.stringify({DEV:false,VITE_HOME_PRIVATE_ACCEPTANCE:options.privateAcceptance?'1':undefined,
+    'import.meta.env':JSON.stringify({DEV:false,PROD:options.production===true,VITE_HOME_PRIVATE_ACCEPTANCE:options.privateAcceptance?'1':undefined,
       VITE_HOME_ENROLLMENT_ONLY:options.enrollmentBuild?'1':undefined})}})
-  const context={module:{exports:{}},require:id=>modules[id]||{},URLSearchParams,location:{hash:options.route||'#team'},
+  const replacements=[]
+  const context={module:{exports:{}},require:id=>modules[id]||{},URLSearchParams,location:{hash:options.route||'#team',replace:url=>replacements.push(url)},
     addEventListener(name,fn){listeners.set(name,fn)},removeEventListener(name){listeners.delete(name)},window:{scrollTo(){}}}
   vm.runInNewContext(code,context)
   const Component=context.module.exports.default
@@ -38,7 +40,8 @@ async function app(api,refreshFailure=false,options={}) {
   const text=()=>nodes(tree).filter(n=>typeof n==='string').join(' ')
   const find=predicate=>nodes(tree).find(n=>n?.props&&predicate(n.props,n))
   async function settle(){await new Promise(resolve=>setImmediate(resolve));render()}
-  render();render();await settle();return {render,settle,text,find,location:context.location,
+  render();render();await settle();return {render,settle,text,find,replacements,location:context.location,
+    changeUser(next){auth.currentUser=next;authChanged(next);render()},
     navigate(hash){context.location.hash=hash;listeners.get('hashchange')?.();render()}}
 }
 
@@ -79,7 +82,7 @@ test('failed account switching stays recoverable and does not invent a signed-ou
   assert.ok(s.find(p=>p.children==='Use a different account'))
 })
 
-test('Help and callback remain reachable after account rejection and use separate page instances',async()=>{
+test('Help and legacy callback share one form for the same signed-in identity',async()=>{
   let calls=0
   const s=await app(async()=>{calls++;throw Object.assign(new Error('Private acceptance account required'),{code:'private_acceptance'})})
   s.navigate('#help')
@@ -88,9 +91,11 @@ test('Help and callback remain reachable after account rejection and use separat
   s.navigate('#callback')
   const callback=s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Help')
   assert.ok(callback)
-  // React remounts the actual form when these route keys differ.
-  assert.notEqual(help.key,callback.key)
-  assert.equal(calls,1)
+  assert.equal(help.key,callback.key,'An alias must not clear the form or replace its retry request ID')
+  s.changeUser({uid:'another-customer',email:'another@example.test',emailVerified:true})
+  assert.notEqual(s.find((p,n)=>typeof n.type==='function'&&n.type.name==='Help').key,callback.key,
+    'Contact details must not survive a change to another account')
+  assert.equal(calls,2,'A different identity requires its own access check')
 })
 
 test('a public Help link with tracking parameters opens without signing in or loading a private account',async()=>{
@@ -190,3 +195,15 @@ test('compact workspace menu toggles and closes on navigation without fetching a
   assert.equal(toggle().props['aria-expanded'],false);
   assert.deepEqual(calls,['/me']);
 });
+
+test('production Help links to one public overview and keeps CookCredit.com distinct',async()=>{
+  const s=await app(async()=>assert.fail('Public Help needs no private fetch'),false,
+    {signedOut:true,route:'#help',production:true})
+  assert.equal(s.find(p=>p['aria-label']==='CookCredit Home').props.href,'https://cookcredit.com/home/')
+  assert.equal(s.find(p=>p.children==='Home services').props.href,'https://cookcredit.com/home/')
+  assert.equal(s.find(p=>p.children==='CookCredit.com').props.href,'https://cookcredit.com/')
+  assert.equal(s.find(p=>p.children==='How it works').props.href,'https://cookcredit.com/home/#how')
+  assert.equal(s.find(p=>p.href==='#home'),undefined)
+  s.navigate('#home')
+  assert.deepEqual(s.replacements,['https://cookcredit.com/home/'])
+})

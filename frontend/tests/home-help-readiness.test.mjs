@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import {readFile} from 'node:fs/promises'
 import {transformWithEsbuild} from 'vite'
-import {safeHomeRoute} from '../home/navigation.js'
+import * as homeNavigation from '../home/navigation.js'
+const {safeHomeRoute}=homeNavigation
 
 test('actual Home callback form warms security without submitting data and respects private access gates',async()=>{
   const source=await readFile(new URL('../home/App.jsx',import.meta.url),'utf8')
@@ -24,7 +25,7 @@ test('actual Home callback form warms security without submitting data and respe
     const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx},
       '../src/firebase':{auth:{},getAppCheckHeaders:async()=>{warmed++;throw new Error('synthetic warm-up failure')}},
       './api':{api:async()=>{submitted++}},
-      './navigation':{safeHomeRoute},
+      './navigation':homeNavigation,
     }
     const context={module:{exports:{}},require:id=>modules[id]||{},crypto}
     vm.runInNewContext(code,context)

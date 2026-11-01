@@ -1,5 +1,6 @@
 import React from "react";
 import { reportClientError } from "../src/utils/errorReporting";
+import { homeSiteLinks } from "./navigation";
 
 function moduleLoadFailure(error) {
   try {
@@ -24,6 +25,11 @@ export default class HomeErrorBoundary extends React.Component {
     this.setState({ reference: reportClientError("render_error") });
   }
   returnHome = () => {
+    const links = homeSiteLinks(import.meta.env);
+    if (links.publicOverview) {
+      location.assign(links.overview);
+      return;
+    }
     location.hash = "home";
     this.setState({ failed: false, moduleFailure: false });
   };
@@ -35,7 +41,7 @@ export default class HomeErrorBoundary extends React.Component {
       <main className="narrow">
         <a
           className="brand"
-          href="#home"
+          href={homeSiteLinks(import.meta.env).overview}
           onClick={(event) => { event.preventDefault(); this.returnHome(); }}
         >
           CookCredit Home

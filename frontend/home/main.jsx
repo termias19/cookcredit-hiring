@@ -5,6 +5,7 @@ import { auth } from "../src/firebase";
 import App from "./App";
 import HomeErrorBoundary from "./HomeErrorBoundary";
 import { startErrorReporting } from "../src/utils/errorReporting";
+import { legacyHomeDestination } from "./navigation";
 const stopReporting = startErrorReporting({
   enabled: location.protocol === "https:",
   apiOrigin: location.origin,
@@ -27,11 +28,11 @@ if (
     connectAuthEmulator(auth, emulator.origin, { disableWarnings: true });
 }
 
-const root =
-  import.meta.hot?.data.root || createRoot(document.getElementById("root"));
-if (import.meta.hot) import.meta.hot.data.root = root;
-root.render(
-  <HomeErrorBoundary>
-    <App />
-  </HomeErrorBoundary>,
-);
+const overview = legacyHomeDestination(location.hash, import.meta.env);
+if (overview) {
+  location.replace(overview);
+} else {
+  const root = import.meta.hot?.data.root || createRoot(document.getElementById("root"));
+  if (import.meta.hot) import.meta.hot.data.root = root;
+  root.render(<HomeErrorBoundary><App /></HomeErrorBoundary>);
+}

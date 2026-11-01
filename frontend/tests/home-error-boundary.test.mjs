@@ -6,17 +6,19 @@ import React from 'react'
 import * as jsx from 'react/jsx-runtime'
 import {renderToStaticMarkup} from 'react-dom/server'
 import {transformWithEsbuild} from 'vite'
+import * as homeNavigation from '../home/navigation.js'
 
 // Exercise the actual boundary class and real React elements, without replacing
 // hooks or performing browser navigation, requests, authentication or payments.
-async function boundary(props={}) {
+async function boundary(props={},environment={}) {
   const reports=[],logs=[],actions=[]
   const source=await readFile(new URL('../home/HomeErrorBoundary.jsx',import.meta.url),'utf8')
-  const {code}=await transformWithEsbuild(source,'HomeErrorBoundary.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
-  const modules={react:React,'react/jsx-runtime':jsx,'../src/utils/errorReporting':{
+  const {code}=await transformWithEsbuild(source,'HomeErrorBoundary.jsx',{loader:'jsx',jsx:'automatic',format:'cjs',
+    define:{'import.meta.env':JSON.stringify(environment)}})
+  const modules={react:React,'react/jsx-runtime':jsx,'./navigation':homeNavigation,'../src/utils/errorReporting':{
     reportClientError:(...args)=>{reports.push(args);return 'synthetic-reference'},
   }}
-  const location={hash:'#request',reload(){actions.push('reload')}}
+  const location={hash:'#request',reload(){actions.push('reload')},assign(url){actions.push(url)}}
   const context={module:{exports:{}},require:id=>modules[id],location,
     console:{error:(...args)=>logs.push(args)},fetch(){assert.fail('The boundary must not submit a request')}}
   vm.runInNewContext(code,context)
@@ -90,4 +92,11 @@ test('browser module errors use only bounded local classifications and keep bran
     assert.equal(prevented,true);assert.equal(s.location.hash,'home')
     assert.deepEqual(s.actions,[])
   }
+})
+
+test('production error recovery uses the same public Home overview without forwarding private routes',async()=>{
+  const s=await boundary({}, {PROD:true});s.fail(new Error('Synthetic failure'))
+  assert.match(s.html(),/href="https:\/\/cookcredit.com\/home\/"/)
+  s.find('Return Home').props.onClick()
+  assert.deepEqual(s.actions,['https://cookcredit.com/home/'])
 })

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import vm from 'node:vm'
 import {transformWithEsbuild} from 'vite'
-import {safeHomeRoute} from '../home/navigation.js'
+import * as homeNavigation from '../home/navigation.js'
+const {safeHomeRoute}=homeNavigation
 import * as visitPresentation from '../home/visitPresentation.js'
 import * as serviceAddress from '../home/serviceAddress.js'
 
@@ -20,7 +21,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     '../src/firebase':{auth:{},getAppCheckHeaders:async()=>({})},
-    './navigation':{safeHomeRoute},
+    './navigation':homeNavigation,
     '../../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
     './OperatingRulesDraft':{__esModule:true,default:()=>null},
