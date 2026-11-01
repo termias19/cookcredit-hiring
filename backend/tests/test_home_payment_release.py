@@ -49,6 +49,8 @@ def test_checkout_uses_the_verified_customer_receipt_address_and_namespaced_idem
     assert params['payment_intent_data']['receipt_email']==payload['email']
     assert params['line_items'][0]['price_data']['unit_amount']==12345
     assert params['metadata']['cookcredit_product']=='home_services'
+    assert params['branding_settings']['display_name']=='CookCredit Home'
+    assert params['branding_settings']['logo']=={'type':'url','url':'https://cookcredit.com/favicon.png'}
     assert options=={'idempotency_key':'home:operation-one'}
 
 

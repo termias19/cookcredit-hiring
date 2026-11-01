@@ -95,6 +95,12 @@ class StripeHome:
                 'home_checkout_attempt': str(payload['attempt'])}
         return client().checkout.sessions.create({
             'mode': 'payment', 'payment_method_types': ['card'],
+            # Brand this session only; the shared merchant's other products
+            # and receipt/account settings are not changed.
+            'branding_settings': {'display_name':'CookCredit Home','background_color':'#f7f5ef',
+                'button_color':'#934b33','font_family':'inter','border_style':'rectangular',
+                'icon':{'type':'url','url':'https://cookcredit.com/favicon.png'},
+                'logo':{'type':'url','url':'https://cookcredit.com/favicon.png'}},
             'customer_email': payload['email'], 'client_reference_id': payload['paymentId'],
             'line_items': [{'price_data': {'currency': 'usd', 'unit_amount': payload['amountCents'],
                 'product_data': {'name': 'CookCredit Home visit — approved maximum'}}, 'quantity': 1}],
