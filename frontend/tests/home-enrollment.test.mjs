@@ -275,6 +275,22 @@ test('enrollment save uses the existing account endpoint and only claims success
   assert.equal(JSON.stringify(calls[2][1].body),JSON.stringify({service:'both',phone:'',contactConsent:true}))
 })
 
+test('a returning enrolled customer sees saved needs and can explicitly edit without another enrollment request',async()=>{
+  const calls=[]
+  const s=await screen('Enrollment',async(path,options)=>{
+    calls.push([path,options]);return {enrollment:{service:'both',phone:'',status:'active'}}
+  },false,async()=>{},{profile:{email:'fixture@example.test',enrollmentOnly:true}})
+  await s.settle()
+  assert.match(s.text(),/You’re on the list/)
+  assert.match(s.text().replace(/\s+/g,' '),/cooking and cleaning is saved/)
+  assert.equal(s.find((p,n)=>n.type==='form'),undefined)
+  s.find(p=>p.children==='Edit my needs').props.onClick();s.render()
+  assert.ok(s.find(p=>p.value==='both').props.checked)
+  assert.ok(s.find(p=>p.name==='contactConsent').props.required)
+  assert.equal(s.find(p=>p.name==='contactConsent').props.checked,undefined)
+  assert.deepEqual(calls,[['/enrollment',undefined]])
+})
+
 test('only the owner screen requests the enrollment directory and failed copy stays honest',async()=>{
   const calls=[]
   const api=async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{visits:[]}}
@@ -378,8 +394,7 @@ test('arrange visit carries the saved enrollment choice without overriding later
   const enrollment=await screen('Enrollment',async(path,options)=>options?{saved:true}:{enrollment:{service:'both'}},
     false,async()=>{},{onArrange:value=>{chosen=value}})
   await enrollment.settle()
-  await enrollment.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
-  enrollment.render()
+  assert.match(enrollment.text(),/You’re on the list/)
   enrollment.find(p=>p.href==='#request').props.onClick()
   assert.equal(chosen,'both')
   const visit=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:chosen})

@@ -22,6 +22,7 @@ export default function Enrollment({ profile, onArrange }) {
       setService(enrollment?.service || "");
       setPhone(enrollment?.phone || "");
       setRegistered(Boolean(enrollment?.service));
+      setSaved(Boolean(enrollment?.service));
       setWithdrawn(enrollment?.status === "withdrawn");
       setReady(true);
     }).catch(e => { if (active) setError(e.message); });
