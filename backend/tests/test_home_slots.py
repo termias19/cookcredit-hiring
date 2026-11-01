@@ -42,12 +42,31 @@ def set_interval(row,start,*,duration=150,**fields):
             estimated_duration=duration/60,**fields))
 
 
+def freeze_clock(monkeypatch,now):
+    from services import home_slots
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls,tz=None):
+            return now.astimezone(tz)if tz else now.replace(tzinfo=None)
+    monkeypatch.setattr(home_slots,'datetime',FixedDateTime)
+    monkeypatch.setattr(rules,'datetime',FixedDateTime)
+
+
+@pytest.fixture
+def stable_clock(monkeypatch):
+    # Travel fixtures write wall times directly into SQL. Stay outside the
+    # repeated/skipped Eastern hour; dedicated cases below cover DST notice.
+    now=datetime.now(timezone.utc).replace(hour=12,minute=0,second=0,microsecond=0)
+    freeze_clock(monkeypatch,now)
+    return now
+
+
 @pytest.mark.parametrize('completed',[False,True])
-def test_activation_preserves_recently_ended_travel_before_upcoming_assignment(app,completed):
+def test_activation_preserves_recently_ended_travel_before_upcoming_assignment(app,completed,stable_clock):
     c=app.test_client();seed_helper(c)
     first=assign(c,requested(c)).json
     second=assign(c,requested(c,time='15:00')).json
-    now=datetime.now(timezone.utc).replace(second=0,microsecond=0)
+    now=stable_clock
     set_interval(first,now-timedelta(minutes=155),
         **({'status':'completed','completed_at':now-timedelta(minutes=5)}if completed else {}))
     set_interval(second,now+timedelta(minutes=30))
@@ -64,11 +83,11 @@ def test_activation_preserves_recently_ended_travel_before_upcoming_assignment(a
     ('completed',60,30,409),('pending_confirmation',60,30,409),
     ('completed',60,60,200),('completed',0,30,200),('cancelled',60,30,200),
 ])
-def test_recent_physical_finish_controls_travel_without_retaining_old_planned_date(app,status,buffer,minutes,expected):
+def test_recent_physical_finish_controls_travel_without_retaining_old_planned_date(app,status,buffer,minutes,expected,stable_clock):
     c=app.test_client();seed_helper(c)
     first=assign(c,requested(c)).json
     target=requested(c,time='15:00')
-    now=datetime.now(timezone.utc).replace(second=0,microsecond=0)
+    now=stable_clock
     start=now+timedelta(minutes=30)
     # The old scheduled date deliberately falls outside the ordinary date index
     # window. Only the server finish instant can identify this recent travel.
@@ -196,14 +215,27 @@ def test_slot_queries_are_strict_and_bounded(app,values):
     assert slots(c,**values).status_code==400
 
 
-def test_default_notice_and_state_are_applied_without_same_day_capacity_promises(app):
+@pytest.mark.parametrize('instant,expected',[
+    ('2026-10-31T04:00:00+00:00',[]),
+    ('2026-03-08T05:00:00+00:00',[]),
+    ('2026-11-01T04:00:00+00:00',['23:00','23:30']),
+])
+def test_default_notice_uses_elapsed_hours_across_daylight_saving(app,monkeypatch,instant,expected):
+    now=datetime.fromisoformat(instant)
+    freeze_clock(monkeypatch,now)
     c=app.test_client();seed_helper(c);assert save(c).status_code==200;assert activate(c).status_code==200
-    today=datetime.now(timezone.utc).astimezone(__import__('zoneinfo').ZoneInfo('America/New_York')).date().isoformat()
-    assert slots(c,date=today).json['slots']==[]
-    assert slots(c,state='SC').json['code']=='service_area_review_required'
+    zone=ZoneInfo('America/New_York');today=now.astimezone(zone).date()
+    offered=slots(c,date=today.isoformat()).json['slots']
+    # Fall-back Sunday has 25 elapsed hours. A late same-date suggestion can
+    # satisfy 24-hour notice; spring-forward Sunday has only 23 elapsed hours.
+    assert [slot['time']for slot in offered]==expected
+    for slot in offered:
+        start=datetime.fromisoformat(today.isoformat()+'T'+slot['time']).replace(tzinfo=zone)
+        assert start.astimezone(timezone.utc)>=now+timedelta(hours=24)
+    assert slots(c,date=(today+timedelta(days=1)).isoformat(),state='SC').json['code']=='service_area_review_required'
     with database.db_session()as session:
         policy=rules.active(session)
-        start=datetime.now(timezone.utc)+timedelta(hours=8)
+        start=now+timedelta(hours=8)
         with pytest.raises(Exception)as failure:rules.require_notice(policy,start)
         assert failure.value.code=='booking_notice_required'
         rules.require_notice(policy,start,manual=True)
