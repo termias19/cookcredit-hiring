@@ -2,7 +2,8 @@
 
 Home services let customers request cooking, cleaning or both. The backend
 stores requests, consent, review, assignment, versioned quotes and approvals. It is
-disabled by default and is not a public booking or payment service yet.
+disabled by default. Opening public booking and payment requires the explicit
+release profile and the acceptance gates below.
 
 ### Enrollment-only public release
 
@@ -10,8 +11,9 @@ disabled by default and is not a public booking or payment service yet.
 service-interest enrollment, existing account emails and App Check protected
 callback intake. The owner retains the enrollment directory, callback follow-up
 and access audit. Existing authorization and origin checks still apply. All
-booking, household, helper, scheduling, pricing and payout APIs are denied,
-including staff access; new endpoints are denied until explicitly reviewed.
+booking, household, helper, scheduling and payout APIs are denied,
+including staff access. The existing owner-only pricing and payment-configuration
+screens remain available for setup. New endpoints are denied until explicitly reviewed.
 Startup rejects enabled payment modes or financial gates in this scope.
 
 Build this public entry with `VITE_HOME_ENROLLMENT_ONLY=1` and
@@ -663,3 +665,34 @@ A full series scheduler must separately handle each occurrence's capacity,
 notice, DST, price, cancellation, consent and payment acceptance before activation.
 Public Home remains enrollment/callback only until that broader booking release
 passes acceptance; the existing payment gates remain off.
+
+
+### Payment release and security checks
+
+The existing owner pricing controls create immutable rate-card revisions. Only
+verified `HOME_OWNER_EMAILS` identities can save or activate them. Enrollment-only
+mode also permits those owner setup endpoints and the existing owner operations
+view; this exception never opens customer booking or payment routes.
+
+Deployed checkout configuration requires an explicit payment mode, a matching
+server-side secret key, the Home signing secret, an HTTPS return origin and,
+for live checkout, cancellation refunds. All monetary flags accept only 0 or 1.
+A key alone does not enable a charge. Connect and helper transfers keep their
+separate gates and existing completion, receipt, issue-hold and account checks.
+The verified customer's email is passed as the payment receipt address; Home's
+existing payment-confirmed outbox message remains a separate notification.
+
+The Home webhook subscribes only to `home_stripe.WEBHOOK_EVENTS`. A valid
+signature must also carry a supported, well-formed event envelope and matching
+mode. Malformed events fail before SQL, unsupported types and unrelated products
+are ignored, and repeated event IDs reuse the durable inbox. No event body,
+secret, card data or household instruction is written to request logs. Canonical
+Stripe reads, quoted amounts and product/payment/quote bindings establish payment,
+not the browser redirect or a claimed client status.
+
+Public discovery lives at `https://cookcredit.com/home/`, linked from the homepage
+and sitemap. This static information page reuses the Home stylesheet and photo
+source; it does not create another account, pricing or booking system. The portal,
+account and private visit pages retain noindex, and Home API responses explicitly
+send `X-Robots-Tag: noindex, nofollow, noarchive`. Never make account data crawlable
+to fix a public marketing-page indexing problem.
