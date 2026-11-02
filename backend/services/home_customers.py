@@ -46,7 +46,7 @@ def enrollment(session,uid):
 
 
 def save_enrollment(session,principal,body):
-    visits.strict_object(body,('service','phone','contactConsent'))
+    visits.strict_object(body,('service','phone','contactConsent'),('name',))
     if body['contactConsent'] is not True:
         visits.fail('consent_required','Confirm that CookCredit may contact you about these services.')
     if body['service'] not in ('cooking','cleaning','both','not_sure'):
@@ -56,10 +56,13 @@ def save_enrollment(session,principal,body):
     from services.home_mail import ensure_welcome
     ensure_welcome(session,principal)
     current=enrollment(session,uid)
-    if current and current.get('service')==body['service'] and current.get('phone')==phone:
+    name=visits.bounded_text(body['name'],'your name',120,required=True) if 'name'in body else (current or {}).get('name')
+    if name:name=' '.join(name.split())
+    if current and current.get('service')==body['service'] and current.get('phone')==phone and current.get('name')==name:
         return {'saved':True}
     now=datetime.now(timezone.utc).isoformat()
     value={'status':'active','service':body['service'],'phone':phone,'enrolledAt':current['enrolledAt'] if current else now,'updatedAt':now}
+    if name:value['name']=name
     session.execute(insert(EaterProfile.__table__).values(user_id=uid).on_conflict_do_nothing(index_elements=[EaterProfile.user_id]))
     row=session.get(HomeHousehold,uid)
     if row:
@@ -100,7 +103,7 @@ def list_enrollments(session,cursor=None):
     result=[]
     for row in rows[:50]:
         interest=(row.instructions or {}).get('enrollment') or {}
-        result.append({'id':row.id,'name':row.name,'email':row.email,'joinedAt':row.created_at.isoformat(),
+        result.append({'id':row.id,'name':interest.get('name') or row.name,'email':row.email,'joinedAt':row.created_at.isoformat(),
             'service':interest.get('service'),'phone':interest.get('phone'),'updatedAt':interest.get('updatedAt'),
             'withdrawn':interest.get('status')=='withdrawn'})
     return {'enrollments':result,'nextCursor':rows[49].id if len(rows)>50 else None}
@@ -161,7 +164,7 @@ def remove_household(session,principal,body):
     return {'removed':True}
 
 
-def create_callback(session,body):
+def create_callback(session,body,*,customer_id=None):
     visits.strict_object(body,('requestId','name','phone','preferredTime','contactConsent'),('website',))
     if body.get('website'):
         visits.fail('invalid_request','Please check the request.')
@@ -181,11 +184,14 @@ def create_callback(session,body):
     session.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key,0))'),{'key':'home-callback:'+str(request_id)})
     existing=session.get(HomeCallback,request_id)
     if existing:
-        if existing.fingerprint!=fingerprint:
+        if existing.fingerprint!=fingerprint or (customer_id and existing.owner_customer_id not in (None,customer_id)):
             visits.fail('idempotency_conflict','This reference was used for a different callback request.',409)
         return {'id':str(existing.id),'status':'received'}
+    from services.home_customer_worklist import lock_customer,lock_contact
+    if customer_id:lock_customer(session,customer_id)
+    lock_contact(session,phone,name)
     row=HomeCallback(id=request_id,fingerprint=fingerprint,
-        name=name,phone=phone,preferred_time=preferred_time)
+        name=name,phone=phone,preferred_time=preferred_time,owner_customer_id=customer_id)
     session.add(row)
     visits.event(session,'system:home','callback_requested',callbackId=str(request_id))
     return {'id':str(request_id),'status':'received'}

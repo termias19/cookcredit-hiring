@@ -51,6 +51,7 @@ def main():
             conn.exec_driver_sql('GRANT UPDATE (status) ON home_notification_cursors TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE ON home_operating_rules TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE ON home_campaigns TO cookcredit_home_app')
+            conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE ON home_customer_followups TO cookcredit_home_app')
             conn.exec_driver_sql('GRANT SELECT,INSERT,UPDATE,DELETE ON cook_availability,cook_blocked_dates TO cookcredit_home_app')
     finally:
         engine.dispose()

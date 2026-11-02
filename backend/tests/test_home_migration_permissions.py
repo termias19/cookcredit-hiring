@@ -59,12 +59,13 @@ def test_migrated_runtime_can_start_but_cannot_rewrite_audit_or_schema(monkeypat
             assert conn.execute(text("SELECT pg_get_constraintdef(oid) FROM pg_constraint "
                 "WHERE conrelid='cook_availability'::regclass AND conname='home_availability_end_hour'")).scalar() is not None
         with runtime.connect() as conn:
-            for privilege in ('SELECT','INSERT','UPDATE'):
-                assert conn.execute(text("SELECT has_table_privilege(current_user,'home_campaigns',:privilege)"),
-                    {'privilege':privilege}).scalar() is True
-            assert conn.execute(text("SELECT has_table_privilege(current_user,'home_campaigns','DELETE')")).scalar() is False
+            for table in ('home_campaigns','home_customer_followups'):
+                for privilege in ('SELECT','INSERT','UPDATE'):
+                    assert conn.execute(text('SELECT has_table_privilege(current_user,:table,:privilege)'),
+                        {'table':table,'privilege':privilege}).scalar() is True
+                assert conn.execute(text("SELECT has_table_privilege(current_user,:table,'DELETE')"),{'table':table}).scalar() is False
         for statement in ('UPDATE home_events SET details=details', 'DELETE FROM home_commands', 'DELETE FROM home_campaigns',
-                          'DELETE FROM home_quotes', 'INSERT INTO home_schema_migrations VALUES (\'unapproved.sql\')',
+                          'DELETE FROM home_customer_followups', 'DELETE FROM home_quotes', 'INSERT INTO home_schema_migrations VALUES (\'unapproved.sql\')',
                           'CREATE TABLE unauthorized (id integer)'):
             with pytest.raises(ProgrammingError):
                 with runtime.begin() as conn:

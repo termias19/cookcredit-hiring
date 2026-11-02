@@ -138,7 +138,7 @@ export default function Visit({ id, profile }) {
             <p role="alert" className="error">
               {error}
             </p>
-            <a href="#visits">Back to visits</a>
+            <a href={profile.operator ? "#team" : "#visits"}>{profile.operator ? "Back to service desk" : "Back to visits"}</a>
           </>
         ) : (
           <p role="status">Opening your visit…</p>
@@ -158,7 +158,7 @@ export default function Visit({ id, profile }) {
   const canUpload = !closed && (visit.isAssignedHelper || profile.operator) && q;
   return (
     <section className="page visit-detail">
-      <a href="#visits">← My visits</a>
+      <a href={profile.operator ? "#team" : "#visits"}>{profile.operator ? "← Service desk" : "← My visits"}</a>
       <div className="heading">
         <div>
           <p className="visit-status">{visitStatusLabel(visit.status)}</p>

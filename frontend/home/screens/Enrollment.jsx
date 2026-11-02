@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
+import { contactName } from "../customerWorklist";
 
 export const serviceNames = {
   cooking: "Cooking",
@@ -11,6 +12,7 @@ export const serviceNames = {
 export default function Enrollment({ profile, onArrange }) {
   const [ready, setReady] = useState(false), [version, setVersion] = useState(0);
   const [service, setService] = useState(""), [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [registered, setRegistered] = useState(false), [withdrawn, setWithdrawn] = useState(false);
@@ -21,6 +23,7 @@ export default function Enrollment({ profile, onArrange }) {
       if (!active) return;
       setService(enrollment?.service || "");
       setPhone(enrollment?.phone || "");
+      setName(enrollment?.name || contactName(profile.name, profile.email));
       setRegistered(Boolean(enrollment?.service));
       setSaved(Boolean(enrollment?.service));
       setWithdrawn(enrollment?.status === "withdrawn");
@@ -34,7 +37,7 @@ export default function Enrollment({ profile, onArrange }) {
     try {
       const fields = new FormData(event.currentTarget);
       await api("/enrollment", { method: "PUT", body: {
-        service, phone, contactConsent: fields.has("contactConsent"),
+        service, phone, name, contactConsent: fields.has("contactConsent"),
       }});
       setSaved(true);
       setRegistered(true); setWithdrawn(false);
@@ -64,11 +67,13 @@ export default function Enrollment({ profile, onArrange }) {
       <h2>You’re on the list.</h2>
       <p role="status">Your request for {serviceNames[service].toLowerCase()} is saved. We can reach you at {profile.email}{phone ? " or " + phone : ""}.</p>
       <p>This does not reserve a visit or authorize a charge.</p>
+      {!name && <p>Please add your name using Edit my needs so CookCredit knows who to contact.</p>}
       <div className="actions">{profile.enrollmentOnly
         ? <a className="button" href="#callback">Request a call</a>
         : <a className="button" href="#request" onClick={() => onArrange?.(service)}>Arrange a visit</a>}
         <button className="secondary" onClick={() => setSaved(false)}>Edit my needs</button></div>
     </div> : <form onSubmit={submit}>
+      <label>Your full name<input autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} /></label>
       <fieldset><legend>Choose the help you need</legend>
         {Object.entries(serviceNames).map(([value, title]) => <label className="check" key={value}>
           <input type="radio" name="service" value={value} required checked={service === value} onChange={() => setService(value)} />{title}

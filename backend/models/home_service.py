@@ -223,6 +223,20 @@ class HomeCallback(Base):
     status = Column(Text, nullable=False, default='requested')
     version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    # Owner-directory association only. It never authorizes customer access to
+    # callback records, visits, households, or another person's account.
+    owner_customer_id = Column(Text, ForeignKey('users.id'))
+
+
+class HomeCustomerFollowup(Base):
+    __tablename__ = 'home_customer_followups'
+    user_id = Column(Text, ForeignKey('users.id'), primary_key=True)
+    status = Column(Text, nullable=False, default='new')
+    contact_name = Column(Text)
+    version = Column(Integer, nullable=False, default=0)
+    activity_at = Column(DateTime(timezone=True), nullable=False)
+    updated_by = Column(Text, ForeignKey('users.id'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
 
 class HomeReceipt(Base):

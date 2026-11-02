@@ -5,13 +5,14 @@ import { serviceNames } from "./Enrollment";
 import OperatingRulesDraft from "./OperatingRulesDraft";
 import Availability from "./Availability";
 import Outreach from "./Outreach";
+import CustomerWorklist from "./CustomerWorklist";
 import { visitSchedule, visitStatusLabel } from "../visitPresentation";
 
 const deskGroups = [
   { title: "Daily work", sections: [
-    { id: "enrollments", title: "Customers", owner: true, intro: "See who has joined and the services they need." },
+    { id: "enrollments", title: "Customers", owner: true, intro: "Who needs help, what they asked for, and your next step." },
     { id: "visits", title: "Visits", intro: "Review requests, assign helpers and follow each visit through its approvals." },
-    { id: "callbacks", title: "Callbacks", intro: "Follow up with people who have asked CookCredit to call them." },
+    { id: "callbacks", title: "Callbacks", hideForOwner: true, intro: "Follow up with people who have asked CookCredit to call them." },
     { id: "outreach", title: "Outreach", owner: true, intro: "Prepare clear food invitations for email, text and print." },
     { id: "helpers", title: "Helpers", intro: "Review experience, service permissions and each helper’s own availability." },
   ] },
@@ -28,9 +29,10 @@ export default function Team({ profile }) {
   // cannot render against another tab's data shape or overwrite its result.
   const [screen, setScreen] = useState({ tab: profile.owner ? "enrollments" : profile.enrollmentOnly ? "callbacks" : "visits", data: null });
   const { tab, data } = screen;
+  const peopleTab = tab === "enrollments" && profile.owner;
   const groups = deskGroups.map(group => ({ ...group,
     title: group.title,
-    sections: group.sections.filter(item => (!item.owner || profile.owner) &&
+    sections: group.sections.filter(item => (!item.owner || profile.owner) && (!item.hideForOwner || !profile.owner) &&
       (!profile.enrollmentOnly || ["enrollments", "callbacks", "audit", "outreach"].includes(item.id) || (profile.owner && ["pricing", "operations"].includes(item.id)))),
   })).filter(group => group.sections.length);
   const currentSection = groups.flatMap(group => group.sections).find(item => item.id === tab) ||
@@ -52,6 +54,7 @@ export default function Team({ profile }) {
     let active = true;
     setData(null);
     setError("");
+    if (peopleTab) return;
     api("/" + tab)
       .then((v) => {
         if (active) setData(v);
@@ -62,7 +65,7 @@ export default function Team({ profile }) {
     return () => {
       active = false;
     };
-  }, [tab, version]);
+  }, [tab, version, peopleTab]);
 
   const run = async (task, successNotice = "Change saved.") => {
     setBusy(true);
@@ -91,17 +94,6 @@ export default function Team({ profile }) {
       setError(e.message);
     } finally {
       setBusy(false);
-    }
-  };
-  const enrollmentLink = new URL(location.href);
-  enrollmentLink.hash = "enroll";
-  enrollmentLink.search = "";
-  const copyEnrollment = async () => {
-    try {
-      await navigator.clipboard.writeText(enrollmentLink.href);
-      setNotice("Enrollment link copied. You can paste it into a text or email.");
-    } catch {
-      setNotice("The link was not copied. Select and copy it from the field below.");
     }
   };
   const review = (event, id) => {
@@ -181,7 +173,7 @@ export default function Team({ profile }) {
           {error}
         </p>
       )}
-      {!data && !error && <p role="status">Loading…</p>}
+      {!peopleTab && !data && !error && <p role="status">Loading…</p>}
       {error && !data && <button onClick={() => setVersion(v => v + 1)}>Try again</button>}
 
       {data && tab === "outreach" && profile.owner && <Outreach data={data} profile={profile} reload={async (cursor) => {
@@ -189,26 +181,7 @@ export default function Team({ profile }) {
         setData(cursor ? { ...value, drafts: [...data.drafts, ...value.drafts] } : value);
       }} />}
 
-      {data && tab === "enrollments" && profile.owner && <>
-        <details className="home-desk-disclosure">
-          <summary>Invite people to enroll</summary>
-          <p>Share this link by text or email. People sign in and choose the services they need. Signing up does not book or charge for a visit.</p>
-          {profile.environment === "staging" && <p className="quiet">This is currently a restricted staging link. Public invitations follow launch acceptance.</p>}
-          <label>Enrollment link<input readOnly value={enrollmentLink.href} /></label>
-          <button onClick={copyEnrollment}>Copy enrollment link</button>
-        </details>
-        <h2>People enrolled</h2>
-        <button className="secondary" disabled={busy} onClick={() => setVersion(v => v + 1)}>Refresh people</button>
-        <p>Only the Home owner can open this directory. Account-only entries have signed in but have not saved their service needs.</p>
-        {!data.enrollments.length && <p>No enrollments yet.</p>}
-        {data.enrollments.map(row => <article className="home-desk-record" key={row.id}>
-          <h3>{row.name}</h3>
-          <p>{row.withdrawn ? "Service interest withdrawn — do not contact about enrollment" : row.service ? serviceNames[row.service] : "Account only — service needs not provided"}</p>
-          <p><a href={"mailto:" + row.email}>{row.email}</a>{row.phone && <> · <a href={"tel:" + row.phone}>{row.phone}</a></>}</p>
-          <p className="quiet">Joined {new Date(row.joinedAt).toLocaleDateString()}{row.updatedAt && " · Needs updated " + new Date(row.updatedAt).toLocaleDateString()}</p>
-        </article>)}
-        {data.nextCursor && <button disabled={busy} onClick={loadMore}>More people</button>}
-      </>}
+      {peopleTab && <CustomerWorklist profile={profile} />}
 
       {data && tab === "operating-rules" && profile.owner && <OperatingRulesDraft key={data.version} data={data} run={run} busy={busy}
         reload={() => setVersion(value => value + 1)} />}

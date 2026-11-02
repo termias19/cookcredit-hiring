@@ -173,14 +173,19 @@ def change_household():
 @limiter.limit('3 per hour')
 def request_callback():
     # Private staging must not collect real anonymous household requests.
-    if os.getenv('COOKCREDIT_ENVIRONMENT')=='staging':
+    if os.getenv('COOKCREDIT_ENVIRONMENT')=='staging' or request.headers.get('Authorization'):
         return home_auth(_request_callback)()
     return _request_callback()
 
 
 def _request_callback():
     with db_session() as session:
-        result=customers.create_callback(session,json_body())
+        customer_id=getattr(g,'user_id',None)
+        if customer_id:
+            visits.sync_identity(session,principal(),refresh=False)
+            from services.home_mail import ensure_welcome
+            ensure_welcome(session,principal())
+        result=customers.create_callback(session,json_body(),customer_id=customer_id)
     return jsonify(result),202
 
 

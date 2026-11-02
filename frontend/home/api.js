@@ -18,7 +18,7 @@ const finalRejections = {
     "invalid_materials", "materials_limit", "tax_review_required",
     "customer_supplies", "receipt_review_required", "invalid_receipts",
     "receipt_evidence_required", "tax_limit", "invalid_phone",
-    "invalid_application", "invalid_permission", "invalid_status", "invalid_campaign",
+    "invalid_application", "invalid_permission", "invalid_status", "invalid_campaign", "invalid_search", "invalid_followup", "invalid_cursor",
   ]),
   409: new Set([
     "stale_version", "operating_rules_changed", "availability_changed",

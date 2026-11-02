@@ -7,6 +7,7 @@ import * as homeNavigation from '../home/navigation.js'
 const {safeHomeRoute}=homeNavigation
 import * as visitPresentation from '../home/visitPresentation.js'
 import * as serviceAddress from '../home/serviceAddress.js'
+import * as customerWorklist from '../home/customerWorklist.js'
 
 // Actual screen handlers under controlled failures; browser acceptance is separate.
 async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportName='default',runtime={}) {
@@ -15,7 +16,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     return [states[slot],value=>{states[slot]=typeof value==='function'?value(states[slot]):value}]},
     useRef(initial){const slot=index++;return states[slot]||=( {current:initial} )},
     useEffect(fn,deps){const slot=index++,old=effects[slot];if(!old||deps.some((d,i)=>d!==old.deps[i]))
-      queued.push(()=>{old?.cleanup?.();effects[slot]={deps,cleanup:fn()}})}}
+      queued.push(()=>{old?.cleanup?.();effects[slot]={deps,cleanup:fn()}})},Fragment:'fragment'}
   const jsx=(type,props,key)=>({type,props,key})
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     '../api':{api,label:v=>v,money:v=>String(v),dollars:Number},
@@ -26,6 +27,9 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './Enrollment':{serviceNames:{both:'Cooking and cleaning',cooking:'Cooking',cleaning:'Cleaning',not_sure:'Help choosing'}},
     './OperatingRulesDraft':{__esModule:true,default:()=>null},
     './Availability':{__esModule:true,default:()=>null},
+    './CustomerWorklist':{__esModule:true,default:function CustomerWorklist(){}},
+    '../customerWorklist':customerWorklist,
+    '../customerWorklist.css':{},
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
     '../visitPresentation':visitPresentation,
@@ -38,7 +42,7 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
   if(exportName!=='default')source+='\nexport { '+exportName+' };'
   const {code}=await transformWithEsbuild(source,name+'.jsx',{loader:'jsx',jsx:'automatic',format:'cjs'})
   const context={module:{exports:{}},require:id=>modules[id],URL,URLSearchParams,crypto,window:{scrollTo(){}},
-    location:{href:'https://home.example.test/#team'},navigator:{clipboard:{writeText:clipboard}},
+    location:{href:'https://home.example.test/#team',origin:'https://home.example.test'},navigator:{clipboard:{writeText:clipboard}},
     FormData:class {constructor(values){this.values=values}has(key){return this.values[key]===true}get(key){return this.values[key]??null}
       getAll(key){return Array.isArray(this.values[key])?this.values[key]:[]}},...runtime.context}
   vm.runInNewContext(code,context)
@@ -213,7 +217,7 @@ test('owner visit list uses the same schedule and status labels after an explici
   })
   await s.settle()
   s.find(p=>p.children==='Visits').props.onClick();s.render();await s.settle()
-  assert.deepEqual(calls,['/enrollments','/visits'])
+  assert.deepEqual(calls,['/visits'])
   assert.match(s.text(),/Cooking and cleaning/)
   assert.match(s.text(),/Saturday, November 7, 2026/)
   assert.match(s.text(),/1:30 PM/);assert.match(s.text(),/Eastern time/)
@@ -270,12 +274,14 @@ test('enrollment save uses the existing account endpoint and only claims success
     if(!options)return {enrollment:null};if(fail)throw new Error('Retry safely');return {enrollment:{service:'both'}}})
   await s.settle()
   s.find(p=>p.value==='both').props.onChange();s.render()
+  assert.ok(s.find(p=>p.autoComplete==='name').props.required)
+  s.find(p=>p.autoComplete==='name').props.onChange({target:{value:'Jordan Smith'}});s.render()
   const submit=()=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
   await submit();s.render();assert.match(s.text(),/Retry safely/);assert.doesNotMatch(s.text(),/You’re on the list/)
   fail=false;await submit();s.render();assert.match(s.text(),/You’re on the list/)
   assert.equal(calls.length,3)
   assert.equal(calls[2][0],'/enrollment');assert.equal(calls[2][1].method,'PUT')
-  assert.equal(JSON.stringify(calls[2][1].body),JSON.stringify({service:'both',phone:'',contactConsent:true}))
+  assert.equal(JSON.stringify(calls[2][1].body),JSON.stringify({service:'both',phone:'',name:'Jordan Smith',contactConsent:true}))
 })
 
 test('a returning enrolled customer sees saved needs and can explicitly edit without another enrollment request',async()=>{
@@ -294,26 +300,25 @@ test('a returning enrolled customer sees saved needs and can explicitly edit wit
   assert.deepEqual(calls,[['/enrollment',undefined]])
 })
 
-test('only the owner screen requests the enrollment directory and failed copy stays honest',async()=>{
+test('only the owner mounts the customer worklist without a second legacy directory request',async()=>{
   const calls=[]
   const api=async path=>{calls.push(path);return path==='/enrollments'?{enrollments:[]}:{visits:[]}}
   const operator=await screen('Team',api,false);await operator.settle()
   assert.deepEqual(calls,['/visits']);assert.doesNotMatch(operator.text(),/People enrolled/)
-  const owner=await screen('Team',api,true,async()=>{throw new Error('clipboard blocked')});await owner.settle()
-  assert.equal(calls.at(-1),'/enrollments')
-  assert.match(owner.text(),/People enrolled/)
-  await owner.find(p=>p.children==='Copy enrollment link').props.onClick();owner.render()
-  assert.match(owner.text(),/link was not copied/)
-  assert.equal(owner.find(p=>p.readOnly).props.value,'https://home.example.test/#enroll')
+  const worklist=s=>s.find((p,n)=>n.type?.name==='CustomerWorklist')
+  assert.equal(worklist(operator),undefined)
+  const owner=await screen('Team',api,true);await owner.settle()
+  assert.deepEqual(calls,['/visits'])
+  assert.ok(worklist(owner));assert.doesNotMatch(owner.text(),/Loading/)
 })
 
 test('clicking the selected service-desk tab keeps its loaded data and does not strand the page on Loading',async()=>{
   const calls=[]
   const s=await screen('Team',async path=>{calls.push(path);return {enrollments:[]}})
-  await s.settle();assert.match(s.text(),/People enrolled/)
+  await s.settle();assert.ok(s.find((p,n)=>n.type?.name==='CustomerWorklist'))
   s.find((p,n)=>n.type==='button'&&p.children==='Customers').props.onClick();s.render();await s.settle()
-  assert.match(s.text(),/People enrolled/);assert.doesNotMatch(s.text(),/Loading/)
-  assert.deepEqual(calls,['/enrollments'])
+  assert.ok(s.find((p,n)=>n.type?.name==='CustomerWorklist'));assert.doesNotMatch(s.text(),/Loading/)
+  assert.deepEqual(calls,[])
 })
 
 test('service desk groups settings behind disclosure and loads only the explicitly selected section',async()=>{
@@ -324,12 +329,11 @@ test('service desk groups settings behind disclosure and loads only the explicit
   assert.ok(s.find(p=>p.children==='Customers'));assert.match(s.text(),/Daily work/)
   const settings=()=>s.find((p,n)=>n.type==='details'&&p.className==='home-desk-group home-desk-settings')
   assert.equal(settings().props.open,false)
-  const invite=s.find((p,n)=>n.type==='details'&&p.className==='home-desk-disclosure')
-  assert.equal(invite.props.open,undefined)
-  assert.deepEqual(calls.map(([path])=>path),['/enrollments'])
+  assert.ok(s.find((p,n)=>n.type?.name==='CustomerWorklist'))
+  assert.deepEqual(calls,[])
   s.find(p=>p.children==='Pricing').props.onClick();s.render();await s.settle()
   assert.equal(settings().props.open,true)
-  assert.deepEqual(calls.map(([path])=>path),['/enrollments','/pricing'])
+  assert.deepEqual(calls.map(([path])=>path),['/pricing'])
   assert.ok(calls.every(([,options])=>!options))
   assert.equal(s.find(p=>p.children==='Refresh people'),undefined)
 })
@@ -342,10 +346,11 @@ test('public enrollment desk exposes owner setup without opening customer bookin
   assert.doesNotMatch(owner.text(),/Helpers|Hours and scheduling/)
   assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Pricing'))
   assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Payment operations'))
-  assert.ok(owner.find((p,n)=>n.type==='button'&&p.children==='Callbacks'))
+  assert.equal(owner.find((p,n)=>n.type==='button'&&p.children==='Callbacks'),undefined)
+  assert.ok(owner.find((p,n)=>n.type?.name==='CustomerWorklist'))
   assert.equal(owner.find((p,n)=>n.type==='button'&&p.children==='Visits'),undefined)
   owner.find((p,n)=>n.type==='button'&&p.children==='Activity log').props.onClick();owner.render();await owner.settle()
-  assert.deepEqual(calls,['/enrollments','/audit'])
+  assert.deepEqual(calls,['/audit'])
   const operatorCalls=[]
   const operator=await screen('Team',async path=>{operatorCalls.push(path);return {callbacks:[]}},false,async()=>{},
     {profile:{owner:false,operator:true,enrollmentOnly:true}})
@@ -369,7 +374,7 @@ test('public enrollment saves interest only and offers a call with clear informa
   assert.ok(s.find(p=>p.href==='#callback'))
   assert.ok(s.find(p=>p.children==='Remove my service needs'))
   assert.equal(calls.length,2);assert.equal(calls[1][0],'/enrollment');assert.equal(calls[1][1].method,'PUT')
-  assert.equal(JSON.stringify(calls[1][1].body),JSON.stringify({service:'cooking',phone:'',contactConsent:true}))
+  assert.equal(JSON.stringify(calls[1][1].body),JSON.stringify({service:'cooking',phone:'',name:'',contactConsent:true}))
 })
 
 test('enrollment-only landing, explanation and blocked entry never offer booking or health intake',async()=>{
@@ -593,7 +598,7 @@ test('owner can reload a changed policy after a failed mutation without replayin
   assert.match(s.text(),/Rules changed in another window/)
   editor=s.find(p=>typeof p.reload==='function'&&p.data?.rules);editor.props.reload();s.render();await s.settle()
   assert.doesNotMatch(s.text(),/Rules changed in another window/)
-  assert.deepEqual(calls,['/enrollments','/operating-rules','/operating-rules'])
+  assert.deepEqual(calls,['/operating-rules','/operating-rules'])
 })
 
 const suggestions=(date='2026-12-01')=>({date,timeZone:'America/New_York',policyVersion:2,
@@ -718,3 +723,38 @@ test('owner price creation preserves cent precision and failed parsing creates n
   assert.equal(calls.filter(([,options])=>options?.method==='POST').length,count);
   assert.match(s.text(),/no more than two decimal places/);
 });
+
+test('customer worklist uses private search, versioned follow-up and honest copy recovery',async()=>{
+  const timers=[],calls=[];let saved=false
+  const person={id:'u:member',kind:'customer',customerId:'member',name:'Jordan Smith',email:'member@example.test',
+    service:'both',canContact:true,status:'new',version:3,activityAt:'2026-11-02T12:00:00+00:00',callbackCount:0,visitCount:0}
+  const s=await screen('CustomerWorklist',async(path,options)=>{
+    calls.push([path,options]);if(path.endsWith('/follow-up')){saved=true;return {updated:true}}
+    return {people:saved?[]:[person],nextCursor:null}
+  },true,async()=>{throw new Error('Clipboard unavailable')},{},'default',{
+    context:{setTimeout(fn){timers.push(fn);return timers.length},clearTimeout(){}}})
+  timers.shift()();await s.settle()
+  assert.equal(calls.length,1);assert.equal(calls[0][0],'/enrollments/search')
+  assert.equal(calls[0][1].method,'POST');assert.equal(calls[0][1].body.scope,'needs')
+  assert.match(s.text(),/Jordan Smith/);assert.match(s.text(),/Cooking and cleaning/)
+  await s.find(p=>p.children==='Copy enrollment link').props.onClick();s.render()
+  assert.match(s.text(),/Select the enrollment link/);assert.doesNotMatch(s.text(),/link copied/)
+  assert.equal(s.find(p=>p.readOnly).props.value,'https://home.example.test/#enroll')
+  await s.find(p=>p['aria-label']==='Follow-up for Jordan Smith').props.onChange({target:{value:'done'}});s.render()
+  assert.equal(calls[1][0],'/enrollments/member/follow-up')
+  assert.equal(JSON.stringify(calls[1][1].body),JSON.stringify({status:'done',version:3,activityAt:person.activityAt}))
+  assert.match(s.text(),/No one is waiting/)
+})
+
+test('a late customer search cannot overwrite the latest query or invent a saved status',async()=>{
+  const timers=[],pending=[]
+  const s=await screen('CustomerWorklist',async(path,options)=>new Promise(resolve=>pending.push({resolve,query:options.body.query})),
+    true,async()=>{},{},'default',{context:{setTimeout(fn){timers.push(fn);return timers.length},clearTimeout(){}}})
+  timers.shift()()
+  s.find(p=>p.placeholder==='Name, email or phone').props.onChange({target:{value:'New name'}});s.render()
+  timers.shift()()
+  assert.equal(pending[1].query,'New name')
+  pending[1].resolve({people:[],nextCursor:null});await s.settle()
+  pending[0].resolve({people:[{id:'c:old',kind:'callback',name:'Outdated contact',activityAt:'2026-11-01',callbackCount:0}],nextCursor:null});await s.settle()
+  assert.match(s.text(),/No match/);assert.doesNotMatch(s.text(),/Outdated contact/)
+})

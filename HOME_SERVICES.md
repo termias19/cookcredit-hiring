@@ -741,6 +741,32 @@ Help and the legacy callback alias share one form for a given signed-in identity
 so following a Help link does not erase entries or replace an unknown request's
 retry ID. An account change resets that form's private contact details.
 
+## Owner customer follow-up
+
+The owner Customers section combines existing Home account, enrollment, visit
+and callback summaries. Registered accounts appear once per Firebase UID.
+The default list shows work needing follow-up; account-only and withdrawn
+enrollments remain available through filters. Search uses a private POST body,
+literal matching and bounded keyset pages. Addresses and household instructions
+are excluded from this summary. Operators retain the existing scoped callback
+queue and cannot read this combined owner directory.
+
+Anonymous repeat calls are grouped by the supplied normalized name and phone.
+They remain requests, not new accounts. The owner must confirm identity before
+linking a call group to an existing Home customer. Linking is reversible and
+does not merge logins, grant access or disclose requests to the linked customer.
+Different people sharing a phone remain separate when their names differ.
+Distinct sign-in accounts are never automatically merged.
+
+Follow-up metadata references the existing UID; it stores no second contact
+record. Version and source-activity checks prevent stale updates. Completing
+follow-up closes existing linked calls but never changes visits or payments.
+New activity and an owner link of an older open call reopen follow-up. All
+mutations use the existing command idempotency and append-only access audit.
+New enrollments collect a contact name; an owner-confirmed fallback can fill
+older missing names without changing Firebase identity. Customer-provided names
+take precedence. These permissions are enforced by the backend owner guard.
+
 ## Owner outreach
 
 The Home service desk has an owner-only **Outreach** section for food invitations
