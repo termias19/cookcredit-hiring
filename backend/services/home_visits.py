@@ -228,6 +228,8 @@ def create_visit(session, principal, body):
     begin=datetime.combine(data['day'],data['start'],ZoneInfo(data['time_zone'])).astimezone(timezone.utc)
     rules.require_window(policy,begin,begin+timedelta(minutes=data['minutes']))
     rules.require_notice(policy,begin)
+    from services.home_customer_worklist import reopen_for_request
+    reopen_for_request(session,principal['uid'])
     booking_id = uuid.uuid4()
     # No quote exists yet. Zero here is an unpriced legacy field, never a free
     # quote or payment authorization. Future pricing must use an approved quote.

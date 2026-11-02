@@ -145,6 +145,16 @@ def lock_customer(session,uid):
     session.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key,0))'),{'key':'home-followup:'+uid})
 
 
+def reopen_for_request(session,uid):
+    # PostgreSQL now() uses transaction start, not commit time. A request can
+    # commit after the owner finishes work while carrying an older timestamp.
+    # Serialize it with follow-up and advance its version independently of time.
+    lock_customer(session,uid)
+    session.execute(update(HomeCustomerFollowup).where(HomeCustomerFollowup.user_id==uid)
+        .values(status='new',version=HomeCustomerFollowup.version+1,
+            updated_by=uid,updated_at=datetime.now(timezone.utc)))
+
+
 def lock_contact(session,phone,name):
     session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('home-call-contact:'||:phone||':'||"
         "lower(regexp_replace(btrim(:name),'[[:space:]]+',' ','g')),0))"),{'phone':phone,'name':name})

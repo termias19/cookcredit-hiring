@@ -1,5 +1,6 @@
 """Actual SQL/API tests in disposable Home schemas; no provider or cloud I/O."""
 import uuid
+import pytest
 from datetime import datetime,timedelta,timezone
 from sqlalchemy import select,func
 from models import User,Booking
@@ -184,3 +185,22 @@ def test_linking_an_older_open_call_reopens_finished_customer_followup(app,monke
     row=search(client)['people'][0]
     assert row['customerId']=='customer'and row['status']=='new'and row['callbackCount']==1
     assert follow(client,customer,'done').status_code==409
+
+
+@pytest.mark.parametrize('kind',('callback','enrollment','visit'))
+def test_requests_reopen_followup_even_when_transaction_time_precedes_handled_time(app,monkeypatch,kind):
+    monkeypatch.setenv('COOKCREDIT_ENVIRONMENT','development')
+    client=app.test_client();enroll(client)
+    row=search(client)['people'][0]
+    assert follow(client,row,'done').status_code==200
+    # Model an overlapping, older transaction timestamp. Reopening must use
+    # the serialized source write/version rather than trusting clock order.
+    with database.db_session()as session:
+        session.get(HomeCustomerFollowup,'customer').activity_at=datetime.now(timezone.utc)+timedelta(days=1)
+    before=search(client,'all')['people'][0]
+    if kind=='callback':call(client,'customer')
+    elif kind=='enrollment':enroll(client,name='Updated contact name')
+    else:assert create(client).status_code==201
+    after=search(client)['people'][0]
+    assert after['status']=='new'and after['version']>before['version']
+    assert follow(client,before,'done').status_code==409

@@ -60,6 +60,8 @@ def save_enrollment(session,principal,body):
     if name:name=' '.join(name.split())
     if current and current.get('service')==body['service'] and current.get('phone')==phone and current.get('name')==name:
         return {'saved':True}
+    from services.home_customer_worklist import reopen_for_request
+    reopen_for_request(session,uid)
     now=datetime.now(timezone.utc).isoformat()
     value={'status':'active','service':body['service'],'phone':phone,'enrolledAt':current['enrolledAt'] if current else now,'updatedAt':now}
     if name:value['name']=name
@@ -187,8 +189,8 @@ def create_callback(session,body,*,customer_id=None):
         if existing.fingerprint!=fingerprint or (customer_id and existing.owner_customer_id not in (None,customer_id)):
             visits.fail('idempotency_conflict','This reference was used for a different callback request.',409)
         return {'id':str(existing.id),'status':'received'}
-    from services.home_customer_worklist import lock_customer,lock_contact
-    if customer_id:lock_customer(session,customer_id)
+    from services.home_customer_worklist import reopen_for_request,lock_contact
+    if customer_id:reopen_for_request(session,customer_id)
     lock_contact(session,phone,name)
     row=HomeCallback(id=request_id,fingerprint=fingerprint,
         name=name,phone=phone,preferred_time=preferred_time,owner_customer_id=customer_id)
