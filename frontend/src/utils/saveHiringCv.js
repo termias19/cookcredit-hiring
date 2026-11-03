@@ -4,11 +4,12 @@ export async function saveHiringCv(loadBlob, browser = window, doc = document, u
 }
 
 export async function saveHiringFile(loadBlob, options, browser = window, doc = document, urls = URL) {
+  const { downloadOnly = false, ...pickerOptions } = options
   // Invoke the picker before awaiting authentication so the click retains activation.
   let handle
-  if (typeof browser.showSaveFilePicker === 'function') {
+  if (!downloadOnly && typeof browser.showSaveFilePicker === 'function') {
     try {
-      handle = await browser.showSaveFilePicker(options)
+      handle = await browser.showSaveFilePicker(pickerOptions)
     } catch (error) {
       if (error.name === 'AbortError') return 'cancelled'
       // Embedded browsers may prohibit the picker. Use their standard download path.
