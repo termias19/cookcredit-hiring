@@ -49,8 +49,10 @@ export default function Enrollment({ profile, onArrange }) {
     finally { setBusy(false); }
   };
   return <section className="narrow">
+    <div className="customer-preferences-heading"><div>
     <p className="eyebrow">CookCredit at home</p>
     <h1>{profile.enrollmentOnly ? "What would help?" : "Service preferences"}</h1>
+    </div>{saved && !profile.enrollmentOnly && <a className="button" href="#request" onClick={() => onArrange?.(service)}>Request a visit</a>}</div>
     <p>{profile.enrollmentOnly
       ? "Choose the kind of help you are interested in. Enrollment and call requests are open; visit booking, scheduling and payments are not available yet."
       : "Update your contact details and the help you’re interested in."}</p>
@@ -67,9 +69,7 @@ export default function Enrollment({ profile, onArrange }) {
         <div><dt>Email</dt><dd>{profile.email}</dd></div>
         {phone && <div><dt>Phone</dt><dd>{phone}</dd></div>}
       </dl>
-      <div className="actions">{profile.enrollmentOnly
-        ? <a className="button" href="#callback">Request a call</a>
-        : <a className="button" href="#request" onClick={() => onArrange?.(service)}>Request a visit</a>}
+      <div className="actions">{profile.enrollmentOnly && <a className="button" href="#callback">Request a call</a>}
         <button className="secondary" onClick={() => setSaved(false)}>Edit my needs</button></div>
     </div> : <form onSubmit={submit}>
       <label>Your full name<input autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} /></label>

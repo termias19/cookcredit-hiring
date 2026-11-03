@@ -33,6 +33,8 @@
 .customer-contact-facts > div { display:grid; grid-template-columns:90px minmax(0,1fr); gap:16px; padding:12px 0; border-bottom:1px solid var(--line); }
 .customer-contact-facts dt { color:var(--muted); font-size:16px; }.customer-contact-facts dd { margin:0; max-width:none; text-align:left; overflow-wrap:anywhere; }
 .customer-preferences-saved h2 { margin-top:0; }
+.customer-preferences-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.customer-preferences-heading > .button { flex-shrink:0; }
 .customer-request-progress { display:flex; gap:20px; padding:0 0 18px; margin:20px 0 28px; border-bottom:1px solid var(--line); list-style:none; }
 .customer-request-progress li { display:flex; gap:8px; align-items:center; font-size:14px; color:var(--muted); }
 .customer-request-progress span { display:inline-flex; align-items:center; justify-content:center; width:25px; height:25px; border:1px solid var(--line); flex-shrink:0; }
@@ -56,6 +58,7 @@
   .home-customer-header nav a { min-height:48px; font-size:16px; padding:10px 6px; }
   .home-customer-main,.home-account-main { padding:24px 16px 48px; }.home-customer-main h1,.home-account-main h1 { font-size:34px; }
   .home-customer-main .heading { display:block; }.home-customer-main .heading .button { margin-top:20px; width:100%; }
+  .customer-preferences-heading { display:block; }.customer-preferences-heading > .button { width:100%; margin:0 0 20px; }
   .home-customer-main .actions { display:flex; flex-wrap:wrap; }.home-customer-main .actions > * { flex:1 1 160px; }
   .customer-journey-steps { display:block; margin:20px 0; }.customer-journey-steps li { margin:8px 0; }
   .customer-empty { padding:20px; }.customer-contact-facts > div { grid-template-columns:65px minmax(0,1fr); gap:14px; }
