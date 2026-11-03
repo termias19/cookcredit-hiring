@@ -4,6 +4,7 @@ import vm from 'node:vm'
 import {readFile} from 'node:fs/promises'
 import {transformWithEsbuild} from 'vite'
 import * as homeNavigation from '../home/navigation.js'
+import * as customerWorklist from '../home/customerWorklist.js'
 const {safeHomeRoute}=homeNavigation
 
 test('actual Home callback form warms security without submitting data and respects private access gates',async()=>{
@@ -26,6 +27,7 @@ test('actual Home callback form warms security without submitting data and respe
       '../src/firebase':{auth:{},getAppCheckHeaders:async()=>{warmed++;throw new Error('synthetic warm-up failure')}},
       './api':{api:async()=>{submitted++}},
       './navigation':homeNavigation,
+      './customerWorklist':customerWorklist,
     }
     const context={module:{exports:{}},require:id=>modules[id]||{},crypto}
     vm.runInNewContext(code,context)

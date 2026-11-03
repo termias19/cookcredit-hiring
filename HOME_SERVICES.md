@@ -741,6 +741,21 @@ Help and the legacy callback alias share one form for a given signed-in identity
 so following a Help link does not erase entries or replace an unknown request's
 retry ID. An account change resets that form's private contact details.
 
+## Customer account navigation
+
+Customers use one compact account header with My visits, Preferences and Help
+visible on desktop and phones. Operations and approved helpers retain their
+existing role-scoped workspace. Preferences reuse enrollment and the existing
+saved-household controls; visit requests reuse the same three-step form and APIs.
+Service names come from one presentation module. Sign-in keeps its existing
+Google/email, verification and safe-return behavior with a simpler header.
+
+Changed requests warn before navigation, browser unload or sign-out. No address,
+instruction or pending form is added to browser storage. The existing acknowledged
+request clears that warning. If the separately requested household save fails,
+the interface links to the already-saved visit instead of offering to send it
+again. Enrollment withdrawal requires a separate confirmation in Your information.
+
 ## Owner customer follow-up
 
 The owner Customers section combines existing Home account, enrollment, visit

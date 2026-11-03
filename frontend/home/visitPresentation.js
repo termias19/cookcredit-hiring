@@ -1,5 +1,6 @@
 // Shared labels keep the request form and saved visit consistent. Stored values
 // remain unchanged; these are presentation labels, not new booking categories.
+export const serviceNames = { cooking: "Cooking", cleaning: "Cleaning", both: "Cooking and cleaning", not_sure: "Help choosing" };
 export const preferences = [
   ["allergies", "Food allergies or ingredients to avoid"],
   ["provided_meal_instructions", "Follow meal instructions I already have"],

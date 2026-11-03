@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { serviceNames } from "./Enrollment";
 import { followupNames, mergePeople } from "../customerWorklist";
-import { visitStatusLabel, visitSchedule } from "../visitPresentation";
+import { visitStatusLabel, visitSchedule, serviceNames } from "../visitPresentation";
 import "../customerWorklist.css";
 
 export default function CustomerWorklist({ profile }) {

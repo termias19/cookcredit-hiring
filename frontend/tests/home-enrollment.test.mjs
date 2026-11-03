@@ -29,6 +29,8 @@ async function screen(name,api,owner=true,clipboard=async()=>{},props={},exportN
     './Availability':{__esModule:true,default:()=>null},
     './CustomerWorklist':{__esModule:true,default:function CustomerWorklist(){}},
     '../customerWorklist':customerWorklist,
+    './customerWorklist':customerWorklist,
+    './SavedDetails':{__esModule:true,default:function SavedDetails(){}},
     '../customerWorklist.css':{},
     './SuggestedTimes':{__esModule:true,default:()=>null},
     '../HomeErrorBoundary':{__esModule:true,default:'home-boundary'},
@@ -162,6 +164,7 @@ test('enabled staging customers may submit and a second callback is only created
   const event={preventDefault(){},currentTarget:{name:'Example',phone:'4045550123',time:'Afternoon',consent:'on'}}
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
   assert.match(s.text(),/callback request is received/);assert.match(s.text(),/visit has not been booked/)
+  assert.equal(s.find(p=>p.children==='Back to my visits').props.href,'#visits')
   s.find(p=>p.children==='Request another call').props.onClick();s.render()
   assert.equal(calls.length,1);assert.ok(s.find((p,n)=>n.type==='form'))
   await s.find((p,n)=>n.type==='form').props.onSubmit(event);s.render()
@@ -277,8 +280,8 @@ test('enrollment save uses the existing account endpoint and only claims success
   assert.ok(s.find(p=>p.autoComplete==='name').props.required)
   s.find(p=>p.autoComplete==='name').props.onChange({target:{value:'Jordan Smith'}});s.render()
   const submit=()=>s.find((p,n)=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{contactConsent:true}})
-  await submit();s.render();assert.match(s.text(),/Retry safely/);assert.doesNotMatch(s.text(),/You’re on the list/)
-  fail=false;await submit();s.render();assert.match(s.text(),/You’re on the list/)
+  await submit();s.render();assert.match(s.text(),/Retry safely/);assert.doesNotMatch(s.text(),/Your preferences are saved/)
+  fail=false;await submit();s.render();assert.match(s.text(),/Your preferences are saved/)
   assert.equal(calls.length,3)
   assert.equal(calls[2][0],'/enrollment');assert.equal(calls[2][1].method,'PUT')
   assert.equal(JSON.stringify(calls[2][1].body),JSON.stringify({service:'both',phone:'',name:'Jordan Smith',contactConsent:true}))
@@ -404,7 +407,7 @@ test('arrange visit carries the saved enrollment choice without overriding later
   const enrollment=await screen('Enrollment',async(path,options)=>options?{saved:true}:{enrollment:{service:'both'}},
     false,async()=>{},{onArrange:value=>{chosen=value}})
   await enrollment.settle()
-  assert.match(enrollment.text(),/You’re on the list/)
+  assert.match(enrollment.text(),/Your preferences are saved/)
   enrollment.find(p=>p.href==='#request').props.onClick()
   assert.equal(chosen,'both')
   const visit=await screen('RequestVisit',async()=>({household:null}),false,async()=>{},{initialService:chosen})
@@ -757,4 +760,47 @@ test('a late customer search cannot overwrite the latest query or invent a saved
   pending[1].resolve({people:[],nextCursor:null});await s.settle()
   pending[0].resolve({people:[{id:'c:old',kind:'callback',name:'Outdated contact',activityAt:'2026-11-01',callbackCount:0}],nextCursor:null});await s.settle()
   assert.match(s.text(),/No match/);assert.doesNotMatch(s.text(),/Outdated contact/)
+})
+
+test('a saved visit with a failed remember request shows its acknowledgement and cannot be resent from the form',async()=>{
+  const calls=[],savedId='11111111-1111-4111-8111-111111111111';let acknowledged=0
+  const s=await screen('RequestVisit',async(path,options)=>{
+    calls.push([path,options]);if(path==='/visits')return {id:savedId}
+    if(options)throw new Error('Saved address unavailable')
+    return {household:null}
+  },false,async()=>{},{onSubmitted:()=>{acknowledged++}})
+  await s.settle()
+  const form=()=>s.find((p,n)=>n.type==='form')
+  await form().props.onSubmit({preventDefault(){},currentTarget:{}});s.render()
+  await form().props.onSubmit({preventDefault(){},currentTarget:{}});s.render()
+  await form().props.onSubmit({preventDefault(){},currentTarget:{cooking:'120',street:'100 Example Street',city:'Atlanta',state:'GA',postalCode:'30315',date:'2030-01-07',time:'10:00',repeatPreference:'once',notes:'',consent:'on',remember:'on'}});s.render()
+  assert.equal(acknowledged,1);assert.equal(form(),undefined)
+  assert.match(s.text(),/Your request is saved/);assert.match(s.text(),/couldn’t also save/)
+  assert.equal(s.find(p=>p.children==='View my request').props.href,'#visit/'+savedId)
+  assert.equal(calls.filter(([path])=>path==='/visits').length,1)
+})
+
+test('request choices match the selected service and saved-detail errors do not block a manual request',async()=>{
+  let fail=true,reads=0
+  const s=await screen('RequestVisit',async()=>{reads++;if(fail)throw new Error('Unavailable');return {household:null}},false)
+  await s.settle();assert.match(s.text(),/saved details could not load/)
+  assert.ok(s.find(p=>p.name==='preferences'&&p.value==='allergies'))
+  assert.equal(s.find(p=>p.name==='preferences'&&p.value==='customer_supplies'),undefined)
+  const cleaning=s.find((p,n)=>n.type==='label'&&Array.isArray(p.children)&&p.children.includes('Cleaning'))
+  cleaning.props.children.find(n=>n?.type==='input').props.onChange();s.render()
+  assert.ok(s.find(p=>p.name==='preferences'&&p.value==='customer_supplies'))
+  assert.equal(s.find(p=>p.name==='preferences'&&p.value==='allergies'),undefined)
+  fail=false;await s.find(p=>p.children==='Try saved details again').props.onClick();s.render()
+  assert.equal(reads,2);assert.doesNotMatch(s.text(),/saved details could not load/)
+})
+
+test('service-interest removal needs an explicit second action and can be cancelled without a write',async()=>{
+  const writes=[]
+  const s=await screen('Enrollment',async(path,options)=>{if(options){writes.push(options.method);return {removed:true}}return {enrollment:{service:'both',name:'Jordan Smith'}}},false)
+  await s.settle();s.find(p=>p.children==='Remove my service needs').props.onClick();s.render()
+  assert.equal(writes.length,0);assert.match(s.text(),/existing visits will stay saved/)
+  s.find(p=>p.children==='Keep my service needs').props.onClick();s.render();assert.equal(writes.length,0)
+  s.find(p=>p.children==='Remove my service needs').props.onClick();s.render()
+  await s.find(p=>p.children==='Confirm removal').props.onClick();s.render()
+  assert.deepEqual(writes,['DELETE']);assert.match(s.text(),/service interest and its phone number have been removed/)
 })

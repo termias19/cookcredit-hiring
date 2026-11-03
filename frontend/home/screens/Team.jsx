@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 
 import { api, dollars, label, money } from "../api";
-import { serviceNames } from "./Enrollment";
 import OperatingRulesDraft from "./OperatingRulesDraft";
 import Availability from "./Availability";
 import Outreach from "./Outreach";
 import CustomerWorklist from "./CustomerWorklist";
-import { visitSchedule, visitStatusLabel } from "../visitPresentation";
+import { visitSchedule, visitStatusLabel, serviceNames } from "../visitPresentation";
 
 const deskGroups = [
   { title: "Daily work", sections: [

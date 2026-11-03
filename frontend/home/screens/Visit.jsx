@@ -1,14 +1,9 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api, downloadReceipt, label, money, stripeLocation } from "../api";
-import { instructionLabel, visitSchedule, visitStatusLabel } from "../visitPresentation";
+import { instructionLabel, visitSchedule, visitStatusLabel, serviceNames } from "../visitPresentation";
 import { repeatLabels } from "../serviceAddress";
 const OperatorVisit = lazy(() => import("./operator/OperatorVisit"));
 
-const serviceNames = {
-  cooking: "Cooking",
-  cleaning: "Cleaning",
-  both: "Cooking & cleaning",
-};
 const statusCopy = {
   requested: "CookCredit is reviewing this request and availability.",
   accepted:

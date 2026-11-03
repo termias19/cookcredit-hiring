@@ -31,18 +31,21 @@ async function app(api,refreshFailure=false,options={}) {
       VITE_HOME_ENROLLMENT_ONLY:options.enrollmentBuild?'1':undefined})}})
   const replacements=[]
   const context={module:{exports:{}},require:id=>modules[id]||{},URLSearchParams,location:{hash:options.route||'#team',replace:url=>replacements.push(url)},
-    addEventListener(name,fn){listeners.set(name,fn)},removeEventListener(name){listeners.delete(name)},window:{scrollTo(){}}}
+    addEventListener(name,fn){listeners.set(name,fn)},removeEventListener(name){listeners.delete(name)},
+    window:{scrollTo(){},confirm:message=>options.confirm?.(message)??true},
+    history:{replaceState(_state,_title,url){context.location.hash=url}}}
   vm.runInNewContext(code,context)
   const Component=context.module.exports.default
   function render(){index=0;queued=[];tree=Component();queued.forEach(fn=>fn())}
   function nodes(node){if(node==null||node===false)return [];if(Array.isArray(node))return node.flatMap(nodes);
-    return [node,...nodes(node.props?.children)]}
+    return [node,...(typeof node.type==='function'&&node.type.name==='CustomerHeader'?nodes(node.type(node.props)):nodes(node.props?.children))]}
   const text=()=>nodes(tree).filter(n=>typeof n==='string').join(' ')
   const find=predicate=>nodes(tree).find(n=>n?.props&&predicate(n.props,n))
   async function settle(){await new Promise(resolve=>setImmediate(resolve));render()}
   render();render();await settle();return {render,settle,text,find,replacements,location:context.location,
     changeUser(next){auth.currentUser=next;authChanged(next);render()},
-    navigate(hash){context.location.hash=hash;listeners.get('hashchange')?.();render()}}
+    navigate(hash){context.location.hash=hash;listeners.get('hashchange')?.();render()},
+    emit(name,event){listeners.get(name)?.(event)}}
 }
 
 test('Home account retry clears a previous API failure and reaches the authorized service desk',async()=>{
@@ -117,17 +120,18 @@ test('signing in from callback recovery preserves that exact internal destinatio
   assert.equal(s.find((p,n)=>n.type==='Account').props.next,'callback')
 })
 
-test('authenticated customers get three simple workspace destinations and one arrange action without operator links',async()=>{
+test('customers always see three account destinations without a duplicate global request action or operations rail',async()=>{
   const calls=[]
   const s=await app(async path=>{calls.push(path);return {owner:false,operator:false,helper:false,name:'Synthetic customer'}},false,{route:'#visits'})
-  const nav=s.find(p=>p['aria-label']==='Your workspace')
+  const nav=s.find(p=>p['aria-label']==='Your Home account')
   const nodes=n=>!n||typeof n!=='object'?[]:[n,...(Array.isArray(n.props?.children)?n.props.children:[n.props?.children]).flatMap(nodes)]
   assert.deepEqual(nodes(nav).filter(n=>n.type==='a').map(n=>n.props.href),['#visits','#enroll','#help'])
   assert.equal(s.find(p=>p.href==='#visits').props['aria-current'],'page')
-  assert.equal(s.find(p=>p.className==='button home-workspace-primary').props.href,'#request')
-  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-workspace-main'))
+  assert.equal(s.find(p=>p.className==='button home-workspace-primary'),undefined)
+  assert.equal(s.find((p,n)=>n.type==='aside'),undefined)
+  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-customer-main'))
   s.navigate('#help');await s.settle()
-  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-workspace-main'))
+  assert.ok(s.find((p,n)=>n.type==='main'&&p.className==='home-customer-main'))
   assert.equal(s.find(p=>p.href==='#help').props['aria-current'],'page')
   s.navigate('#enroll');await s.settle()
   assert.deepEqual(calls,['/me'])
@@ -185,7 +189,7 @@ test('public enrollment build gives landing and account entry enrollment copy wi
 
 test('compact workspace menu toggles and closes on navigation without fetching another account',async()=>{
   const calls=[];
-  const s=await app(async path=>{calls.push(path);return {owner:false,operator:false,helper:false}});
+  const s=await app(async path=>{calls.push(path);return {owner:true,operator:true,helper:false}});
   const toggle=()=>s.find(p=>p['aria-controls']==='home-workspace-links');
   assert.equal(toggle().props['aria-expanded'],false);
   toggle().props.onClick();s.render();
@@ -206,4 +210,31 @@ test('production Help links to one public overview and keeps CookCredit.com dist
   assert.equal(s.find(p=>p.href==='#home'),undefined)
   s.navigate('#home')
   assert.deepEqual(s.replacements,['https://cookcredit.com/home/'])
+})
+
+test('leaving a changed request requires confirmation and cancelling preserves the current screen',async()=>{
+  let allow=false,prompts=0,prevented=0
+  const s=await app(async()=>({owner:false,operator:false,helper:false}),false,
+    {route:'#request',confirm:()=>{prompts++;return allow}})
+  s.find(p=>typeof p.onChangeCapture==='function').props.onChangeCapture()
+  s.emit('beforeunload',{preventDefault(){prevented++}})
+  assert.equal(prevented,1)
+  s.navigate('#help')
+  assert.equal(s.location.hash,'#request')
+  assert.ok(s.find((p,n)=>n.type==='RequestVisit'))
+  allow=true;s.navigate('#help')
+  assert.equal(s.location.hash,'#help');assert.equal(prompts,2)
+  assert.ok(s.find((p,n)=>n.type?.name==='Help'))
+})
+
+test('an acknowledged request leaves without an unsaved warning and account screens keep two clear header links',async()=>{
+  const s=await app(async()=>({owner:false,operator:false,helper:false}),false,{route:'#request',confirm:()=>assert.fail('Saved request must not be called unsent')})
+  s.find(p=>typeof p.onChangeCapture==='function').props.onChangeCapture()
+  s.find((p,n)=>n.type==='RequestVisit').props.onSubmitted()
+  s.navigate('#visit/11111111-1111-4111-8111-111111111111')
+  assert.ok(s.find((p,n)=>n.type==='Visit'))
+  const signedOut=await app(async()=>assert.fail('Account entry needs no private fetch'),false,{signedOut:true,route:'#sign-in?next=enroll'})
+  assert.ok(signedOut.find((p,n)=>n.type==='main'&&p.className==='home-account-main'))
+  assert.ok(signedOut.find(p=>p.children==='Home services'));assert.ok(signedOut.find(p=>p.children==='Help'))
+  assert.equal(signedOut.find(p=>p.children==='My visits'),undefined)
 })

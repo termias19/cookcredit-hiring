@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { api } from "../api";
 import HomeErrorBoundary from "../HomeErrorBoundary";
-import { preferences, cleaningTasks as tasks } from "../visitPresentation";
+import { preferences, cleaningTasks as tasks, visitSchedule, serviceNames } from "../visitPresentation";
 import { formatServiceAddress, readServiceAddress, repeatLabels } from "../serviceAddress";
 
 const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
@@ -11,7 +11,7 @@ function localDay(zone) {
     year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map(p => [p.type, p.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
-export default function RequestVisit({ profile, initialService }) {
+export default function RequestVisit({ profile, initialService, onSubmitted }) {
   const heading = useRef(null);
   const mounted = useRef(true);
   const [service, setService] = useState(
@@ -23,6 +23,7 @@ export default function RequestVisit({ profile, initialService }) {
   const [saved, setSaved] = useState(null),
     [useSaved, setUseSaved] = useState(false),
     [step, setStep] = useState(0);
+  const [savedError, setSavedError] = useState(false), [received, setReceived] = useState(null);
   const [cookingMinutes, setCookingMinutes] = useState(120), [cleaningMinutes, setCleaningMinutes] = useState(60);
   const [preferredDate, setPreferredDate] = useState(""), [preferredTime, setPreferredTime] = useState("10:00");
   const serviceStates = Array.isArray(profile.serviceStates) && profile.serviceStates.length ? profile.serviceStates : ["GA"];
@@ -30,11 +31,15 @@ export default function RequestVisit({ profile, initialService }) {
   const [checkedTimeZone, setCheckedTimeZone] = useState(null);
   const timeZone = checkedTimeZone || profile.serviceTimeZone || "America/New_York";
   const durationMinutes = (service === "cleaning" ? 0 : cookingMinutes) + (service === "cooking" ? 0 : cleaningMinutes);
+  const loadSaved = () => {
+    setSavedError(false);
+    return api("/household")
+      .then((value) => { if (mounted.current) setSaved(value.household); })
+      .catch(() => { if (mounted.current) setSavedError(true); });
+  };
   useEffect(() => {
     mounted.current = true;
-    api("/household")
-      .then((value) => { if (mounted.current) setSaved(value.household); })
-      .catch(() => {});
+    loadSaved();
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => {
@@ -83,16 +88,21 @@ export default function RequestVisit({ profile, initialService }) {
       };
     try {
       const value = await api("/visits", { method: "POST", body });
+      if (mounted.current) onSubmitted?.();
       // The acknowledged visit remains saved, but leaving this screen must not
       // start another account's household update or pull the person back here.
       if (!mounted.current) return;
       // Saving household details is a separate, explicit choice. A failure must
       // never make an already-created visit appear to have failed.
-      if (f.get("remember") === "on")
-        await api("/household", {
+      if (f.get("remember") === "on") {
+        try { await api("/household", {
           method: "PUT",
           body: { address: body.address, addressDetails, instructions, remember: true },
-        }).catch(() => {});
+        }); } catch {
+          if (mounted.current) setReceived(value.id);
+          return;
+        }
+      }
       if (mounted.current) location.hash = "visit/" + value.id;
     } catch (e) {
       if (mounted.current) setError(e.code === "operating_rules_changed"
@@ -102,25 +112,35 @@ export default function RequestVisit({ profile, initialService }) {
       if (mounted.current) setBusy(false);
     }
   };
+  if (received) return <section className="narrow customer-request">
+    <p className="eyebrow">Request received</p><h1>Your request is saved.</h1>
+    <p role="status">We received your visit request. We couldn’t also save the address and preferences for future visits.</p>
+    <p>Your request does not need to be sent again. You can check its details now.</p>
+    <a className="button" href={"#visit/" + received}>View my request</a>
+  </section>;
   return (
-    <section className="narrow">
-      <a href="#home">← Home</a>
-      <p className="eyebrow">Step {step + 1} of 3</p>
+    <section className="narrow customer-request">
+      <a href="#visits">← My visits</a>
+      <p className="eyebrow">Request a visit · Step {step + 1} of 3</p>
+      <ol className="customer-request-progress" aria-label="Request progress">
+        {["Help", "Instructions", "Time and address"].map((title,index) => <li key={title} aria-current={step === index ? "step" : undefined}><span>{index+1}</span>{title}</li>)}
+      </ol>
       <h1 ref={heading} tabIndex="-1">
-        {["What would help?", "Make it yours.", "Where and when?"][step]}
+        {["Choose your help", "Visit instructions", "Time and address"][step]}
       </h1>
       <p>
-        Sending a request is free. We’ll review availability and send you a full
-        quote before you pay.
+        {step === 0 ? "Choose cooking, cleaning or both, and how much time you would like. There is no payment to send a request."
+          : step === 1 ? "Add the practical details your helper will need. You can leave optional instructions blank."
+            : "Tell us your preferred time and address. We’ll confirm availability and send a full quote before you pay."}
       </p>
       <form onSubmit={submit}>
-        <fieldset hidden={step !== 0}>
+        <fieldset hidden={step !== 0} disabled={busy}>
           <legend>Choose your help</legend>
           <div className="service-choices">
             {[
               ["cooking", "Cooking"],
               ["cleaning", "Cleaning"],
-              ["both", "Cooking & cleaning"],
+              ["both", "Cooking and cleaning"],
             ].map(([value, title]) => (
               <label key={value} className="check">
                 <input
@@ -162,9 +182,10 @@ export default function RequestVisit({ profile, initialService }) {
             next step.
           </p>
         </fieldset>
-        <fieldset hidden={step !== 1}>
+        <fieldset hidden={step !== 1} disabled={busy}>
           <legend>Preferences and instructions</legend>
-          {saved && (
+          {savedError && <p className="notice">Your saved details could not load. You can enter new details for this visit, or <button type="button" className="text" onClick={loadSaved}>Try saved details again</button>.</p>}
+          {saved?.address && (
             <label className="check">
               <input
                 type="checkbox"
@@ -175,7 +196,10 @@ export default function RequestVisit({ profile, initialService }) {
             </label>
           )}
           <div key={useSaved ? "saved" : "fresh"}>
-            {preferences.map(([value, title]) => (
+            <div className="customer-instruction-choices">
+            {preferences.filter(([value]) => value === "phone_help" ||
+              (service === "cleaning" ? ["fragrance_free", "customer_supplies"].includes(value)
+                : service === "cooking" ? !["fragrance_free", "customer_supplies"].includes(value) : true)).map(([value, title]) => (
               <label className="check" key={value}>
                 <input
                   type="checkbox"
@@ -188,6 +212,7 @@ export default function RequestVisit({ profile, initialService }) {
                 {title}
               </label>
             ))}
+            </div>
             {service !== "cooking" && (
               <>
                 <h2>What needs cleaning?</h2>
@@ -249,7 +274,7 @@ export default function RequestVisit({ profile, initialService }) {
             </>
           )}
         </fieldset>
-        <fieldset hidden={step !== 2}>
+        <fieldset hidden={step !== 2} disabled={busy}>
           <legend>Your visit details</legend>
           <section className="service-address" aria-labelledby="service-address-title" key={useSaved ? "saved-address" : "new-address"}>
             <h2 id="service-address-title">Service address</h2>
@@ -296,7 +321,7 @@ export default function RequestVisit({ profile, initialService }) {
             </label>
           </div>
           <p className="quiet">
-            Times are in {timeZone}. Your requested time is subject to
+            Times are in {visitSchedule(preferredDate, preferredTime, timeZone).zone}. Your requested time is subject to
             availability.
           </p>
           <label>How often would you like help?<select name="repeatPreference" defaultValue="once" aria-describedby="repeat-help">
@@ -327,7 +352,8 @@ export default function RequestVisit({ profile, initialService }) {
             {error}
           </p>
         )}
-        <div className="actions">
+        {step === 2 && <p className="customer-request-review"><strong>{serviceNames[service]} · {durationMinutes / 60} {durationMinutes === 60 ? "hour" : "hours"}</strong><br />Request only. You’ll review the full price before paying.</p>}
+        <div className="actions customer-request-actions">
           {step > 0 && (
             <button
               type="button"

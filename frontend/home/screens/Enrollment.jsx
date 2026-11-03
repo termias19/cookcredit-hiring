@@ -1,13 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { contactName } from "../customerWorklist";
-
-export const serviceNames = {
-  cooking: "Cooking",
-  cleaning: "Cleaning",
-  both: "Cooking and cleaning",
-  not_sure: "Help choosing",
-};
+import SavedDetails from "./SavedDetails";
+import { serviceNames } from "../visitPresentation";
 
 export default function Enrollment({ profile, onArrange }) {
   const [ready, setReady] = useState(false), [version, setVersion] = useState(0);
@@ -16,6 +11,7 @@ export default function Enrollment({ profile, onArrange }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [registered, setRegistered] = useState(false), [withdrawn, setWithdrawn] = useState(false);
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
   useEffect(() => {
     let active = true;
     setError("");
@@ -48,29 +44,32 @@ export default function Enrollment({ profile, onArrange }) {
     setBusy(true); setError("");
     try {
       await api("/enrollment", { method: "DELETE", body: {} });
-      setRegistered(false); setWithdrawn(true); setSaved(false); setService(""); setPhone("");
+      setRegistered(false); setWithdrawn(true); setSaved(false); setService(""); setPhone(""); setConfirmRemoval(false);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };
   return <section className="narrow">
     <p className="eyebrow">CookCredit at home</p>
-    <h1>What would help?</h1>
+    <h1>{profile.enrollmentOnly ? "What would help?" : "Service preferences"}</h1>
     <p>{profile.enrollmentOnly
       ? "Choose the kind of help you are interested in. Enrollment and call requests are open; visit booking, scheduling and payments are not available yet."
-      : "Tell us what you need. CookCredit will contact you to discuss availability. No address, date or payment is needed yet."}</p>
+      : "Update your contact details and the help you’re interested in."}</p>
     {error && <p className="error" role="alert">{error}</p>}
     {withdrawn && <p role="status">Your service interest and its phone number have been removed. Existing visits stay unchanged.</p>}
     {!ready ? error
       ? <button onClick={() => setVersion(v => v + 1)}>Try again</button>
       : <p role="status">Opening your details…</p>
-    : saved ? <div className="section">
-      <h2>You’re on the list.</h2>
-      <p role="status">Your request for {serviceNames[service].toLowerCase()} is saved. We can reach you at {profile.email}{phone ? " or " + phone : ""}.</p>
-      <p>This does not reserve a visit or authorize a charge.</p>
-      {!name && <p>Please add your name using Edit my needs so CookCredit knows who to contact.</p>}
+    : saved ? <div className="section customer-preferences-saved">
+      <h2>{profile.enrollmentOnly ? "You’re on the list." : "Your preferences are saved."}</h2>
+      <p role="status">Your interest in {serviceNames[service].toLowerCase()} is saved. A visit has not been booked or charged.</p>
+      <dl className="customer-contact-facts">
+        <div><dt>Name</dt><dd>{name || "Please add your name using Edit my needs."}</dd></div>
+        <div><dt>Email</dt><dd>{profile.email}</dd></div>
+        {phone && <div><dt>Phone</dt><dd>{phone}</dd></div>}
+      </dl>
       <div className="actions">{profile.enrollmentOnly
         ? <a className="button" href="#callback">Request a call</a>
-        : <a className="button" href="#request" onClick={() => onArrange?.(service)}>Arrange a visit</a>}
+        : <a className="button" href="#request" onClick={() => onArrange?.(service)}>Request a visit</a>}
         <button className="secondary" onClick={() => setSaved(false)}>Edit my needs</button></div>
     </div> : <form onSubmit={submit}>
       <label>Your full name<input autoComplete="name" maxLength={120} required value={name} onChange={event => setName(event.target.value)} /></label>
@@ -84,10 +83,14 @@ export default function Enrollment({ profile, onArrange }) {
       <label className="check"><input type="checkbox" name="contactConsent" required />CookCredit may contact me about these services.</label>
       <button disabled={busy}>{busy ? "Saving…" : "Save my service needs"}</button>
     </form>}
-    {registered && <button className="text" disabled={busy} onClick={remove}>Remove my service needs</button>}
+    {!profile.enrollmentOnly && <SavedDetails />}
     <details><summary>Your information</summary>
       <p>Only the CookCredit Home owner can open the enrollment directory. It contains your account name and email, selected service interest and optional phone number, so CookCredit can follow up with your permission. This is service-contact permission, not advertising consent.</p>
       <p>Use “Remove my service needs” to withdraw your interest and remove the optional phone from this enrollment. Your CookCredit login remains. Email <a href="mailto:connectwithus@cookcredit.com">connectwithus@cookcredit.com</a> for account or data requests. Read our <a href="https://cookcredit.com/privacy.html">Privacy Policy</a>.</p>
+      {registered && (confirmRemoval ? <div className="notice" role="status"><p>Remove your service interest and its contact details? Your account and existing visits will stay saved.</p>
+        <div className="actions"><button className="secondary" disabled={busy} onClick={remove}>Confirm removal</button>
+          <button className="text" disabled={busy} onClick={() => setConfirmRemoval(false)}>Keep my service needs</button></div></div>
+        : <button className="text" disabled={busy} onClick={() => setConfirmRemoval(true)}>Remove my service needs</button>)}
     </details>
   </section>;
 }

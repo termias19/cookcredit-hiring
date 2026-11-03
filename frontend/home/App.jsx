@@ -6,10 +6,11 @@ import { safeHomeRoute, homeSiteLinks, legacyHomeDestination } from "./navigatio
 import Account from "./screens/Account";
 import RequestVisit from "./screens/RequestVisit";
 import Visit from "./screens/Visit";
-import SavedDetails from "./screens/SavedDetails";
-import Enrollment, { serviceNames } from "./screens/Enrollment";
-import { visitSchedule, visitStatusLabel } from "./visitPresentation";
+import Enrollment from "./screens/Enrollment";
+import { visitSchedule, visitStatusLabel, serviceNames } from "./visitPresentation";
+import { contactName } from "./customerWorklist";
 import "./style.css";
+import "./customerJourney.css";
 
 const Team = lazy(() => import("./screens/Team"));
 const Payout = lazy(() => import("./screens/Payout"));
@@ -36,14 +37,30 @@ export default function App() {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const enrollmentOnly = profile ? profile.enrollmentOnly === true : import.meta.env.VITE_HOME_ENROLLMENT_ONLY === "1";
   const main = useRef();
+  const requestDirty = useRef(false), currentRoute = useRef(route);
+  currentRoute.current = route;
   useEffect(() => {
     const change = () => {
+      if (currentRoute.current === "request" && readRoute() !== "request" && requestDirty.current) {
+        if (!window.confirm("Leave this request? Unsaved details will be lost. Check My visits before sending a request again.")) {
+          history.replaceState(null, "", "#request");
+          return;
+        }
+        requestDirty.current = false;
+      }
       const destination = legacyHomeDestination(location.hash, import.meta.env);
       if (destination) location.replace(destination);
       else setRoute(readRoute());
     };
     addEventListener("hashchange", change);
     return () => removeEventListener("hashchange", change);
+  }, []);
+  useEffect(() => {
+    const warn = event => {
+      if (currentRoute.current === "request" && requestDirty.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    addEventListener("beforeunload", warn);
+    return () => removeEventListener("beforeunload", warn);
   }, []);
   useEffect(
     () =>
@@ -53,6 +70,7 @@ export default function App() {
         setProfileError("");
         setProfileErrorCode("");
         setVisitService(null);
+        requestDirty.current = false;
       }),
     [],
   );
@@ -86,6 +104,8 @@ export default function App() {
     setSessionVersion((v) => v + 1);
   };
   const leaveAccount = async (target) => {
+    if (currentRoute.current === "request" && requestDirty.current &&
+        !window.confirm("Sign out? Any unsaved request details will be lost.")) return;
     setSessionBusy(true); setSessionError("");
     try {
       await signOut(auth);
@@ -143,7 +163,8 @@ export default function App() {
     );
   else if (profile.enrollmentOnly && safeHomeRoute(route, true) !== route) content = <EnrollmentEntry />;
   else if (route === "enroll") content = <Enrollment profile={profile} onArrange={setVisitService} />;
-  else if (route === "request") content = <RequestVisit profile={profile} initialService={visitService} />;
+  else if (route === "request") content = <RequestVisit profile={profile} initialService={visitService}
+    onSubmitted={() => { requestDirty.current = false; }} />;
   else if (route === "visits") content = <Visits />;
   else if (/^visit\/[a-f0-9-]{36}$/.test(route))
     content = <Visit key={route} id={route.split("/")[1]} profile={profile} />;
@@ -163,8 +184,12 @@ export default function App() {
     );
   const workspace = Boolean(user?.emailVerified && profile &&
     !["home", "how", "sign-in"].includes(route.split("?")[0]) && !route.startsWith("account/action"));
+  const customerWorkspace = workspace && !profile.operator && !profile.helper;
+  const accountScreen = route.startsWith("account/action") || route.split("?")[0] === "sign-in" ||
+    (requiresAccount && user && !user.emailVerified) || (requiresAccount && user === null);
   return (
-    <div className={workspace ? "home-workspace" : "home-public"}>
+    <div className={customerWorkspace ? "home-customer" : workspace ? "home-workspace" : "home-public"}
+      onChangeCapture={() => { if (route === "request") requestDirty.current = true; }}>
       {import.meta.env.DEV && import.meta.env.VITE_HOME_AUTH_EMULATOR_URL && (
         <div className="local-note">
           Local walkthrough · Example accounts and visits. No real messages,
@@ -181,7 +206,8 @@ export default function App() {
       >
         Skip to content
       </a>
-      {workspace ? <aside className="home-workspace-rail" aria-label="Home workspace">
+      {customerWorkspace ? <CustomerHeader key={route} route={route} enrollmentOnly={enrollmentOnly} email={user.email}
+        busy={sessionBusy} signOut={() => leaveAccount("home")} /> : workspace ? <aside className="home-workspace-rail" aria-label="Home workspace">
         <a className="brand" href={siteLinks.overview} aria-label="CookCredit Home">
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>CookCredit<small>At-home services</small></span>
@@ -214,7 +240,7 @@ export default function App() {
           <button className="text" disabled={sessionBusy} onClick={() => leaveAccount("home")}>Sign out</button>
         </div>
         </div>
-      </aside> : <header>
+      </aside> : <header className={accountScreen ? "home-account-header" : undefined}>
         <a className="brand" href={siteLinks.overview} aria-label="CookCredit Home">
           <img src="/assets/cookcredit-mark-orange.svg" alt="" />
           <span>
@@ -222,6 +248,7 @@ export default function App() {
           </span>
         </a>
         <nav aria-label="Main">
+          {accountScreen ? <><a href={siteLinks.overview}>Home services</a><a href="#help">Help</a></> : <>
           <a href={siteLinks.how}>How it works</a>
           {!enrollmentOnly && <a href="#visits">My visits</a>}
           <a href="#enroll">Service needs</a>
@@ -240,16 +267,17 @@ export default function App() {
           ) : (
             <a href={enrollmentOnly ? "#sign-in?next=enroll" : "#sign-in"}>Sign in</a>
           )}
+          </>}
         </nav>
       </header>}
       {sessionError && <p className="error" role="alert">{sessionError}</p>}
-      <main id="main" tabIndex="-1" ref={main} className={workspace ? "home-workspace-main" : undefined}>
+      <main id="main" tabIndex="-1" ref={main} className={customerWorkspace ? "home-customer-main" : workspace ? "home-workspace-main" : accountScreen ? "home-account-main" : undefined}>
         <Suspense fallback={<p role="status">Opening…</p>}>{content}</Suspense>
       </main>
       <footer>
         <a href={siteLinks.overview}>Home services</a>
         <a href={siteLinks.cookcredit}>CookCredit.com</a>
-        {!enrollmentOnly && <a href="#helping">Work with us</a>}
+        {!enrollmentOnly && !customerWorkspace && <a href="#helping">Work with us</a>}
         <a href="mailto:connectwithus@cookcredit.com">
           connectwithus@cookcredit.com
         </a>
@@ -258,6 +286,24 @@ export default function App() {
       </footer>
     </div>
   );
+}
+
+function CustomerHeader({ route, enrollmentOnly, email, busy, signOut }) {
+  return <header className="home-customer-header">
+    <div className="customer-header-top">
+      <a className="brand" href={siteLinks.overview} aria-label="CookCredit Home">
+        <img src="/assets/cookcredit-mark-orange.svg" alt="" /><span>CookCredit<small>At-home services</small></span>
+      </a>
+      <details className="customer-account-menu"><summary>Your account</summary>
+        <div><p>{email}</p><button className="text" disabled={busy} onClick={signOut}>Sign out</button></div>
+      </details>
+    </div>
+    <nav aria-label="Your Home account">
+      {!enrollmentOnly && <a href="#visits" aria-current={route === "visits" || route === "request" || route.startsWith("visit/") ? "page" : undefined}>My visits</a>}
+      <a href="#enroll" aria-current={route === "enroll" ? "page" : undefined}>Preferences</a>
+      <a href="#help" aria-current={route === "help" ? "page" : undefined}>Help</a>
+    </nav>
+  </header>;
 }
 
 function EnrollmentEntry() {
@@ -421,7 +467,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
   return (
     <section className="narrow">
       <p className="eyebrow">A person to help</p>
-      <h1>Let’s talk it through.</h1>
+      <h1>Ask us to call you</h1>
       <p>
         {enrollmentOnly ? "Request a call about your service needs or account. Visit booking is not available yet." : "Request a call to discuss a visit or get help with your account."} This service is not for emergencies.
       </p>
@@ -444,7 +490,9 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
             CookCredit will contact you at the number you provided. A visit has
             not been booked.
           </p>
-          <a href={siteLinks.overview}>Return to Home services</a>
+          <a className="button" href={user?.emailVerified ? enrollmentOnly ? "#enroll" : "#visits" : siteLinks.overview}>
+            {user?.emailVerified ? enrollmentOnly ? "Back to preferences" : "Back to my visits" : "Return to Home services"}
+          </a>
           <button className="secondary" onClick={() => {
             id.current = crypto.randomUUID(); setSent(false); setError("");
           }}>Request another call</button>
@@ -453,7 +501,7 @@ function Help({ user, profile, accessErrorCode, switchAccount, busySwitching = f
         <form onSubmit={submit}>
           <label>
             Your name
-            <input name="name" autoComplete="name" maxLength="120" required />
+            <input name="name" autoComplete="name" maxLength="120" required defaultValue={contactName(profile?.name || user?.displayName, user?.email)} />
           </label>
           <label>
             Phone number
@@ -533,13 +581,12 @@ function Visits() {
       <div className="heading">
         <div>
           <p className="eyebrow">Your account</p>
-          <h1>My visits</h1>
+        <h1>My visits</h1>
         </div>
         <a className="button" href="#request">
-          Arrange a visit
+          Request a visit
         </a>
       </div>
-      <SavedDetails />
       <ErrorMessage error={state.error} />
       {state.error && !state.loading && (
         <button className="secondary" onClick={() => load(false)}>
@@ -547,9 +594,12 @@ function Visits() {
         </button>
       )}
       {!state.loading && !state.error && !state.rows.length && (
-        <p>
-          No visits yet. Start with a request and we’ll help arrange the rest.
-        </p>
+        <section className="customer-empty">
+          <h2>No visits yet.</h2>
+          <p>Start with a request for cooking, cleaning or both. We’ll confirm availability and send a full quote for you to review before payment.</p>
+          <ol className="customer-journey-steps"><li>Send your request</li><li>Review your quote</li><li>Pay and confirm</li></ol>
+          <p>Prefer to talk first? <a href="#help">Ask us to call you.</a></p>
+        </section>
       )}
       {state.rows.map((row) => {
         const schedule = visitSchedule(row.date, row.time, row.timeZone);

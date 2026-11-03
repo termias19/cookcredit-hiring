@@ -201,7 +201,7 @@ export default function Account({ user, refresh, next, enrollmentOnly = false })
   };
   if (user && !user.emailVerified && !resetCode && !action)
     return (
-      <section className="narrow">
+      <section className="narrow home-account-form">
         <p className="eyebrow">One last step</p>
         <h1>Check your email.</h1>
         <p>
@@ -244,16 +244,16 @@ export default function Account({ user, refresh, next, enrollmentOnly = false })
       </section>
     );
   return (
-    <section className="narrow">
+    <section className="narrow home-account-form">
       <p className="eyebrow">CookCredit Home</p>
       <h1>
         {resetCode
           ? "Choose a new password"
           : mode === "signup"
-            ? "Let’s make this easy."
+            ? "Create your account"
             : mode === "reset"
               ? "Reset your password"
-              : "Welcome back."}
+              : "Sign in to CookCredit"}
       </h1>
       <p>
         {resetCode
