@@ -40,7 +40,11 @@ export async function api(
   let preparingSecurity = false;
   try {
     const user = auth.currentUser;
-    if (user)
+    // Public Help also works while a new account awaits verification. Keep
+    // App Check below; associate calls only with a verified account. Private
+    // staging still requires its verified identity at the server boundary.
+    const anonymousHelp = method === "POST" && path === "/callbacks" && user?.emailVerified === false;
+    if (user && !anonymousHelp)
       headers.Authorization = "Bearer " + (await waitForRequest(() => user.getIdToken(), controller.signal));
     if (protectedAccount) {
       preparingSecurity = true;

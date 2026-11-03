@@ -11,7 +11,7 @@ function client(prepare,overrides={}) {
   const calls=[],reports=[],deadlines=[]
   let expire,cleared=false
   const sandbox={
-    auth:{currentUser:null},getAppCheckHeaders:prepare,waitForRequest,createPendingRequests,
+    auth:{currentUser:overrides.user||null},getAppCheckHeaders:prepare,waitForRequest,createPendingRequests,
     reportClientError:code=>reports.push(code),saveHiringFile:()=>{},
     AbortController,DOMException,TypeError,crypto,
     setTimeout:(callback,delay)=>{deadlines.push(delay);expire=callback;return 1},clearTimeout:()=>{cleared=true},
@@ -76,6 +76,19 @@ test('actual Home client attaches completed attestation before the existing API 
   assert.deepEqual(clientUnderTest.deadlines,[45000,15000])
   assert.match(options.headers['Idempotency-Key'],/^[a-f0-9-]{36}$/)
   assert.equal(clientUnderTest.cleared(),true)
+})
+
+test('public Help keeps App Check while an unverified account can request a call without account association',async()=>{
+  for(const [verified,path,expectedToken]of [[false,'/callbacks',false],[true,'/callbacks',true],[false,'/enrollment',true]]){
+    let tokenReads=0,attestations=0
+    const user={uid:'synthetic',emailVerified:verified,async getIdToken(){tokenReads++;return 'synthetic-token'}}
+    const underTest=client(async()=>{attestations++;return {'X-Firebase-AppCheck':'synthetic-attestation'}},{user})
+    await underTest.request(path,{method:'POST',body:{name:'Synthetic'},protectedAccount:true})
+    assert.equal(attestations,1)
+    assert.equal(tokenReads,expectedToken?1:0)
+    assert.equal(underTest.calls[0][1].headers.Authorization,expectedToken?'Bearer synthetic-token':undefined)
+    assert.equal(underTest.calls[0][1].headers['X-Firebase-AppCheck'],'synthetic-attestation')
+  }
 })
 
 test('callback UI nonce changes after reload do not duplicate an unacknowledged callback',async()=>{
