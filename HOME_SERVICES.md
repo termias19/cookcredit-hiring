@@ -461,6 +461,15 @@ request bodies or SQL parameters. The durable audit event commits with the state
 change. Events are not a message-delivery acknowledgement. The Home bridge uses
 the existing durable delivery patterns; deployed retry/age monitoring still needs
 staging acceptance.
+Home domain rejections (HTTP 4xx) emit `home_request_rejected` at WARNING with the
+fixed validation code, route endpoint name, method, status, duration and generated
+request ID. The response includes the same `reference`; match it with
+`jsonPayload.requestId`. Malformed HTTP input gets a fixed `http_400`/`http_413`
+code. No request bodies, address/health details, identities, raw URLs or credentials
+are logged. Unhandled/server failures retain ERROR severity and their existing
+retry behavior. Expected rejections are visible in the operations dashboard
+without becoming server-outage alerts.
+
 Use the existing AccountEmail provider and Home dispatch endpoint. One Home
 recovery schedule covers its separate durable queues; Hiring's schedules retain
 their own targets. Do not introduce a second mail provider. Mutation commands

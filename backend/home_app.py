@@ -109,9 +109,11 @@ def create_app(config=None):
     def trace():
         g.request_id, g.started = uuid.uuid4().hex, time.monotonic()
         if request.path != '/api/home/health' and not app.config['HOME_ENABLED']:
+            g.home_failure_code = 'home_disabled'
             return jsonify(error='Home services are not available yet.', code='home_disabled'), 503
         if app.config['HOME_ENROLLMENT_ONLY'] and request.method!='OPTIONS':
             if request.method not in ENROLLMENT_ONLY_ENDPOINTS.get(request.endpoint,()):
+                g.home_failure_code = 'enrollment_only'
                 return jsonify(error='Home is accepting service enrollment and call requests. Visit booking is not available here yet.',
                     code='enrollment_only'),403
 
@@ -127,6 +129,13 @@ def create_app(config=None):
             emit_event('home_request_failed', severity='ERROR', endpoint=request.endpoint or 'unmatched',
                 method=request.method,code=getattr(g,'home_failure_code','unclassified'),
                 status=response.status_code, durationMs=round((time.monotonic() - g.started) * 1000))
+        elif 400 <= response.status_code < 500 and hasattr(g, 'home_failure_code'):
+            # Rejections are useful diagnostics, not server outages. Only codes
+            # selected by our handlers enter logs; never inspect a response body,
+            # request URL, identity or household payload to guess the reason.
+            emit_event('home_request_rejected', severity='WARNING', endpoint=request.endpoint or 'unmatched',
+                method=request.method, code=g.home_failure_code, status=response.status_code,
+                durationMs=round((time.monotonic() - g.started) * 1000))
         return response
 
     @app.errorhandler(HomeError)
@@ -134,7 +143,7 @@ def create_app(config=None):
         # Domain codes are identifiers defined by this application. Never log
         # the message, request payload, URL, provider response or SQL parameters.
         g.home_failure_code=error.code if isinstance(error.code,str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}',error.code) else 'invalid_domain_code'
-        response = jsonify(error=error.message, code=error.code)
+        response = jsonify(error=error.message, code=error.code, reference=g.request_id)
         if error.code == 'receipt_processing_busy':
             response.headers['Retry-After'] = '2'
         return response, error.status
@@ -142,7 +151,8 @@ def create_app(config=None):
     @app.errorhandler(Exception)
     def unexpected(error):
         if isinstance(error, HTTPException):
-            return jsonify(error=error.name, code='http_error'), error.code
+            g.home_failure_code = 'http_' + str(error.code)
+            return jsonify(error=error.name, code='http_error', reference=g.request_id), error.code
         # Exception messages and traceback locals can contain household data or
         # SQL parameters. Only the class and server reference enter shared logs.
         g.home_failure_code='temporary_error'

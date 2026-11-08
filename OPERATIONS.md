@@ -87,6 +87,35 @@ Review the existing owner notification channel and enabled alert policies during
 each release. Test alert routing in staging with clearly labelled synthetic events;
 do not represent API acceptance as proof of email notification receipt.
 
+### Background failure and recovery review
+
+Run `python deploy/platform_monitoring.py --environment production --include-shared`
+after an alert and during release verification. Use `--environment staging` for
+the private deployment. This read-only command checks existing completed Scheduler
+attempts, current job state, and recent durable queue counters. It reports failed
+attempts that have a later successful invocation separately from failures with no
+observed recovery. A successful invocation alone does not establish delivery or
+settlement. Missing, stale, unreadable or truncated evidence fails the review.
+The command makes no SQL connection, dispatch, resend or payment call.
+
+The IAM-protected **CookCredit operations and recovery** Cloud Monitoring dashboard
+uses the same existing logs: server errors, Home validation rejections, failed and
+successful background attempts, durable queue counters, and shared/legacy cleanup.
+The dashboard definition is `dashboard()` in `deploy/platform_monitoring.py`.
+Reuse that dashboard; do not create another alert policy, worker or metric for it.
+Existing alert conditions, owner channels, rate limits and retry settings stay in
+force. A recovered attempt remains in the logs; never erase or downgrade it to
+make a release look clean.
+
+With `--include-shared`, the review explicitly reports
+`blocked_database_disabled` when the old retention job targets a Cloud SQL
+instance whose activation policy is `NEVER`. This is an unresolved cleanup
+blocker, not successful retention or an empty database. Keep the data and shared
+assessment resources intact. Do not restart the instance, disable retention or
+delete its records without the dependency, record-disposition and recovery review
+described in the incident record. Do not use this legacy blocker as a reason to
+replay active Hiring/Home work.
+
 Do not blindly resend terminal messages: confirm recipient/destination, why retries failed, deduplication state and whether a provider accepted the prior send. Keep event IDs and signed webhook payloads stable. Webhooks are at-least-once delivery; receivers must deduplicate event IDs.
 
 ## Capacity and rate limits
