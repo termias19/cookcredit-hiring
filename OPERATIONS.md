@@ -103,9 +103,18 @@ uses the same existing logs: server errors, Home validation rejections, failed a
 successful background attempts, durable queue counters, and shared/legacy cleanup.
 The dashboard definition is `dashboard()` in `deploy/platform_monitoring.py`.
 Reuse that dashboard; do not create another alert policy, worker or metric for it.
-Existing alert conditions, owner channels, rate limits and retry settings stay in
-force. A recovered attempt remains in the logs; never erase or downgrade it to
-make a release look clean.
+For production `cc-hiring-webhooks`, a failed Scheduler attempt stays in Cloud
+Logging. The dispatcher alert fires after 40 minutes without a recorded success.
+The window covers the five-minute schedule, full attempt deadlines, retry backoff
+and metric ingestion delay. The existing application alert still reports webhook
+queue entries that fail permanently or have been pending for at least ten minutes.
+Application exceptions, other Scheduler jobs, and staging use their existing rules.
+
+`deploy/hiring_webhook_alert.py` defaults to a read-only plan. Prepare the
+success metric and replacement policy before activating the Scheduler exclusion.
+Activation requires a fresh positive metric sample after policy creation. Recheck
+the silence window before changing the webhook schedule or retry budget. A
+recovered attempt remains available in the Scheduler logs and the recovery review.
 
 With `--include-shared`, the review explicitly reports
 `blocked_database_disabled` when the old retention job targets a Cloud SQL
