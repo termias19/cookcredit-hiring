@@ -27,6 +27,18 @@ def test_later_success_recovers_transport_but_newer_failure_stays_unrecovered():
     assert 'never print this' not in json.dumps(result)
 
 
+def test_transport_failure_without_http_response_is_not_ignored():
+    config = {'state': 'ENABLED', 'status': {'code': 0}}
+    failure = {**attempt(15, None), 'severity': 'ERROR'}
+    result = monitor.summarize_job([attempt(60, 200), failure], config, 60, NOW)
+    assert result['state'] == 'attention_required' and result['lastOutcome'] == 'failed'
+    assert result['lastHttpStatus'] is None and result['unrecoveredAttempts'] == 1
+    result = monitor.summarize_job([failure, attempt(5, 204)], config, 60, NOW)
+    assert result['state'] == 'healthy' and result['recoveredAttempts'] == 1
+    result = monitor.summarize_job([attempt(60, 200), attempt(5, None)], config, 60, NOW)
+    assert result['state'] == 'attention_required' and result['unknownAttempts'] == 1
+
+
 @pytest.mark.parametrize('entries,config', [([], {'state': 'ENABLED'}),
     ([attempt(4000, 200)], {'state': 'ENABLED'}),
     ([attempt(1, 200)], {'state': 'PAUSED'}),
@@ -50,6 +62,7 @@ def fake_cloud(*, missing_queue=False, billing=True, legacy=False):
             return {'state': 'ENABLED', 'status': {'code': 0}}
         if url == monitor.LOG_API:
             body = kwargs['json']
+            assert 'timestamp<="' + NOW.isoformat() + '"' in body['filter']
             if 'queue_health' not in body['filter']:
                 project = body['resourceNames'][0].split('/')[-1]
                 return {'entries': [attempt(60, 200, name) for p, name, _ in monitor.job_specs('production', legacy) if p == project]}

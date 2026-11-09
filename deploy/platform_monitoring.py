@@ -43,23 +43,32 @@ def summarize_job(entries, config, cadence, now):
             continue
         stamp = parse_time(row.get('timestamp'))
         status = row.get('httpRequest', {}).get('status')
-        if stamp is not None and type(status) is int:
-            attempts.append((stamp, status))
-    attempts.sort(reverse=True)
-    success = next((stamp for stamp, status in attempts if status == 200), None)
-    failures = [stamp for stamp, status in attempts if status != 200]
+        if stamp is None:
+            continue
+        status = status if type(status) is int and 100 <= status <= 599 else None
+        if row.get('severity') in ('ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'):
+            outcome = 'failed'
+        elif status is None:
+            outcome = 'unknown'
+        else:
+            outcome = 'succeeded' if 200 <= status < 300 else 'failed'
+        attempts.append((stamp, status, outcome))
+    attempts.sort(key=lambda attempt: (attempt[0], attempt[2] != 'succeeded'), reverse=True)
+    success = next((stamp for stamp, _, outcome in attempts if outcome == 'succeeded'), None)
+    failures = [stamp for stamp, _, outcome in attempts if outcome == 'failed']
     # Do not confuse a running/newer failure with an earlier successful call.
     recovered = sum(success is not None and stamp < success for stamp in failures)
-    latest_time, latest_status = attempts[0] if attempts else (None, None)
+    latest_time, latest_status, latest_outcome = attempts[0] if attempts else (None, None, 'unknown')
     fresh = latest_time is not None and 0 <= (now - latest_time).total_seconds() <= max(900, cadence * 2)
-    healthy = (config.get('state') == 'ENABLED' and fresh and latest_status == 200
+    healthy = (config.get('state') == 'ENABLED' and fresh and latest_outcome == 'succeeded'
                and config.get('status', {}).get('code', 0) == 0)
     return {'state': 'healthy' if healthy else 'attention_required',
-            'schedulerState': config.get('state'), 'lastHttpStatus': latest_status,
+            'schedulerState': config.get('state'), 'lastHttpStatus': latest_status, 'lastOutcome': latest_outcome,
             'lastAttempt': latest_time.isoformat() if latest_time else None,
             'lastSuccess': success.isoformat() if success else None,
             'failedAttempts': len(failures), 'recoveredAttempts': recovered,
-            'unrecoveredAttempts': len(failures) - recovered, 'fresh': fresh}
+            'unrecoveredAttempts': len(failures) - recovered,
+            'unknownAttempts': sum(outcome == 'unknown' for _, _, outcome in attempts), 'fresh': fresh}
 
 
 def read_pages(session, api, method, url, key, *, body=None, pages=20):
@@ -80,13 +89,16 @@ def review(session, api, environment, *, hours=24, include_shared=False, now=Non
     if type(hours) is not int or not 2 <= hours <= 48:
         raise ValueError('Review window must be 2 to 48 hours')
     now = now or datetime.now(timezone.utc)
+    # All log reads use the same cutoff. A healthy queue report emitted while
+    # this multi-request review is running must not look like a future log.
+    snapshot = ' AND timestamp<="' + now.isoformat() + '"'
     specs = job_specs(environment, include_shared)
     jobs = []
     for project in sorted({p for p, _, _ in specs}):
         names = [name for p, name, _ in specs if p == project]
         query = ('resource.type="cloud_scheduler_job" AND timestamp>="' + (now - timedelta(hours=hours)).isoformat()
                  + '" AND jsonPayload."@type"="' + FINISHED + '" AND resource.labels.job_id=('
-                 + ' OR '.join('"' + n + '"' for n in names) + ')')
+                 + ' OR '.join('"' + n + '"' for n in names) + ')' + snapshot)
         entries = read_pages(session, api, 'POST', LOG_API, 'entries', body={
             'resourceNames': ['projects/' + project], 'filter': query, 'orderBy': 'timestamp desc'})
         for p, name, cadence in specs:
@@ -110,7 +122,7 @@ def review(session, api, environment, *, hours=24, include_shared=False, now=Non
                           for c in hiring.get('template', {}).get('containers', []) for e in c.get('env', []))
     query = ('resource.type="cloud_run_revision" AND resource.labels.service_name=('
              + ' OR '.join('"' + s + '"' for s in services) + ') AND jsonPayload.event="queue_health"'
-             + ' AND timestamp>="' + (now - timedelta(hours=2)).isoformat() + '"')
+             + ' AND timestamp>="' + (now - timedelta(hours=2)).isoformat() + '"' + snapshot)
     entries = read_pages(session, api, 'POST', LOG_API, 'entries', body={
         'resourceNames': ['projects/' + PROJECT], 'filter': query, 'orderBy': 'timestamp desc'}, pages=5)
     expected = {(services[0], q) for q in ('email', 'webhook')} | {
