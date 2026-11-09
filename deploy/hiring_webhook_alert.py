@@ -11,9 +11,11 @@ from hiring_staging import PROJECT, REGION, api, client
 JOB = 'cc-hiring-webhooks'
 SILENCE_SECONDS = 40 * 60
 METRIC = 'cookcredit_hiring_webhook_success'
+METRIC_TYPE = f'logging.googleapis.com/user/{METRIC}'
 POLICY_NAME = 'CookCredit Hiring webhook dispatcher stalled'
 LOG_METRICS = f'https://logging.googleapis.com/v2/projects/{PROJECT}/metrics'
 MONITORING = f'https://monitoring.googleapis.com/v3/projects/{PROJECT}'
+PROMQL = f'https://monitoring.googleapis.com/v1/projects/{PROJECT}/location/global/prometheus/api/v1/query'
 SCHEDULER = f'https://cloudscheduler.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/jobs'
 
 SCHEDULER_FILTER = (
@@ -29,9 +31,13 @@ SUCCESS_LOG_FILTER = (
     'AND httpRequest.status>=200 AND httpRequest.status<300 AND severity<ERROR'
 )
 METRIC_FILTER = (
-    f'metric.type="logging.googleapis.com/user/{METRIC}" AND resource.type="cloud_scheduler_job" '
+    f'metric.type="{METRIC_TYPE}" AND resource.type="cloud_scheduler_job" '
     f'AND resource.labels.project_id="{PROJECT}" AND resource.labels.location="{REGION}" '
     f'AND resource.labels.job_id="{JOB}"'
+)
+ABSENCE_QUERY = (
+    f'absent_over_time({{"{METRIC_TYPE}",monitored_resource="cloud_scheduler_job",'
+    f'project_id="{PROJECT}",location="{REGION}",job_id="{JOB}"}}[{SILENCE_SECONDS // 60}m])'
 )
 
 
@@ -76,8 +82,9 @@ def stalled_policy(channels):
         'userLabels': {'product': 'cookcredit-hiring', 'environment': 'production'},
         'conditions': [{
             'displayName': 'No successful production webhook dispatch for 40 minutes',
-            'conditionAbsent': {'filter': METRIC_FILTER, 'duration': f'{SILENCE_SECONDS}s',
-                                'trigger': {'count': 1}},
+            'conditionPrometheusQueryLanguage': {
+                'query': ABSENCE_QUERY, 'duration': '0s', 'evaluationInterval': '60s',
+            },
         }],
         'documentation': {
             'mimeType': 'text/markdown',
@@ -95,7 +102,9 @@ def verify_replacement(policy, desired):
         if policy.get(field) != desired[field]:
             raise RuntimeError(f'Existing webhook alert has unexpected {field}')
     conditions = policy.get('conditions', [])
-    if len(conditions) != 1 or conditions[0].get('conditionAbsent') != desired['conditions'][0]['conditionAbsent']:
+    actual = conditions[0].get('conditionPrometheusQueryLanguage', {}) if len(conditions) == 1 else {}
+    if (actual.get('query') != ABSENCE_QUERY or actual.get('duration', '0s') != '0s'
+            or actual.get('evaluationInterval') != '60s'):
         raise RuntimeError('Existing webhook alert has an unexpected condition')
 
 
@@ -109,6 +118,15 @@ def has_fresh_success(series, created, now):
             if cutoff <= start < end <= now and int(point['value'].get('int64Value', 0)) > 0:
                 return True
     return False
+
+
+def observed_success(session, since):
+    now = datetime.now(timezone.utc)
+    data = api(session, 'GET', f'{MONITORING}/timeSeries', params={
+        'filter': METRIC_FILTER, 'interval.startTime': (now - timedelta(minutes=15)).isoformat(),
+        'interval.endTime': now.isoformat(),
+    })
+    return has_fresh_success(data.get('timeSeries', []), since, now)
 
 
 def run(session, phase):
@@ -145,11 +163,22 @@ def run(session, phase):
         return outcome
     if phase == 'prepare':
         if not metric:
-            api(session, 'POST', LOG_METRICS, json={
+            metric = api(session, 'POST', LOG_METRICS, json={
                 'name': METRIC, 'filter': SUCCESS_LOG_FILTER,
                 'description': 'Successful completed attempts of the production Hiring webhook Scheduler job.',
             })
         if not replacement:
+            # Cloud Logging can accept the metric before Monitoring can use it
+            # in a condition. The original alert remains active during that gap.
+            descriptor = api(session, 'GET', f'{MONITORING}/metricDescriptors/{METRIC_TYPE}', missing=True)
+            if not descriptor:
+                return {**outcome, 'metricPresent': True, 'waitingForMetricDescriptor': True}
+            since = datetime.fromisoformat(metric['createTime'].replace('Z', '+00:00'))
+            if not observed_success(session, since):
+                return {**outcome, 'metricPresent': True, 'waitingForSuccessMetric': True}
+            evaluation = api(session, 'GET', PROMQL, params={'query': ABSENCE_QUERY})
+            if evaluation.get('status') != 'success' or evaluation.get('data', {}).get('result') != []:
+                raise RuntimeError('The alert query must see the live successful dispatch before arming')
             replacement = api(session, 'POST', f'{MONITORING}/alertPolicies', json=desired)
             verify_replacement(replacement, desired)
         return {**outcome, 'stalledPolicy': replacement['name'], 'metricPresent': True}
@@ -157,12 +186,7 @@ def run(session, phase):
     if not replacement or not metric:
         raise RuntimeError('Prepare the replacement monitor before activating the filter')
     created = datetime.fromisoformat(replacement['mutationRecord']['mutateTime'].replace('Z', '+00:00'))
-    now = datetime.now(timezone.utc)
-    data = api(session, 'GET', f'{MONITORING}/timeSeries', params={
-        'filter': METRIC_FILTER, 'interval.startTime': (now - timedelta(minutes=15)).isoformat(),
-        'interval.endTime': now.isoformat(),
-    })
-    if not has_fresh_success(data.get('timeSeries', []), created, now):
+    if not observed_success(session, created):
         return {**outcome, 'activated': False, 'waitingForSuccessMetric': True}
     if conditions != current['conditions']:
         api(session, 'PATCH', 'https://monitoring.googleapis.com/v3/' + current['name'],
