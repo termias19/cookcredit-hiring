@@ -102,7 +102,7 @@ def create_or_get_attempt(session, *, user_id: str, session_id: str, profile_id:
         if video_url and not existing.video_url:
             existing.video_url = video_url
             existing.metadata_ = {**(existing.metadata_ or {}),
-                                  **{k: metadata[k] for k in ('recording_path', 'recording_generation') if k in metadata}}
+                                  **{k: metadata[k] for k in ('recording_path', 'recording_generation', 'recording_availability') if k in metadata}}
             existing.updated_at = _utcnow()
         if (existing.verification_state not in ATTEMPT_TERMINAL and existing.video_url
                 and (existing.metadata_ or {}).get('recording_generation')

@@ -4,6 +4,7 @@ import usePlaybackView from '../hooks/usePlaybackView'
 import PlaybackViewControl from './PlaybackViewControl'
 import OriginalLandmarks from './OriginalLandmarks'
 import './CandidateVideoPlayer.css'
+import { reportClientError } from '../utils/errorReporting'
 
 export default function CandidateVideoPlayer({ url, active = true, reel = false, onRetry, cookId, roleId, attemptId, label = 'Candidate assessment recording' }) {
   const video = useRef(null)
@@ -13,7 +14,11 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
   const [position, setPosition] = useState(0), [duration, setDuration] = useState(0)
   useEffect(() => {
     if (!url || !active) return undefined
-    const timer = window.setTimeout(() => setStatus(current => current === 'ready' ? current : 'stalled'), 15000)
+    const timer = window.setTimeout(() => setStatus(current => {
+      if (current === 'ready') return current
+      reportClientError('video_stalled')
+      return 'stalled'
+    }), 15000)
     return () => window.clearTimeout(timer)
   }, [url, active])
   useEffect(() => {
@@ -31,7 +36,7 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
     {!reel && <div className="cc-report-view"><PlaybackViewControl /></div>}
     <video ref={video} src={url} crossOrigin="anonymous" controls={!reel} playsInline muted={muted} loop={reel} preload={active ? 'metadata' : 'none'}
       aria-label={label} onLoadedMetadata={event => { setStatus('ready'); setDuration(event.currentTarget.duration) }} onCanPlay={() => setStatus('ready')}
-      onError={() => setStatus('error')} onPlaying={() => { setStatus('ready'); setPlaying(true) }} onPause={() => setPlaying(false)}
+      onError={event => { setStatus('error'); const code = event.currentTarget.error?.code; if (code !== 1) reportClientError(({2:'video_network_error',3:'video_decode_error',4:'video_format_error'})[code] || 'video_format_error') }} onPlaying={() => { setStatus('ready'); setPlaying(true) }} onPause={() => setPlaying(false)}
       onTimeUpdate={event => setPosition(event.currentTarget.currentTime)} />
     {landmarks && active && <OriginalLandmarks videoRef={video} cookId={cookId} roleId={roleId} attemptId={attemptId} />}
     {reel && <>

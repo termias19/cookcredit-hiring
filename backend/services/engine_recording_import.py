@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 import requests
 from google.api_core.exceptions import PreconditionFailed
-from services.assessment_media import MAX_VIDEO_BYTES, VIDEO_TYPES
+from services.assessment_media import MAX_VIDEO_BYTES, VIDEO_TYPES, recording_snapshot
 from services.firebase import get_storage_bucket
 
 ID = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
@@ -89,7 +89,7 @@ def read_owned_record(owner_uid, assessment_id, *, id_token, app_check=None):
     return {key: _value(value) for key, value in document.get('fields', {}).items()}
 
 
-def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_check=None):
+def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_check=None, observation=None):
     """Call only after the finalized document and application consent are checked."""
     path = str(record.get('storagePath') or '')
     expected = f'cookcredit-skill/users/{owner_uid}/assessments/{assessment_id}/'
@@ -129,6 +129,8 @@ def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_ch
         blob.reload(timeout=20)
         if blob.metadata != metadata or int(blob.size or 0) != size or blob.content_type != kind:
             raise EngineImportError('The existing private recording did not match this assessment.')
+        if observation is not None:
+            observation.update(recording_snapshot(blob))
         return destination, str(blob.generation), kind, generation
 
     # Spool to disk beyond 4 MB rather than multiplying an 80 MB byte buffer per request.
@@ -169,4 +171,6 @@ def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_ch
     if (blob.metadata != metadata or int(blob.size or 0) != size
             or blob.content_type != kind or not blob.generation):
         raise EngineImportError('The imported recording could not be verified.')
+    if observation is not None:
+        observation.update(recording_snapshot(blob))
     return destination, str(blob.generation), kind, generation

@@ -4,7 +4,7 @@ import { Star, Info, X, Search, Hand, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import { getCandidateReport, getCandidateVideo } from '../utils/Api'
-import { reportPlayback } from '../utils/reportPlayback'
+import { reportPlayback, recordingLabel, playbackFailure } from '../utils/reportPlayback'
 import CandidateVideoPlayer from './CandidateVideoPlayer'
 import './MobileCandidateFeed.css'
 import HiringBottomNav from './HiringBottomNav'
@@ -19,6 +19,7 @@ function CandidateReel({ candidate }) {
   const { user } = useAuth(), biz = useBusiness(), navigate = useNavigate()
   const [visible, setVisible] = useState(false), [report, setReport] = useState(null)
   const [url, setUrl] = useState(null), [error, setError] = useState(''), [retry, setRetry] = useState(0)
+  const [terminal, setTerminal] = useState(false)
   const [saving, setSaving] = useState(false), [starError, setStarError] = useState('')
   const [details, setDetails] = useState(false)
   useEffect(() => {
@@ -33,9 +34,14 @@ function CandidateReel({ candidate }) {
       try {
         const token = await user.getIdToken()
         const next = await getCandidateReport({ token, cookId: candidate.id })
+        if (live) setReport(next)
+        if (['expired','unavailable'].includes(next.assessment?.recording?.state)) {
+          if (live) { setUrl(null); setTerminal(true); setError(`${recordingLabel(next.assessment.recording)}. The application and assessment history remain available.`) }
+          return
+        }
         const signed = await reportPlayback({ token, cookId: candidate.id, attemptId: next.assessment?.attemptId, request: getCandidateVideo })
-        if (live) { setReport(next); setUrl(signed); setError(signed ? '' : 'No playable recording is available for this attempt.') }
-      } catch { if (live) { setUrl(null); setError('Could not load this shared assessment. Please retry.') } }
+        if (live) { setReport(next); setUrl(signed); setTerminal(false); setError(signed ? '' : 'No playable recording is available for this attempt.') }
+      } catch (error) { if (live) { const failure = playbackFailure(error); setUrl(null); setTerminal(failure.terminal); setError(failure.message) } }
     })()
     return () => { live = false }
   }, [visible, user, candidate.id, retry])
@@ -55,7 +61,7 @@ function CandidateReel({ candidate }) {
   return <article className="cc-candidate-reel" ref={root} aria-label={`${candidate.name || 'Candidate'} assessment`}>
     {url ? <CandidateVideoPlayer key={`${candidate.id}:${url}`} url={url} cookId={candidate.id} attemptId={report?.assessment?.attemptId} reel active={visible && !details}
       onRetry={() => setRetry(x => x + 1)} /> : <div className="cc-reel-loading" role="status">
-      <p>{error || 'Loading shared recording…'}</p>{error && <button onClick={() => setRetry(x => x + 1)}>Retry</button>}
+      <p>{error || 'Loading shared recording…'}</p>{error && !terminal && <button onClick={() => setRetry(x => x + 1)}>Retry</button>}
     </div>}
     <div className="cc-reel-caption">
       <h2>{candidate.name || 'Candidate'}</h2><p>{report?.role?.title || 'Shared with your company'}{candidate.city ? ` · ${candidate.city}` : ''}</p>

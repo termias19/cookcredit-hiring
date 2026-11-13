@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from services import engine_recording_import as importer
 from services import engine_assessment
+from datetime import datetime, timezone
 
 
 class Response:
@@ -23,6 +24,7 @@ class Blob:
         self.size = None
         self.content_type = None
         self.uploads = []
+        self.time_created = datetime(2026, 11, 13, tzinfo=timezone.utc)
     def exists(self, **kwargs): return self.generation is not None
     def reload(self, **kwargs): pass
     def upload_from_file(self, file, **kwargs):
@@ -119,3 +121,14 @@ def test_redirect_cannot_receive_applicant_credentials(monkeypatch):
     monkeypatch.setattr(importer.requests, 'get', lambda *a, **k: Response({}, status=302))
     with pytest.raises(importer.EngineImportError):
         importer.read_owned_record('alice', 'a1', id_token='private-token')
+
+
+def test_retry_retains_creation_time_and_expiry_instead_of_extending_policy(setup):
+    record, _, blob, _ = setup
+    first, second = {}, {}
+    importer.import_owned_recording(record, 'alice', 'a1', id_token='private', observation=first)
+    importer.import_owned_recording(record, 'alice', 'a1', id_token='private', observation=second)
+    assert first['generation'] == second['generation'] == '9876'
+    assert first['createdAt'] == second['createdAt'] == '2026-11-13T00:00:00+00:00'
+    assert first['expiresAt'] == second['expiresAt'] == '2026-12-13T00:00:00+00:00'
+    assert len(blob.uploads) == 1

@@ -164,7 +164,7 @@ def client(db, monkeypatch):
         'uid': token, 'email': token+'@example.test', 'email_verified': True,
     })
     monkeypatch.setattr(assessment_sharing, 'inspect_recording', lambda *a: ('skill_videos/cook/clip.webm', '123', 'video/webm'))
-    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid: f'https://storage.example.test/{uid}/{generation}')
+    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid, **kw: f'https://storage.example.test/{uid}/{generation}')
     monkeypatch.setattr(hiring, '_ensure_cook_profile', lambda *a: None)
     monkeypatch.setattr(hiring.hiring_cv, 'cleanup_on_rollback', lambda *a: None)
     monkeypatch.setattr(hiring.hiring_cv, 'store_cv', lambda aid, data: {'path': f'hiring_cv/{aid}/test.pdf', 'sha256': 'a' * 64, 'generation': '1', 'bytes': len(data)})

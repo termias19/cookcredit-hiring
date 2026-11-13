@@ -53,6 +53,21 @@ def test_untrusted_origin_cannot_report(client, capsys):
     assert not capsys.readouterr().out
 
 
+@pytest.mark.parametrize('code,severity', [('video_network_error','WARNING'), ('video_stalled','WARNING'),
+                                        ('video_decode_error','ERROR'), ('video_format_error','ERROR')])
+def test_media_diagnostics_keep_bounded_codes_without_recording_urls(client, capsys, code, severity):
+    payload = report(); payload['code'] = code
+    result = client.post('/api/observability/client-error', json=payload,
+                         headers={'Origin':'https://hiring.cookcredit.com'})
+    assert result.status_code == 204
+    event = json.loads(capsys.readouterr().out.strip())
+    assert event['code'] == code and event['severity'] == severity
+    payload['videoUrl'] = 'https://example.test/?signature=private'
+    assert client.post('/api/observability/client-error', json=payload,
+                       headers={'Origin':'https://hiring.cookcredit.com'}).status_code == 400
+    assert not capsys.readouterr().out
+
+
 def test_home_security_timeout_has_its_own_bounded_phase(client, monkeypatch, capsys):
     monkeypatch.setenv('COOKCREDIT_PRODUCT','home-services')
     monkeypatch.setenv('HOME_FRONTEND_ORIGINS','https://home.example.test')
