@@ -69,13 +69,13 @@ function CandidateReport({ id, roleId }) {
     return () => { live = false }
   }, [user, id, roleId])
 
-  async function playVideo() {
-    setVideo({ open: true, url: null, loading: true })
+  async function playVideo({ original = false } = {}) {
+    setVideo({ open: true, url: null, loading: true, original })
     try {
       const token = await user?.getIdToken?.()
       const url = await reportPlayback({ token, cookId: id, roleId,
-        attemptId: report?.assessment?.attemptId, request: getCandidateVideo })
-      setVideo({ open: true, url, loading: false })
+        attemptId: report?.assessment?.attemptId, request: getCandidateVideo, original })
+      setVideo({ open: true, url, loading: false, original })
     } catch (error) { setVideo({ open: true, url: null, loading: false, ...playbackFailure(error) }) }
   }
 
@@ -166,7 +166,8 @@ function CandidateReport({ id, roleId }) {
               </span>
             </button>
           ) : video.url ? (
-            <CandidateVideoPlayer key={video.url} url={video.url} cookId={id} roleId={roleId} attemptId={report?.assessment?.attemptId} onRetry={playVideo} />
+            <CandidateVideoPlayer key={video.url} url={video.url} cookId={id} roleId={roleId} attemptId={report?.assessment?.attemptId}
+              onRetry={() => playVideo({ original: video.original })} onOriginal={video.original ? undefined : () => playVideo({ original: true })} />
           ) : (
             <div style={{ border: '1px solid var(--cc-border)', padding: '14px 16px', fontSize: 13, color: '#777', lineHeight: 1.5 }}>
               <p role="status">{video.loading ? 'Loading…' : video.message || 'The recording could not be loaded.'}</p>

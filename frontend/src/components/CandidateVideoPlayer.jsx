@@ -6,7 +6,7 @@ import OriginalLandmarks from './OriginalLandmarks'
 import './CandidateVideoPlayer.css'
 import { reportClientError } from '../utils/errorReporting'
 
-export default function CandidateVideoPlayer({ url, active = true, reel = false, onRetry, cookId, roleId, attemptId, label = 'Candidate assessment recording' }) {
+export default function CandidateVideoPlayer({ url, active = true, reel = false, onRetry, onOriginal, cookId, roleId, attemptId, label = 'Candidate assessment recording' }) {
   const video = useRef(null)
   const [landmarks] = usePlaybackView()
   const [status, setStatus] = useState('loading')
@@ -49,7 +49,9 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
   }, [active, reel, url])
   const toggle = () => { if (video.current?.paused) video.current.play().catch(() => setStatus('error')); else video.current?.pause() }
   return <div className={`cc-candidate-player${reel ? ' cc-player-reel' : ''}`}>
-    {!reel && <div className="cc-report-view"><PlaybackViewControl /></div>}
+    {!reel && <div className="cc-report-view"><PlaybackViewControl />
+      {onOriginal && <button className="cc-original-recording" type="button" onClick={onOriginal}>Original recording</button>}
+    </div>}
     <video ref={video} src={url} crossOrigin="anonymous" controls={!reel} playsInline muted={muted} loop={reel} preload={active ? 'metadata' : 'none'}
       aria-label={label} onLoadedMetadata={event => { setStatus('ready'); setDuration(event.currentTarget.duration) }} onCanPlay={() => setStatus('ready')}
       onError={event => { setStatus('error'); const code = event.currentTarget.error?.code; if (code !== 1) reportClientError(({2:'video_network_error',3:'video_decode_error',4:'video_format_error'})[code] || 'video_format_error') }} onPlaying={() => { setStatus('ready'); setPlaying(true) }} onPause={() => setPlaying(false)}

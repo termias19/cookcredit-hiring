@@ -1,7 +1,7 @@
 // Never attach a recording to a report for a different attempt.
-export async function reportPlayback({ token, cookId, roleId, attemptId, request, signal }) {
+export async function reportPlayback({ token, cookId, roleId, attemptId, request, signal, original = false }) {
   if (!token || !attemptId) throw new Error('Load the assessment report before playback.')
-  const result = await request({ token, cookId, roleId, attemptId, ...(signal ? { signal } : {}) })
+  const result = await request({ token, cookId, roleId, attemptId, ...(signal ? { signal } : {}), ...(original ? { original: true } : {}) })
   if (result?.attemptId !== attemptId) throw new Error('Recording does not match this report.')
   return result.videoUrl || null
 }

@@ -372,9 +372,10 @@ export async function replayPartnerWebhookDelivery({ token, deliveryId }) {
   })
 }
 // Gated playback URL for a candidate's verified-skill capture (only cooks who applied to the org).
-export async function getCandidateVideo({ token, cookId, roleId, attemptId, landmarks = false, signal }) {
+export async function getCandidateVideo({ token, cookId, roleId, attemptId, landmarks = false, original = false, signal }) {
   const filters = new URLSearchParams()
   if (landmarks) filters.set('landmarks', '1')
+    if (original) filters.set('original', '1')
   if (roleId) filters.set('roleId', roleId)
   if (attemptId) filters.set('attemptId', attemptId)
   const query = filters.size ? `?${filters}` : ''

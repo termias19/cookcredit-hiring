@@ -25,6 +25,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt pytest==9.0.3 PyYAML==6.0.2
+      - name: Install decoder used by the isolated compression job
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Migrations and regression tests
         working-directory: backend
         env:

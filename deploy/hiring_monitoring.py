@@ -4,6 +4,16 @@ import copy
 import json
 from hiring_staging import api, client, PROJECT
 
+RECOVERY_EXCLUSION = (' AND NOT (jsonPayload.retryableBackground=true '
+    'AND jsonPayload.endpoint="auth.dispatch_emails" '
+    'AND jsonPayload.event=("dependency_unavailable" OR "request_failed"))')
+
+
+def legacy_service_filter(environment):
+    service = 'cookcredit-hiring' + ('-staging' if environment == 'staging' else '')
+    return ('resource.type="cloud_run_revision" AND resource.labels.service_name="'
+            + service + '" AND jsonPayload.event:* AND severity>=ERROR')
+
 
 def application_error_filter(environment, *, recoverable_background=False):
     if environment not in ('production', 'staging'):
@@ -11,16 +21,16 @@ def application_error_filter(environment, *, recoverable_background=False):
     service = 'cookcredit-hiring' + ('-staging' if environment == 'staging' else '')
     # Structured events already exclude raw user/provider payloads. This includes
     # new failure categories automatically and works below the API-volume floor.
-    query = ('resource.type="cloud_run_revision" AND resource.labels.service_name="'
-             + service + '" AND jsonPayload.event:* AND severity>=ERROR')
+    job = 'cc-hiring-' + ('stg-' if environment == 'staging' else '') + 'compression'
+    query = ('((resource.type="cloud_run_revision" AND resource.labels.service_name="'
+             + service + '" AND jsonPayload.event:*) OR (resource.type="cloud_run_job" '
+             'AND resource.labels.job_name="' + job + '")) AND severity>=ERROR')
     if recoverable_background:
         if environment != 'production':
             raise ValueError('Recovery coverage must be armed explicitly for production')
         # NOT retains older events without this field. Unknown dependencies,
         # real delivery errors and all other endpoints still match immediately.
-        query += (' AND NOT (jsonPayload.retryableBackground=true '
-                  'AND jsonPayload.endpoint="auth.dispatch_emails" '
-                  'AND jsonPayload.event=("dependency_unavailable" OR "request_failed"))')
+        query += RECOVERY_EXCLUSION
     return query
 
 
@@ -33,8 +43,9 @@ def desired_policy(current, environment):
         raise RuntimeError('Existing alert must be enabled and have its owner channel')
     policy['displayName'] = 'CookCredit hiring ' + environment + ' application and delivery failures'
     conditions[0]['displayName'] = 'Structured Hiring error, including low-traffic and browser failures'
-    aware = (environment == 'production' and conditions[0]['conditionMatchedLog'].get('filter') ==
-             application_error_filter(environment, recoverable_background=True))
+    aware = (environment == 'production' and conditions[0]['conditionMatchedLog'].get('filter') in (
+             application_error_filter(environment, recoverable_background=True),
+             legacy_service_filter(environment) + RECOVERY_EXCLUSION))
     conditions[0]['conditionMatchedLog']['filter'] = application_error_filter(environment, recoverable_background=aware)
     policy['documentation'] = {'mimeType': 'text/markdown', 'content':
         'A Hiring application, browser, dependency, public-site or delivery error was recorded. '

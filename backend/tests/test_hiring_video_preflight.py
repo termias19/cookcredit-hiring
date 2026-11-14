@@ -45,12 +45,13 @@ def test_corrupt_container_and_remote_paths_are_rejected(tmp_path):
     with pytest.raises(VideoInspectionError): inspect_video('https://example.test/clip.mp4')
 
 
-def test_timeout_fails_closed(video, monkeypatch):
-    def timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired('ffprobe', 15)
-    monkeypatch.setattr(subprocess, 'run', timeout)
-    with pytest.raises(VideoInspectionError, match='time budget'):
-        inspect_video(video)
+def test_timeout_and_output_flood_fail_closed():
+    import sys
+    from scripts.inspect_hiring_video import run
+    with pytest.raises(VideoInspectionError, match='resource limit'):
+        run([sys.executable, '-c', 'import time; time.sleep(5)'], .05)
+    with pytest.raises(VideoInspectionError, match='limit'):
+        run([sys.executable, '-c', 'import sys; sys.stdout.write("x"*2000000)'], 5)
 
 
 def test_audio_is_rejected_instead_of_retained_silently(tmp_path):

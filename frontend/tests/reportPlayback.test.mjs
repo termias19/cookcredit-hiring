@@ -29,6 +29,15 @@ test('revoked access never retries without the pinned identity', async () => {
   assert.equal(calls, 1)
 })
 
+test('original quality still uses the pinned, consent-gated playback request', async () => {
+  let input
+  const url = await reportPlayback({token:'test',cookId:'cook',attemptId:'shown-attempt',original:true,
+    request:async value => { input=value;return {attemptId:'shown-attempt',videoUrl:'private-original'} }})
+  assert.equal(input.original,true)
+  assert.equal(input.attemptId,'shown-attempt')
+  assert.equal(url,'private-original')
+})
+
 test('missing and expired recordings explain availability without deleting the assessment', () => {
   for (const code of ['recording_expired','recording_missing']) {
     const failure = playbackFailure({code,requestId:'a'.repeat(32),message:'secret URL'})

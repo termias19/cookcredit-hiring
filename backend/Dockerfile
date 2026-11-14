@@ -4,7 +4,7 @@
 # every dep ships a self-contained manylinux wheel (psycopg2-binary bundles libpq,
 # Pillow bundles libjpeg/zlib, numpy/scipy bundle OpenBLAS), so NO apt build toolchain
 # is needed. Keep it that way — if you add a source-only dep, install its build libs here.
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -35,3 +35,15 @@ CMD exec gunicorn wsgi:app \
     --workers ${GUNICORN_WORKERS} --threads ${GUNICORN_THREADS} \
     --timeout 120 \
     --access-logfile - --error-logfile -
+
+# On-demand job only. The API image below does not contain a video decoder.
+FROM base AS compression
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+USER appuser
+ENTRYPOINT ["python", "scripts/compress_hiring_video.py"]
+CMD []
+
+# Keep the default build target as the lightweight HTTP API.
+FROM base AS api

@@ -8,6 +8,7 @@
 .cc-playback-view button {flex:1;border:0;border-radius:8px;padding:10px 16px;min-height:40px;background:transparent;color:#214b40;font-size:12px;}
 .cc-playback-view button[aria-pressed=true] {background:#1f6f5c;color:#fff;}
 .cc-report-view {position:absolute;top:10px;right:10px;z-index:5;}
+.cc-original-recording {display:block;min-height:44px;margin-top:6px;padding:8px 14px;border:1px solid #d5d8ce;border-radius:6px;background:#fffdf8;color:#214b40;font-size:12px;cursor:pointer;}
 .cc-playback-landmarks {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;}
 .cc-landmark-status {position:absolute;top:12px;left:12px;max-width:65%;background:#18231ecc;color:#fff;padding:6px 9px;border-radius:5px;font-size:10px;pointer-events:none;z-index:2;}
 .cc-report-view~.cc-landmark-status {top:64px;}

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import math
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from services.hiring_capture import validate_capture
@@ -24,17 +25,28 @@ class VideoInspectionError(ValueError):
 
 
 def run(command, timeout):
+    # Decoders consume untrusted files. Bound output while the process runs,
+    # rather than checking an already-unbounded capture_output allocation.
     try:
-        result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True,
-                                timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+            with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=errors) as child:
+                deadline = time.monotonic() + timeout
+                while child.poll() is None:
+                    if (time.monotonic() >= deadline or
+                            max(output.tell(), errors.tell()) > 1024 * 1024):
+                        child.kill()
+                        child.wait()
+                        raise VideoInspectionError('Video inspector exceeded its resource limit')
+                    time.sleep(0.05)
+                if child.returncode:
+                    raise VideoInspectionError('Video container or decoding check failed')
+            output.seek(0)
+            raw = output.read(1024 * 1024 + 1)
+    except OSError as exc:
         raise VideoInspectionError('Video inspector unavailable or time budget exceeded') from exc
-    if result.returncode:
-        # Decoder logs can contain local paths; do not return them as public errors.
-        raise VideoInspectionError('Video container or decoding check failed')
-    if len(result.stdout) > 1024 * 1024:
+    if len(raw) > 1024 * 1024:
         raise VideoInspectionError('Video inspector output exceeded its limit')
-    return result.stdout.decode('utf-8', errors='strict')
+    return raw.decode('utf-8', errors='strict')
 
 
 def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
@@ -45,15 +57,21 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
         raise VideoInspectionError('Video size exceeds the supported range')
     claim = validate_capture(capture)
     # Inspect a fixed private copy so the probe and decoder read identical bytes.
-    with path.open('rb') as source:
-        data = source.read(MAX_BYTES + 1)
-    if not 0 < len(data) <= MAX_BYTES:
-        raise VideoInspectionError('Video size changed or exceeds the supported range')
-    digest = hashlib.sha256(data).hexdigest()
+    digest = hashlib.sha256()
+    size = 0
     with tempfile.TemporaryDirectory(prefix='hiring-video-') as directory:
         local = Path(directory) / ('recording' + path.suffix.lower())
-        local.write_bytes(data)
-        common = ['-protocol_whitelist', 'file', '-format_whitelist', 'mov,matroska,webm']
+        with path.open('rb') as source, local.open('xb') as target:
+            for chunk in iter(lambda: source.read(256 * 1024), b''):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise VideoInspectionError('Video size changed or exceeds the supported range')
+                digest.update(chunk)
+                target.write(chunk)
+        if not size:
+            raise VideoInspectionError('Video is empty')
+        digest = digest.hexdigest()
+        common = ['-max_alloc', '67108864', '-protocol_whitelist', 'file', '-format_whitelist', 'mov,matroska,webm']
         raw = run([ffprobe, '-v', 'error', *common, '-show_entries',
                    'stream=codec_type,width,height,sample_aspect_ratio,color_range,color_space,color_transfer,color_primaries:stream_side_data=rotation:format=duration',
                    '-of', 'json', str(local)], 15)
@@ -100,7 +118,7 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
         if not claim['samples']:
             issues.append('inference-samples-missing')
     return {'schema': 'hiring-video-preflight-v1', 'serverVerified': False,
-            'sha256': digest, 'bytes': len(data), 'width': width, 'height': height,
+            'sha256': digest, 'bytes': size, 'width': width, 'height': height,
             'sampleAspectRatio': stream.get('sample_aspect_ratio'),
             'colorMetadata': {key: stream.get(key) for key in (
                 'color_range', 'color_space', 'color_transfer', 'color_primaries')},

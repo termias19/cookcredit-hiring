@@ -233,6 +233,60 @@ remain `public_site_health` ERROR events covered by the application alert.
 SQL failures still return 503 and retain Scheduler retries. No additional job,
 queue or alert policy is needed for this separation.
 
+### Optional background playback compression
+
+The original consented Hiring object remains the scoring/evidence source. Its
+path, generation and 30-day retention clock are unchanged. A smaller playback
+copy is optional; it never certifies or changes a skill score.
+
+`034_recording_compression.sql` adds processing state to existing attempts. The
+existing `/api/skills/dispatch-pending` Scheduler tick claims bounded work and
+starts an on-demand Cloud Run Job. There is no additional queue, Scheduler or
+idle worker. `HIRING_COMPRESSION_JOB` enables dispatch; `HIRING_COMPRESSED_PLAYBACK=1`
+enables consumption independently. The API image excludes FFmpeg. Build the
+same Dockerfile with `--target compression` for the private worker image. The
+pure plans in `deploy/hiring_compression.py` exclude SMTP, Stripe and integration
+credentials from its environment and reuse each environment's runtime identity
+and SQL connection. Job invocation permission belongs only on that specific job,
+never at project scope or to public principals.
+
+Admission defaults to two active executions (hard ceiling four). Each task has
+one CPU, 1 GiB, a 15-minute timeout and zero provider retries. SQL owns three
+attempts, retry delays, a 20-minute lease and publication fencing. This caps
+active spend; it is not a high-volume capacity certification. Review queue age
+and actual demand before raising admission. Existing SQL/API capacity is unchanged.
+
+The v1 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
+up to 720p pixels with no rotation. It preserves dimensions, frame timestamps,
+aspect and declared color, uses H.264 CRF 24, and requires at least 10% savings,
+matching complete decodes, <=2 ms timing/duration drift, average SSIM >=0.985
+and minimum frame SSIM >=0.95. SSIM is diagnostic; representative cutting detail
+and browser playback still need review. Unsupported or rejected inputs keep
+using the original. Decoders run only in an isolated job, with local-file input
+protocols, format/codec limits, bounded output, deadlines and capped allocations.
+
+The deterministic derivative key includes original path/generation and profile.
+Uploads use generation preconditions. Consent and retention are checked again
+before publication. The derivative inherits the original creation time as
+Custom-Time; a derivative-only lifecycle rule expires it on the original clock.
+No original lifecycle rule is changed. Signed links remain at most five minutes,
+after existing company/seat/consent checks and an original-generation lookup.
+An unavailable derivative falls back to the original.
+
+Trace `recording_compression_*` events by `processingReference`, attempt UUID,
+execution, profile and release. Logs exclude identities, object paths, signed
+URLs, provider bodies and raw decoder exceptions. Recoverable processing failures
+log warnings. Exhaustion, unexpected job failures, or queue age >=30 minutes
+match the existing enabled application alert; email/webhook recovery coverage
+and all unrelated alert policies stay intact. `platform_monitoring.py` includes
+the processing queue when enabled and a processing/fallback log panel.
+
+Rollback: disable compressed playback to restore original playback immediately;
+remove the job dispatch flag to stop new launches. Keep additive columns,
+originals, derivative records, retry evidence and alerts. Let in-flight leases
+finish or expire; do not delete media or blindly requeue failed records. Diagnose
+the safe failure code and exact release before an explicitly reviewed retry.
+
 ### Bounded recording transfers and reel playback
 
 Hiring imports the applicant-selected, generation-pinned object through the

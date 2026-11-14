@@ -55,8 +55,9 @@ def emit_event(event, *, severity='INFO', **fields):
         if isinstance(reference, str) and re.fullmatch(r'[a-f0-9]{32}', reference):
             fields.setdefault('requestId', reference)
     print(json.dumps({'severity': severity, 'event': event,
-        'service': os.getenv('K_SERVICE', 'local'),
+        'service': os.getenv('K_SERVICE') or os.getenv('CLOUD_RUN_JOB', 'local'),
         'revision': os.getenv('K_REVISION', 'local'),
+        **({'execution': os.environ['CLOUD_RUN_EXECUTION']} if os.getenv('CLOUD_RUN_EXECUTION') else {}),
         'commit': os.getenv('RELEASE_COMMIT', 'unrecorded'), **fields}), flush=True)
 
 

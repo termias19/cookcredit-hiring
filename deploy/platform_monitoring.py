@@ -120,6 +120,8 @@ def review(session, api, environment, *, hours=24, include_shared=False, now=Non
                  + '/locations/us-central1/services/' + services[0])
     billing_enabled = any(e.get('name') == 'STRIPE_ASYNC_ENABLED' and e.get('value') == '1'
                           for c in hiring.get('template', {}).get('containers', []) for e in c.get('env', []))
+    compression_enabled = any(e.get('name') == 'HIRING_COMPRESSION_JOB' and e.get('value')
+                          for c in hiring.get('template', {}).get('containers', []) for e in c.get('env', []))
     query = ('resource.type="cloud_run_revision" AND resource.labels.service_name=('
              + ' OR '.join('"' + s + '"' for s in services) + ') AND jsonPayload.event="queue_health"'
              + ' AND timestamp>="' + (now - timedelta(hours=2)).isoformat() + '"' + snapshot)
@@ -129,6 +131,8 @@ def review(session, api, environment, *, hours=24, include_shared=False, now=Non
         (services[1], q) for q in ('email', 'home_events', 'home_financial')}
     if billing_enabled:
         expected.add((services[0], 'billing'))
+    if compression_enabled:
+        expected.add((services[0], 'recording_compression'))
     latest = {}
     for e in entries:
         j = e.get('jsonPayload', {}); service = e.get('resource', {}).get('labels', {}).get('service_name')
@@ -146,7 +150,7 @@ def review(session, api, environment, *, hours=24, include_shared=False, now=Non
         healthy = (fresh and e.get('severity') == 'INFO'
                    and all(k in values for k in required)
                    and not any(values.get(k, 0) for k in ('failed', 'held', 'expiredLeases', 'paymentReviews', 'expectedWaitingOverdue'))
-                   and values['oldestSeconds'] < 600)
+                   and values['oldestSeconds'] < (1800 if key[1] == 'recording_compression' else 600))
         latest[key] = {'service': service, 'queue': key[1], 'time': stamp.isoformat(),
                        'state': 'healthy' if healthy else 'attention_required', **values}
     queues = [latest.get(key, {'service': key[0], 'queue': key[1], 'state': 'missing_evidence'}) for key in sorted(expected)]
@@ -176,6 +180,9 @@ def dashboard():
         logs('Failed background attempts', jobs + ' AND severity>=ERROR'),
         logs('Successful background attempts: compare job and timestamp', jobs + ' AND jsonPayload."@type"="' + FINISHED + '" AND httpRequest.status=200'),
         logs('Latest durable queue counters', active + ' AND jsonPayload.event="queue_health"'),
+        logs('Recording processing and original fallback',
+             '((resource.type="cloud_run_job" AND resource.labels.job_name=("cc-hiring-compression" OR "cc-hiring-stg-compression")) OR '
+             + active + ') AND jsonPayload.event=~"^recording_compression_"'),
         logs('Legacy and shared assessment cleanup', '(resource.type="cloud_scheduler_job" AND resource.labels.job_id=("biometric-retention-sweep" OR "firebase-schedule-purgeExpiredCookCreditSkillData-us-central1"))', (PROJECT, SHARED_PROJECT)),
     ]}}
 

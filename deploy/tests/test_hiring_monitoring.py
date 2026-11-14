@@ -31,6 +31,15 @@ def test_no_implicit_environment_or_silent_disabled_policy():
     with pytest.raises(RuntimeError):module.desired_policy({'conditions': [{'conditionMatchedLog': {}}]}, 'production')
 
 
+def test_job_coverage_preserves_preexisting_email_recovery_exclusion():
+    before = {'enabled': True, 'notificationChannels': ['owner-channel'], 'conditions': [
+        {'conditionMatchedLog': {'filter': module.legacy_service_filter('production') + module.RECOVERY_EXCLUSION}}]}
+    query = module.desired_policy(before, 'production')['conditions'][0]['conditionMatchedLog']['filter']
+    assert 'resource.type="cloud_run_job"' in query
+    assert 'resource.labels.job_name="cc-hiring-compression"' in query
+    assert query.endswith(module.RECOVERY_EXCLUSION)
+
+
 def test_recovery_aware_filter_is_narrow_and_survives_a_later_monitoring_update():
     query=module.application_error_filter('production',recoverable_background=True)
     assert query.startswith(module.application_error_filter('production')+' AND NOT (')

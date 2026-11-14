@@ -1236,6 +1236,11 @@ def candidate_video(cook_id):
         try:
             url = playback_url(grant.storage_path, grant.storage_generation, cook_id, observation=observation)
             remember_observation()
+            from services.recording_compression import compressed_playback_url
+            if request.args.get('original') != '1' and observation.get('expiresAt'):
+                url = compressed_playback_url(grant.storage_path, grant.storage_generation, cook_id,
+                    (attempt.metadata_ or {}).get('playback_derivative'),
+                    datetime.fromisoformat(observation['expiresAt'])) or url
             if request.args.get('landmarks') == '1':
                 original_url = landmarks_url((attempt.metadata_ or {}).get('original_landmarks'),
                                              grant.storage_path, grant.storage_generation)

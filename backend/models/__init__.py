@@ -466,6 +466,14 @@ class SkillAttempt(Base):
     dispatch_due_at = Column(DateTime(timezone=True))
     dispatch_token = Column(PG_UUID(as_uuid=True))
     dispatch_failures = Column(Integer, nullable=False, default=0, server_default="0")
+    # Optional playback processing never changes verification or original media.
+    compression_state = Column(Text)
+    compression_due_at = Column(DateTime(timezone=True))
+    compression_lease_id = Column(PG_UUID(as_uuid=True))
+    compression_lease_until = Column(DateTime(timezone=True))
+    compression_count = Column(Integer, nullable=False, default=0, server_default="0")
+    compression_error = Column(Text)
+    compression_requested_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
