@@ -281,6 +281,13 @@ match the existing enabled application alert; email/webhook recovery coverage
 and all unrelated alert policies stay intact. `platform_monitoring.py` includes
 the processing queue when enabled and a processing/fallback log panel.
 
+The existing recovery-monitor tool also supports `--job processing`: its
+40-minute heartbeat detects a silently stopped `cc-hiring-dispatch` schedule.
+Prepare it only after a real success metric and an empty live absence query
+are observed. This adds silence coverage while preserving every immediate
+processing Scheduler failure, worker error and backlog alert. No new polling
+service or work queue is introduced.
+
 Rollback: disable compressed playback to restore original playback immediately;
 remove the job dispatch flag to stop new launches. Keep additive columns,
 originals, derivative records, retry evidence and alerts. Let in-flight leases

@@ -74,6 +74,25 @@ def test_email_rollout_requires_its_actual_cadence_and_retry_budget():
     with pytest.raises(RuntimeError):alert.validate_job({**job,'schedule':'*/5 * * * *'},'emails')
 
 
+def test_processing_silence_coverage_keeps_all_immediate_failures():
+    import copy
+    settings=alert.job_settings('processing')
+    assert settings['job']=='cc-hiring-dispatch'
+    assert settings['metric']=='cookcredit_hiring_processing_success'
+    assert 'job_id="cc-hiring-dispatch"' in settings['query']
+    assert settings['query'].endswith('[40m])')
+    existing={'enabled':True,'notificationChannels':['owner-channel'],'conditions':[{
+        'name':'original','conditionMatchedLog':{'filter':alert.SCHEDULER_FILTER
+            +' AND resource.labels.job_id!="cc-hiring-webhooks" AND resource.labels.job_id!="cc-hiring-emails"'}}]}
+    before=copy.deepcopy(existing)
+    assert alert.scheduler_conditions(existing,'processing')==before['conditions']
+    assert existing==before
+    policy=alert.stalled_policy(['owner-channel'],'processing')
+    assert policy['enabled'] and policy['notificationChannels']==['owner-channel']
+    assert 'processing' in policy['conditions'][0]['displayName']
+    assert 'thirty minutes' in policy['documentation']['content']
+
+
 @pytest.mark.parametrize('recovered', [False, True])
 def test_email_immediate_filters_change_only_after_replacement_observes_success(monkeypatch,recovered):
     import copy

@@ -42,13 +42,14 @@ ABSENCE_QUERY = (
 
 
 def job_settings(kind='webhooks'):
-    if kind not in ('webhooks', 'emails'):
+    if kind not in ('webhooks', 'emails', 'processing'):
         raise ValueError('Only reviewed production dispatchers are supported')
-    job = 'cc-hiring-' + kind
-    metric = 'cookcredit_hiring_' + kind[:-1] + '_success'
+    job = 'cc-hiring-dispatch' if kind == 'processing' else 'cc-hiring-' + kind
+    noun = 'processing' if kind == 'processing' else kind[:-1]
+    metric = 'cookcredit_hiring_' + noun + '_success'
     metric_type = 'logging.googleapis.com/user/' + metric
     return {'job':job, 'metric':metric, 'metric_type':metric_type,
-            'policy': 'CookCredit Hiring ' + kind[:-1] + ' dispatcher stalled',
+            'policy': 'CookCredit Hiring ' + noun + ' dispatcher stalled',
             'success_filter':SUCCESS_LOG_FILTER.replace(JOB, job),
             'metric_filter':METRIC_FILTER.replace(METRIC_TYPE, metric_type).replace(JOB, job),
             'query':ABSENCE_QUERY.replace(METRIC_TYPE, metric_type).replace(JOB, job)}
@@ -85,6 +86,10 @@ def scheduler_conditions(policy, kind='webhooks'):
     allowed = [SCHEDULER_FILTER + ''.join(e for i,e in enumerate(exclusions) if mask & (1 << i)) for mask in range(4)]
     if condition.get('filter') not in allowed:
         raise RuntimeError('Production Scheduler filter changed outside this rollout')
+    if kind == 'processing':
+        # Add missing-heartbeat coverage without suppressing any processing
+        # Scheduler failures, worker errors or backlog alerts.
+        return conditions
     selected = {e for e in exclusions if e in condition['filter']}
     selected.add(f' AND resource.labels.job_id!="{job_settings(kind)["job"]}"')
     condition['filter'] = SCHEDULER_FILTER + ''.join(e for e in exclusions if e in selected)
@@ -93,6 +98,7 @@ def scheduler_conditions(policy, kind='webhooks'):
 
 def stalled_policy(channels, kind='webhooks'):
     settings = job_settings(kind)
+    noun = 'processing' if kind == 'processing' else kind[:-1]
     return {
         'displayName': settings['policy'],
         'enabled': True,
@@ -100,7 +106,7 @@ def stalled_policy(channels, kind='webhooks'):
         'notificationChannels': channels,
         'userLabels': {'product': 'cookcredit-hiring', 'environment': 'production'},
         'conditions': [{
-            'displayName': f'No successful production {kind[:-1]} dispatch for 40 minutes',
+            'displayName': f'No successful production {noun} dispatch for 40 minutes',
             'conditionPrometheusQueryLanguage': {
                 'query': settings['query'], 'duration': '0s', 'evaluationInterval': '60s',
             },
@@ -109,9 +115,10 @@ def stalled_policy(channels, kind='webhooks'):
             'mimeType': 'text/markdown',
             'content': (f'The production {settings["job"]} job has recorded no successful '
                         'execution for 40 minutes. Check Scheduler attempt logs and durable '
-                        'delivery queue counters. Review existing delivery state '
+                        'queue counters. Review existing durable state '
                         'before replaying work. The application alert still reports terminal '
-                        'delivery failures and pending work at least ten minutes old.'),
+                        + ('processing failures and recording work at least thirty minutes old.' if kind == 'processing' else
+                           'delivery failures and pending work at least ten minutes old.')),
         },
     }
 
@@ -205,6 +212,10 @@ def run(session, phase, kind='webhooks'):
 
     if not replacement or not metric:
         raise RuntimeError('Prepare the replacement monitor before activating the filter')
+    if kind == 'processing':
+        # prepare already arms this monitor after observing its real metric.
+        # There is no cutover: all existing immediate failure filters stay on.
+        return {**outcome, 'activated': True, 'existingFailureFiltersPreserved': True}
     created = datetime.fromisoformat(replacement['mutationRecord']['mutateTime'].replace('Z', '+00:00'))
     if not observed_success(session, created, kind):
         return {**outcome, 'activated': False, 'waitingForSuccessMetric': True}
@@ -236,7 +247,7 @@ def run(session, phase, kind='webhooks'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--phase', choices=('plan', 'prepare', 'activate'), default='plan')
-    parser.add_argument('--job', choices=('webhooks','emails'), default='webhooks')
+    parser.add_argument('--job', choices=('webhooks','emails','processing'), default='webhooks')
     args = parser.parse_args()
     with client() as session:
         print(json.dumps(run(session, args.phase, args.job), indent=2))
