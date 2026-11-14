@@ -8,6 +8,45 @@ from sqlalchemy import func, select, or_, and_, literal
 from services.database import db_session
 
 
+def dependency_diagnostic(error):
+    """Bounded cause codes only. Never serialize a driver error or SQL statement."""
+    from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeout
+    from redis.exceptions import RedisError, ConnectionError as RedisConnectionError, TimeoutError as RedisTimeout
+    from limits.errors import StorageError
+    from services.email_capacity import EmailQueueBusy
+    if isinstance(error, OperationalError):
+        state = getattr(getattr(error, 'orig', None), 'pgcode', None)
+        if not isinstance(state, str) or not re.fullmatch(r'[0-9A-Z]{5}', state):
+            state = None
+        transient = bool(error.connection_invalidated or
+                         (state and (state.startswith('08') or state in ('57P01', '57P02', '57P03'))))
+        if state is None and not transient:
+            # libpq connection-start failures can lack SQLSTATE. Inspect only
+            # a bounded real-driver message for fixed transport phrases, and
+            # emit only the category. Authentication/unknown text is retained
+            # as an actionable unknown failure, never printed or suppressed.
+            from psycopg2 import OperationalError as DriverOperationalError
+            if isinstance(error.orig, DriverOperationalError):
+                message = str(error.orig)[:2048].lower()
+                transient = any(phrase in message for phrase in (
+                    'server closed the connection unexpectedly',
+                    'terminating connection due to administrator command',
+                    'the database system is starting up', 'the database system is shutting down',
+                )) or ('connection to server' in message and 'connection refused' in message)
+        return {'dependency':'database', 'reason':'connection_interrupted' if transient else 'database_operational_error',
+                'sqlState':state, 'retryableDependency':transient}
+    if isinstance(error, PoolTimeout):
+        return {'dependency':'database', 'reason':'pool_timeout', 'retryableDependency':True}
+    if isinstance(error, RedisError):
+        return {'dependency':'redis', 'reason':'connection_interrupted' if isinstance(error,(RedisConnectionError,RedisTimeout)) else 'redis_error',
+                'retryableDependency':isinstance(error,(RedisConnectionError,RedisTimeout))}
+    if isinstance(error, StorageError):
+        return {'dependency':'rate_limit_store', 'reason':'storage_unavailable', 'retryableDependency':False}
+    if isinstance(error, EmailQueueBusy):
+        return {'dependency':'email_queue', 'reason':'queue_capacity', 'retryableDependency':False}
+    return {'dependency':'unknown', 'reason':'unknown_dependency', 'retryableDependency':False}
+
+
 def emit_event(event, *, severity='INFO', **fields):
     # Correlate maintenance/probe events with the API response using only the
     # server-generated ID. Background jobs and local checks need no HTTP context.

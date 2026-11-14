@@ -5,14 +5,23 @@ import json
 from hiring_staging import api, client, PROJECT
 
 
-def application_error_filter(environment):
+def application_error_filter(environment, *, recoverable_background=False):
     if environment not in ('production', 'staging'):
         raise ValueError('Unknown environment')
     service = 'cookcredit-hiring' + ('-staging' if environment == 'staging' else '')
     # Structured events already exclude raw user/provider payloads. This includes
     # new failure categories automatically and works below the API-volume floor.
-    return ('resource.type="cloud_run_revision" AND resource.labels.service_name="'
-            + service + '" AND jsonPayload.event:* AND severity>=ERROR')
+    query = ('resource.type="cloud_run_revision" AND resource.labels.service_name="'
+             + service + '" AND jsonPayload.event:* AND severity>=ERROR')
+    if recoverable_background:
+        if environment != 'production':
+            raise ValueError('Recovery coverage must be armed explicitly for production')
+        # NOT retains older events without this field. Unknown dependencies,
+        # real delivery errors and all other endpoints still match immediately.
+        query += (' AND NOT (jsonPayload.retryableBackground=true '
+                  'AND jsonPayload.endpoint="auth.dispatch_emails" '
+                  'AND jsonPayload.event=("dependency_unavailable" OR "request_failed"))')
+    return query
 
 
 def desired_policy(current, environment):
@@ -24,7 +33,9 @@ def desired_policy(current, environment):
         raise RuntimeError('Existing alert must be enabled and have its owner channel')
     policy['displayName'] = 'CookCredit hiring ' + environment + ' application and delivery failures'
     conditions[0]['displayName'] = 'Structured Hiring error, including low-traffic and browser failures'
-    conditions[0]['conditionMatchedLog']['filter'] = application_error_filter(environment)
+    aware = (environment == 'production' and conditions[0]['conditionMatchedLog'].get('filter') ==
+             application_error_filter(environment, recoverable_background=True))
+    conditions[0]['conditionMatchedLog']['filter'] = application_error_filter(environment, recoverable_background=aware)
     policy['documentation'] = {'mimeType': 'text/markdown', 'content':
         'A Hiring application, browser, dependency, public-site or delivery error was recorded. '
         'Inspect the event category, requestId/clientReference, revision and source commit in Cloud Logging. '
@@ -79,11 +90,11 @@ def run(environment, apply=False, create_missing=False):
         api(session, 'PATCH', base + after['name'],
             params={'updateMask': 'displayName,conditions,documentation'}, json=body)
         verified = api(session, 'GET', base + after['name'])
-        assert verified['conditions'][0]['conditionMatchedLog']['filter'] == application_error_filter(environment)
+        assert verified['conditions'] == after['conditions']
         assert verified['notificationChannels'] == before['notificationChannels']
         assert verified.get('alertStrategy') == before.get('alertStrategy')
     return {'environment': environment, 'policy': before['name'], 'updated': apply,
-            'filter': application_error_filter(environment),
+            'filter': after['conditions'][0]['conditionMatchedLog']['filter'],
             'existingNotificationChannels': len(before['notificationChannels'])}
 
 

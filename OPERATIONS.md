@@ -116,6 +116,20 @@ Activation requires a fresh positive metric sample after policy creation. Rechec
 the silence window before changing the webhook schedule or retry budget. A
 recovered attempt remains available in the Scheduler logs and the recovery review.
 
+The same rollout supports `--job emails`. Prepare and verify the email success
+metric and dispatcher policy before activating its immediate-alert exclusion.
+The forty-minute window also covers the one-minute email schedule, four possible
+300-second attempts, configured backoff and telemetry delay. Terminal email
+delivery failures and ten-minute pending queue age retain immediate coverage.
+Only known recoverable dependencies at `auth.dispatch_emails` receive the
+server-generated `retryableBackground` marker. These attempts remain ERROR logs.
+After the replacement has observed success, activation excludes only those marked
+dependency/request events from the immediate application policy. Unknown errors,
+authentication failures, other endpoints, queues and staging retain coverage.
+SQLSTATE and connection categories are bounded. Driver text, SQL, credentials and
+addresses are never emitted. Existing database pre-ping, outboxes, leases and
+Scheduler retries handle recovery. Do not add another resend path.
+
 With `--include-shared`, the review explicitly reports
 `blocked_database_disabled` when the old retention job targets a Cloud SQL
 instance whose activation policy is `NEVER`. This is an unresolved cleanup

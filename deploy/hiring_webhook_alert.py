@@ -1,4 +1,4 @@
-"""Roll out retry-aware monitoring for the production Hiring webhook Scheduler job."""
+"""Guarded recovery monitoring for existing production Hiring dispatchers."""
 
 import argparse
 import copy
@@ -41,6 +41,19 @@ ABSENCE_QUERY = (
 )
 
 
+def job_settings(kind='webhooks'):
+    if kind not in ('webhooks', 'emails'):
+        raise ValueError('Only reviewed production dispatchers are supported')
+    job = 'cc-hiring-' + kind
+    metric = 'cookcredit_hiring_' + kind[:-1] + '_success'
+    metric_type = 'logging.googleapis.com/user/' + metric
+    return {'job':job, 'metric':metric, 'metric_type':metric_type,
+            'policy': 'CookCredit Hiring ' + kind[:-1] + ' dispatcher stalled',
+            'success_filter':SUCCESS_LOG_FILTER.replace(JOB, job),
+            'metric_filter':METRIC_FILTER.replace(METRIC_TYPE, metric_type).replace(JOB, job),
+            'query':ABSENCE_QUERY.replace(METRIC_TYPE, metric_type).replace(JOB, job)}
+
+
 def one_policy(policies, display_name, *, optional=False):
     matches = [policy for policy in policies if policy.get('displayName') == display_name]
     if not matches and optional:
@@ -50,47 +63,53 @@ def one_policy(policies, display_name, *, optional=False):
     return matches[0]
 
 
-def validate_job(job):
+def validate_job(job, kind='webhooks'):
     # Allow the five-minute cadence, four attempts at the full deadline, retry
     # backoffs of 15/30/60 seconds, and up to ten minutes of metric visibility lag.
     expected_retry = {
         'retryCount': 3, 'maxRetryDuration': '0s', 'minBackoffDuration': '15s',
         'maxBackoffDuration': '120s', 'maxDoublings': 5,
     }
-    if (job.get('state') != 'ENABLED' or job.get('schedule') != '*/5 * * * *'
+    cadence = '* * * * *' if kind == 'emails' else '*/5 * * * *'
+    if (job.get('state') != 'ENABLED' or job.get('schedule') != cadence
             or job.get('attemptDeadline') != '300s' or job.get('retryConfig') != expected_retry):
         raise RuntimeError('Review the silence window against the current Scheduler retry budget')
 
 
-def scheduler_conditions(policy):
+def scheduler_conditions(policy, kind='webhooks'):
     conditions = copy.deepcopy(policy['conditions'])
     if len(conditions) != 1 or not policy.get('enabled') or not policy.get('notificationChannels'):
         raise RuntimeError('Expected the enabled production Scheduler alert with a notification channel')
     condition = conditions[0].get('conditionMatchedLog', {})
-    if condition.get('filter') not in (SCHEDULER_FILTER, SCHEDULER_FILTER + WEBHOOK_EXCLUSION):
+    exclusions = [f' AND resource.labels.job_id!="cc-hiring-{job}"' for job in ('webhooks','emails')]
+    allowed = [SCHEDULER_FILTER + ''.join(e for i,e in enumerate(exclusions) if mask & (1 << i)) for mask in range(4)]
+    if condition.get('filter') not in allowed:
         raise RuntimeError('Production Scheduler filter changed outside this rollout')
-    condition['filter'] = SCHEDULER_FILTER + WEBHOOK_EXCLUSION
+    selected = {e for e in exclusions if e in condition['filter']}
+    selected.add(f' AND resource.labels.job_id!="{job_settings(kind)["job"]}"')
+    condition['filter'] = SCHEDULER_FILTER + ''.join(e for e in exclusions if e in selected)
     return conditions
 
 
-def stalled_policy(channels):
+def stalled_policy(channels, kind='webhooks'):
+    settings = job_settings(kind)
     return {
-        'displayName': POLICY_NAME,
+        'displayName': settings['policy'],
         'enabled': True,
         'combiner': 'OR',
         'notificationChannels': channels,
         'userLabels': {'product': 'cookcredit-hiring', 'environment': 'production'},
         'conditions': [{
-            'displayName': 'No successful production webhook dispatch for 40 minutes',
+            'displayName': f'No successful production {kind[:-1]} dispatch for 40 minutes',
             'conditionPrometheusQueryLanguage': {
-                'query': ABSENCE_QUERY, 'duration': '0s', 'evaluationInterval': '60s',
+                'query': settings['query'], 'duration': '0s', 'evaluationInterval': '60s',
             },
         }],
         'documentation': {
             'mimeType': 'text/markdown',
-            'content': ('The production cc-hiring-webhooks job has recorded no successful '
+            'content': (f'The production {settings["job"]} job has recorded no successful '
                         'execution for 40 minutes. Check Scheduler attempt logs and durable '
-                        'webhook and billing queue counters. Review existing delivery state '
+                        'delivery queue counters. Review existing delivery state '
                         'before replaying work. The application alert still reports terminal '
                         'delivery failures and pending work at least ten minutes old.'),
         },
@@ -103,7 +122,7 @@ def verify_replacement(policy, desired):
             raise RuntimeError(f'Existing webhook alert has unexpected {field}')
     conditions = policy.get('conditions', [])
     actual = conditions[0].get('conditionPrometheusQueryLanguage', {}) if len(conditions) == 1 else {}
-    if (actual.get('query') != ABSENCE_QUERY or actual.get('duration', '0s') != '0s'
+    if (actual.get('query') != desired['conditions'][0]['conditionPrometheusQueryLanguage']['query'] or actual.get('duration', '0s') != '0s'
             or actual.get('evaluationInterval') != '60s'):
         raise RuntimeError('Existing webhook alert has an unexpected condition')
 
@@ -120,43 +139,44 @@ def has_fresh_success(series, created, now):
     return False
 
 
-def observed_success(session, since):
+def observed_success(session, since, kind='webhooks'):
     now = datetime.now(timezone.utc)
     data = api(session, 'GET', f'{MONITORING}/timeSeries', params={
-        'filter': METRIC_FILTER, 'interval.startTime': (now - timedelta(minutes=15)).isoformat(),
+        'filter': job_settings(kind)['metric_filter'], 'interval.startTime': (now - timedelta(minutes=15)).isoformat(),
         'interval.endTime': now.isoformat(),
     })
     return has_fresh_success(data.get('timeSeries', []), since, now)
 
 
-def run(session, phase):
+def run(session, phase, kind='webhooks'):
     if phase not in ('plan', 'prepare', 'activate'):
         raise ValueError('Unknown rollout phase')
-    validate_job(api(session, 'GET', f'{SCHEDULER}/{JOB}'))
+    settings = job_settings(kind)
+    validate_job(api(session, 'GET', f'{SCHEDULER}/{settings["job"]}'), kind)
     page = api(session, 'GET', f'{MONITORING}/alertPolicies', params={'pageSize': 100})
     if page.get('nextPageToken'):
         raise RuntimeError('Review the complete list of alert policies before changing coverage')
     policies = page['alertPolicies']
     current = one_policy(policies, 'CookCredit hiring production background job failure')
-    conditions = scheduler_conditions(current)
+    conditions = scheduler_conditions(current, kind)
     delivery = one_policy(policies, 'CookCredit hiring production application and delivery failures')
     if (not delivery.get('enabled') or delivery.get('notificationChannels') != current['notificationChannels']
             or [c.get('conditionMatchedLog', {}).get('filter') for c in delivery['conditions']]
-            != [application_error_filter('production')]):
+            not in ([application_error_filter('production')], [application_error_filter('production', recoverable_background=True)])):
         raise RuntimeError('Verify the existing production webhook queue alert before changing coverage')
 
-    desired = stalled_policy(current['notificationChannels'])
-    replacement = one_policy(policies, POLICY_NAME, optional=True)
+    desired = stalled_policy(current['notificationChannels'], kind)
+    replacement = one_policy(policies, settings['policy'], optional=True)
     if replacement:
         verify_replacement(replacement, desired)
-    metric = api(session, 'GET', f'{LOG_METRICS}/{METRIC}', missing=True)
-    if metric and (metric.get('filter') != SUCCESS_LOG_FILTER or metric.get('disabled')
+    metric = api(session, 'GET', f'{LOG_METRICS}/{settings["metric"]}', missing=True)
+    if metric and (metric.get('filter') != settings['success_filter'] or metric.get('disabled')
                    or metric.get('metricDescriptor', {}).get('metricKind') != 'DELTA'
                    or metric.get('metricDescriptor', {}).get('valueType') != 'INT64'
                    or metric.get('metricDescriptor', {}).get('labels') or metric.get('bucketName')):
         raise RuntimeError('Existing webhook success metric does not match the intended filter')
 
-    outcome = {'phase': phase, 'job': JOB, 'silenceSeconds': SILENCE_SECONDS,
+    outcome = {'phase': phase, 'job': settings['job'], 'silenceSeconds': SILENCE_SECONDS,
                'schedulerPolicy': current['name'], 'queuePolicy': delivery['name'],
                'stalledPolicy': replacement['name'] if replacement else None, 'metricPresent': bool(metric)}
     if phase == 'plan':
@@ -164,19 +184,19 @@ def run(session, phase):
     if phase == 'prepare':
         if not metric:
             metric = api(session, 'POST', LOG_METRICS, json={
-                'name': METRIC, 'filter': SUCCESS_LOG_FILTER,
-                'description': 'Successful completed attempts of the production Hiring webhook Scheduler job.',
+                'name': settings['metric'], 'filter': settings['success_filter'],
+                'description': f'Successful completed attempts of production {settings["job"]}.',
             })
         if not replacement:
             # Cloud Logging can accept the metric before Monitoring can use it
             # in a condition. The original alert remains active during that gap.
-            descriptor = api(session, 'GET', f'{MONITORING}/metricDescriptors/{METRIC_TYPE}', missing=True)
+            descriptor = api(session, 'GET', f'{MONITORING}/metricDescriptors/{settings["metric_type"]}', missing=True)
             if not descriptor:
                 return {**outcome, 'metricPresent': True, 'waitingForMetricDescriptor': True}
             since = datetime.fromisoformat(metric['createTime'].replace('Z', '+00:00'))
-            if not observed_success(session, since):
+            if not observed_success(session, since, kind):
                 return {**outcome, 'metricPresent': True, 'waitingForSuccessMetric': True}
-            evaluation = api(session, 'GET', PROMQL, params={'query': ABSENCE_QUERY})
+            evaluation = api(session, 'GET', PROMQL, params={'query': settings['query']})
             if evaluation.get('status') != 'success' or evaluation.get('data', {}).get('result') != []:
                 raise RuntimeError('The alert query must see the live successful dispatch before arming')
             replacement = api(session, 'POST', f'{MONITORING}/alertPolicies', json=desired)
@@ -186,7 +206,7 @@ def run(session, phase):
     if not replacement or not metric:
         raise RuntimeError('Prepare the replacement monitor before activating the filter')
     created = datetime.fromisoformat(replacement['mutationRecord']['mutateTime'].replace('Z', '+00:00'))
-    if not observed_success(session, created):
+    if not observed_success(session, created, kind):
         return {**outcome, 'activated': False, 'waitingForSuccessMetric': True}
     if conditions != current['conditions']:
         api(session, 'PATCH', 'https://monitoring.googleapis.com/v3/' + current['name'],
@@ -197,12 +217,26 @@ def run(session, phase):
         for field in ('enabled', 'notificationChannels', 'alertStrategy', 'documentation', 'userLabels', 'combiner')
     ):
         raise RuntimeError('Unexpected changes in the Scheduler alert readback')
+    if kind == 'emails':
+        # The replacement is active and has observed success. Only now move
+        # specifically classified recoverable email dependencies out of the
+        # immediate application rule. All original ERROR logs remain intact.
+        delivery_conditions = copy.deepcopy(delivery['conditions'])
+        delivery_conditions[0]['conditionMatchedLog']['filter'] = application_error_filter('production', recoverable_background=True)
+        if delivery_conditions != delivery['conditions']:
+            api(session, 'PATCH', 'https://monitoring.googleapis.com/v3/' + delivery['name'],
+                params={'updateMask':'conditions'}, json={'name':delivery['name'],'conditions':delivery_conditions})
+        verified = api(session, 'GET', 'https://monitoring.googleapis.com/v3/' + delivery['name'])
+        if verified['conditions'] != delivery_conditions or any(verified.get(k) != delivery.get(k) for k in (
+                'enabled','notificationChannels','alertStrategy','documentation','userLabels','combiner')):
+            raise RuntimeError('Unexpected changes in application alert readback')
     return {**outcome, 'activated': True, 'verifiedSuccessMetric': True}
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--phase', choices=('plan', 'prepare', 'activate'), default='plan')
-    phase = parser.parse_args().phase
+    parser.add_argument('--job', choices=('webhooks','emails'), default='webhooks')
+    args = parser.parse_args()
     with client() as session:
-        print(json.dumps(run(session, phase), indent=2))
+        print(json.dumps(run(session, args.phase, args.job), indent=2))

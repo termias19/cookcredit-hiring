@@ -31,6 +31,17 @@ def test_no_implicit_environment_or_silent_disabled_policy():
     with pytest.raises(RuntimeError):module.desired_policy({'conditions': [{'conditionMatchedLog': {}}]}, 'production')
 
 
+def test_recovery_aware_filter_is_narrow_and_survives_a_later_monitoring_update():
+    query=module.application_error_filter('production',recoverable_background=True)
+    assert query.startswith(module.application_error_filter('production')+' AND NOT (')
+    assert 'jsonPayload.retryableBackground=true' in query
+    assert 'jsonPayload.endpoint="auth.dispatch_emails"' in query
+    assert '"dependency_unavailable" OR "request_failed"' in query
+    before={'enabled':True,'notificationChannels':['owner-channel'],'conditions':[{'conditionMatchedLog':{'filter':query}}]}
+    assert module.desired_policy(before,'production')['conditions'][0]['conditionMatchedLog']['filter']==query
+    with pytest.raises(ValueError):module.application_error_filter('staging',recoverable_background=True)
+
+
 def test_missing_staging_coverage_reuses_known_routing_without_production_identity():
     production = {'displayName': 'CookCredit hiring production application and delivery failures',
                   'enabled': True, 'combiner': 'OR', 'userLabels': {'environment': 'production'},
