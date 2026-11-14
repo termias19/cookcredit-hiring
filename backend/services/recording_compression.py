@@ -23,6 +23,12 @@ MAX_TRIES = 3
 LOCK = 635742019  # Transaction-scoped admission, not a new durable work system.
 
 
+class JobStartError(RuntimeError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__('Compression execution could not be started')
+
+
 def now():
     return datetime.now(timezone.utc)
 
@@ -99,10 +105,12 @@ def launch_job(attempt_id, token):
             'overrides': {'containerOverrides': [{'args': [str(uuid.UUID(attempt_id)), str(uuid.UUID(token))]}],
                           'taskCount': 1, 'timeout': '900s'}}, timeout=15)
         if response.status_code != 200:
-            raise RuntimeError('Compression execution could not be started')
+            raise JobStartError({401:'execution_authentication_failed', 403:'execution_permission_denied',
+                404:'execution_job_missing', 429:'execution_rate_limit'}.get(response.status_code,
+                    'execution_service_unavailable' if response.status_code >= 500 else 'execution_rejected'))
         result = response.json()
         if not result.get('name') or result.get('error'):
-            raise RuntimeError('Compression execution was not acknowledged')
+            raise JobStartError('execution_acknowledgement_missing')
 
 
 def _claim():
@@ -180,10 +188,10 @@ def drain_compression(*, send=None, limit=2):
             (send or launch_job)(aid, token)
             stats['delivered'] += 1
             _event('recording_compression_dispatched', aid, token)
-        except Exception:
+        except Exception as exc:
             # A timeout may have started a job. Fence that delivery before a
             # retry; stale/duplicate workers cannot publish or extend retention.
-            _finish(aid, token, 'pending', code='execution_start_failed')
+            _finish(aid, token, 'pending', code=exc.code if isinstance(exc, JobStartError) else 'execution_start_failed')
             stats['failed'] += 1
     report_compression_health()
     return stats

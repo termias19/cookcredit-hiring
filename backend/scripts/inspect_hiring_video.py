@@ -12,6 +12,7 @@ import sys
 import tempfile
 import math
 import time
+import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from services.hiring_capture import validate_capture
@@ -29,7 +30,10 @@ def run(command, timeout):
     # rather than checking an already-unbounded capture_output allocation.
     try:
         with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
-            with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=errors) as child:
+            # The decoder needs local files and system libraries, never DB,
+            # payment, SMTP or Google credential environment variables.
+            decoder_env = {key: os.environ[key] for key in ('PATH', 'SystemRoot', 'TEMP', 'TMP') if key in os.environ}
+            with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=errors, env=decoder_env) as child:
                 deadline = time.monotonic() + timeout
                 while child.poll() is None:
                     if (time.monotonic() >= deadline or

@@ -35,3 +35,13 @@ def test_derivative_identity_changes_with_source_generation():
     assert compression.derivative_path(path, '123') == compression.derivative_path(path, '123')
     assert compression.derivative_path(path, '123') != compression.derivative_path(path, '124')
     assert 'cook/' not in compression.derivative_path(path, '123')
+
+
+def test_decoder_does_not_inherit_server_secrets(monkeypatch):
+    import os, sys
+    from scripts.inspect_hiring_video import run
+    monkeypatch.setenv('DB_PASS', 'never-pass-to-decoder')
+    monkeypatch.setenv('STRIPE_SECRET_KEY', 'never-pass-to-decoder')
+    output = run([sys.executable, '-c',
+        'import os; print("DB_PASS" in os.environ or "STRIPE_SECRET_KEY" in os.environ)'], 5)
+    assert output.strip() == 'False'
