@@ -43,3 +43,17 @@ def test_existing_output_cannot_overwrite_evidence(tmp_path):
     with pytest.raises(VideoInspectionError): encode_playback(source, source)
     with pytest.raises(VideoInspectionError): encode_playback(source, target)
     assert source.read_bytes() == b'original' and target.read_bytes() == b'previous'
+
+
+def test_short_final_sample_keeps_exact_container_duration_on_ffmpeg7_and_older(tmp_path):
+    source, target = tmp_path/'short-final-sample.mp4', tmp_path/'playback.mp4'
+    subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','testsrc2=s=320x240:r=24',
+        '-frames:v','48','-c:v','libx264','-preset','ultrafast','-crf','4','-bf','0','-threads','1',
+        '-enc_time_base','1:60000','-video_track_timescale','60000',
+        '-bsf:v',r'setts=duration=if(eq(N\,47)\,1000\,DURATION)','-an',str(source)],
+        check=True,capture_output=True,timeout=30)
+    before=source.read_bytes()
+    assert abs(inspect_video(source)['containerDurationSec']-1.975)<.002
+    result=encode_playback(source,target)
+    assert result['maxFrameDriftMs']<=2 and source.read_bytes()==before
+    assert abs(inspect_video(target)['containerDurationSec']-1.975)<.002

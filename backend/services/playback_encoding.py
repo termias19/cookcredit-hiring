@@ -3,18 +3,52 @@ import json
 import math
 import re
 from pathlib import Path
+from fractions import Fraction
 
 from scripts.inspect_hiring_video import run, compare_playback, VideoInspectionError
 
 # Version the byte-producing profile and gates together. No scaling, frame-rate
 # conversion or B-frames: the published landmark timestamps must stay aligned.
-PROFILE = 'h264-crf24-timing-v1'
+PROFILE = 'h264-crf24-timing-v2'
 INPUT = ['-max_alloc', '67108864', '-protocol_whitelist', 'file',
          '-format_whitelist', 'mov,matroska,webm', '-codec_whitelist', 'h264,vp8,vp9']
 
 
 class EncodingSkipped(ValueError):
     """Expected unsupported input; original playback remains available."""
+    def __init__(self, code, *, checks=None):
+        super().__init__(code)
+        self.checks = checks or {}
+
+
+def _final_packet_duration(source, stream, duration):
+    """Preserve the real final sample length, not an encoder's nominal FPS.
+
+    FFmpeg 7 can keep every VFR PTS yet extend the last MP4 sample. Read the
+    pinned source's integer packet timing and change only that output duration.
+    Subsequent decoding/count/timestamp/container checks remain mandatory.
+    """
+    raw = run(['ffprobe', '-v', 'error', *INPUT, '-select_streams', 'v:0',
+               '-show_packets', '-show_entries', 'packet=pts,duration', '-of', 'csv=p=0', str(source)], 30)
+    try:
+        value = stream['time_base']
+        if not re.fullmatch(r'[1-9][0-9]{0,8}/[1-9][0-9]{0,8}', value):
+            raise ValueError()
+        timebase = Fraction(value)
+        packets = [tuple(int(v) for v in line.split(',')[:2]) for line in raw.splitlines() if line.strip()]
+        if (not 2 <= len(packets) <= 21600 or any(len(p) != 2 or p[0] < 0 or p[1] <= 0 for p in packets)
+                or packets[0][0] != 0 or any(b[0] <= a[0] for a, b in zip(packets, packets[1:]))
+                or not 0 < packets[-1][1] * timebase <= 1
+                or abs(float(sum(packets[-1]) * timebase) - duration) > .002):
+            raise ValueError()
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        raise EncodingSkipped('unsupported_timing') from None
+    # The bitstream filter sees encoder packet time units (TB), which can
+    # differ from the MP4 track time base. All interpolated values are integers.
+    ticks = packets[-1][1]
+    expression = (f'setts=pts=PTS:dts=DTS:duration=if(eq(N\\,{len(packets)-1})\\,'
+                  f'{ticks}*{timebase.numerator}/({timebase.denominator}*TB)\\,DURATION)')
+    return len(packets), expression
 
 
 def encode_playback(source, target):
@@ -44,16 +78,21 @@ def encode_playback(source, target):
             if not re.fullmatch(r'[a-z0-9_-]{1,24}', value):
                 raise EncodingSkipped('unsupported_color')
             colors.extend([option, value])
+    packet_count, duration_filter = _final_packet_duration(source, stream, duration)
     run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-threads', '1', *INPUT,
          '-copyts', '-start_at_zero', '-i', str(source), '-map', '0:v:0', '-an', '-sn', '-dn',
          '-t', '180', '-map_metadata', '-1', '-map_chapters', '-1', '-c:v', 'libx264',
          '-preset', 'fast', '-crf', '24', '-profile:v', 'high', '-bf', '0', '-threads', '2',
          '-pix_fmt', 'yuv420p', *colors, '-fps_mode', 'passthrough', '-enc_time_base', '-1',
          '-video_track_timescale', '60000', '-force_key_frames', 'expr:gte(t,n_forced*2)',
+         '-bsf:v', duration_filter,
          '-movflags', '+faststart', '-fs', str(80 * 1024 * 1024), '-n', str(target)], 480)
     check = compare_playback(source, target)
-    if not check['technicalChecksPassed']:
-        raise EncodingSkipped('timing_or_metadata_gate')
+    if not check['technicalChecksPassed'] or check['sourceFrames'] != packet_count:
+        details = {key: check[key] for key in ('sameGeometry', 'sameSampleAspectRatio',
+            'sameDeclaredColorMetadata', 'sourceFrames', 'playbackFrames', 'sourceTimelineIssues',
+            'playbackTimelineIssues', 'maxFrameDriftMs', 'decodedDurationDeltaMs', 'containerDurationDeltaMs')}
+        raise EncodingSkipped('timing_or_metadata_gate', checks=details)
     if check['reductionPercent'] < 10:
         raise EncodingSkipped('insufficient_savings')
     # SSIM is an additional conservative gate, never a skill/identity verdict.

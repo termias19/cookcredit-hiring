@@ -287,8 +287,10 @@ def process_recording(aid, token):
                       'originalGeneration': str(generation), 'expiresAt': snapshot['expiresAt']}
         return 'ready' if _finish(aid, token, 'ready', derivative=derivative) else 'fenced'
     except EncodingSkipped as exc:
+        if exc.checks:
+            _event('recording_compression_gate_rejected', aid, token, checks=exc.checks)
         code = str(exc) if str(exc) in ('original_unavailable', 'original_expired', 'unsupported_capture',
-            'unsupported_color', 'timing_or_metadata_gate', 'insufficient_savings', 'quality_gate',
+            'unsupported_color', 'unsupported_timing', 'timing_or_metadata_gate', 'insufficient_savings', 'quality_gate',
             'derivative_metadata_gate') else 'input_gate'
         _finish(aid, token, 'skipped', code=code)
         return 'skipped'
