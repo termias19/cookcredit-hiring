@@ -13,6 +13,22 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
   const [playing, setPlaying] = useState(false), [muted, setMuted] = useState(true)
   const [position, setPosition] = useState(0), [duration, setDuration] = useState(0)
   useEffect(() => {
+    const element = video.current
+    // React may already have set a new src before the old effect cleans up.
+    // Restore it on setup, including development StrictMode's cleanup cycle.
+    if (element && url && element.getAttribute('src') !== url) {
+      element.setAttribute('src', url)
+      element.load()
+    }
+    return () => {
+      // Removing a reel releases its decoder, download and buffered media,
+      // rather than retaining every previously watched recording in memory.
+      element?.pause()
+      element?.removeAttribute('src')
+      element?.load()
+    }
+  }, [url])
+  useEffect(() => {
     if (!url || !active) return undefined
     const timer = window.setTimeout(() => setStatus(current => {
       if (current === 'ready') return current

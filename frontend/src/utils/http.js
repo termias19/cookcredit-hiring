@@ -50,6 +50,7 @@ export async function http(path, opts = {}) {
     throwOnError = false,
     headers: extraHeaders,
     timeoutMs,
+    signal,
   } = opts
 
   let fetchBody
@@ -64,9 +65,12 @@ export async function http(path, opts = {}) {
   const limit = timeoutMs ?? (formData ? UPLOAD_TIMEOUT_MS : JSON_TIMEOUT_MS)
 
   const doFetch = async (bearer) => {
+    if (signal?.aborted) throw new DOMException('Request cancelled', 'AbortError')
     const headers = { ...baseHeaders }
     if (bearer) headers['Authorization'] = `Bearer ${bearer}`
     const ctl = new AbortController()
+    const cancel = () => ctl.abort()
+    signal?.addEventListener('abort', cancel, { once: true })
     const timer = setTimeout(() => ctl.abort(), limit)
     try {
       return await fetch(`${BASE}${path}`, {
@@ -77,6 +81,7 @@ export async function http(path, opts = {}) {
       })
     } finally {
       clearTimeout(timer)
+      signal?.removeEventListener('abort', cancel)
     }
   }
 
@@ -91,6 +96,9 @@ export async function http(path, opts = {}) {
       if (fresh) res = await doFetch(fresh)
     }
   } catch (e) {
+    // Navigation/swiping intentionally cancels obsolete reads. It is not a
+    // network failure and must not produce misleading operational alerts.
+    if (signal?.aborted) throw new DOMException('Request cancelled', 'AbortError')
     if (e?.name === 'AbortError') {
       reportClientError('api_timeout')
       throw new Error('Request timed out — check your connection and try again.')

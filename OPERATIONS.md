@@ -232,3 +232,22 @@ probes are INFO events. Persistent failures and indexing/canonical regressions
 remain `public_site_health` ERROR events covered by the application alert.
 SQL failures still return 503 and retain Scheduler retries. No additional job,
 queue or alert policy is needed for this separation.
+
+### Bounded recording transfers and reel playback
+
+Hiring imports the applicant-selected, generation-pinned object through the
+existing Firebase rules. Transfers use a 1 MiB resumable SDK buffer and 256 KiB
+source reads, with two simultaneous imports per API process and a bounded retry
+response for excess work. No complete recording is spooled to Cloud Run's
+memory-backed temporary filesystem. Size, available source checksum and source
+generation are checked before finalization; destination creation remains
+immutable and CRC32C checked. Failed transfers cancel only their incomplete
+resumable session, never an existing recording. Retention remains 30 days.
+
+Reels mount a player only for the visible candidate, cancel obsolete report and
+signing requests and release the old decoder/source on unmount. Returning to a
+candidate obtains a fresh consent-checked URL. Deliberate navigation cancellation
+does not report a network error; actual timeout and media failures still do.
+The maximum-size test measures Python buffer allocations, not total container
+RSS or a production throughput guarantee. Published scoring and recording
+quality settings are unchanged.

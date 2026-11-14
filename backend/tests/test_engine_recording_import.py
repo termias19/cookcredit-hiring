@@ -27,12 +27,21 @@ class Blob:
         self.time_created = datetime(2026, 11, 13, tzinfo=timezone.utc)
     def exists(self, **kwargs): return self.generation is not None
     def reload(self, **kwargs): pass
-    def upload_from_file(self, file, **kwargs):
-        assert kwargs['if_generation_match'] == 0
-        self.uploads.append(file.read())
-        self.size = kwargs['size']
-        self.content_type = kwargs['content_type']
-        self.generation = 9876
+    def open(self, mode, **kwargs):
+        assert mode == 'wb' and kwargs['if_generation_match'] == 0
+        assert kwargs['chunk_size'] == 1024 * 1024 and kwargs['checksum'] == 'crc32c'
+        blob = self
+        class Writer:
+            def __init__(self): self.data = bytearray()
+            def __enter__(self): return self
+            def write(self, data): self.data.extend(data)
+            def __exit__(self, kind, error, trace):
+                if kind is None:
+                    blob.uploads.append(bytes(self.data))
+                    blob.size = len(self.data)
+                    blob.content_type = kwargs['content_type']
+                    blob.generation = 9876
+        return Writer()
 
 
 @pytest.fixture
@@ -132,3 +141,96 @@ def test_retry_retains_creation_time_and_expiry_instead_of_extending_policy(setu
     assert first['createdAt'] == second['createdAt'] == '2026-11-13T00:00:00+00:00'
     assert first['expiresAt'] == second['expiresAt'] == '2026-12-13T00:00:00+00:00'
     assert len(blob.uploads) == 1
+
+
+def test_failed_source_checksum_does_not_finalize_an_object(setup):
+    record, metadata, blob, _ = setup
+    metadata['md5Hash'] = 'INVALID_CHECKSUM'
+    with pytest.raises(importer.EngineImportError, match='checksum'):
+        importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+    assert blob.uploads == [] and blob.generation is None
+
+
+def test_source_overwrite_before_final_chunk_does_not_publish_media(setup, monkeypatch):
+    record, metadata, blob, _ = setup
+    reads = 0
+    def read(*args, **kwargs):
+        nonlocal reads
+        reads += 1
+        return {**metadata, 'generation': '124' if reads == 2 else '123'}
+    monkeypatch.setattr(importer, '_json_get', read)
+    with pytest.raises(importer.EngineImportError, match='changed'):
+        importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+    assert blob.uploads == [] and blob.generation is None
+
+
+def test_interrupted_stream_is_cancelled_and_same_import_can_retry(setup, monkeypatch):
+    record, _, blob, _ = setup
+    normal = importer.requests.get
+    def get(url, **options):
+        response = normal(url, **options)
+        if 'params' in options:
+            def chunks(size):
+                yield b'vi'
+                raise importer.requests.ConnectionError('PRIVATE_TOKEN')
+            response.iter_content = chunks
+        return response
+    monkeypatch.setattr(importer.requests, 'get', get)
+    with pytest.raises(importer.EngineImportError, match='interrupted'):
+        importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+    assert blob.uploads == []
+    monkeypatch.setattr(importer.requests, 'get', normal)
+    importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+    assert blob.uploads == [b'video']
+
+
+def test_transfer_gate_rejects_excess_work_without_reading_or_losing_permits(setup):
+    record, _, blob, calls = setup
+    assert importer._import_gate.acquire(blocking=False)
+    assert importer._import_gate.acquire(blocking=False)
+    try:
+        with pytest.raises(importer.EngineImportBusy):
+            importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+        assert calls == [] and blob.uploads == []
+    finally:
+        importer._import_gate.release(); importer._import_gate.release()
+    importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+    assert blob.uploads == [b'video']
+
+
+def test_maximum_size_import_uses_real_sdk_buffer_with_bounded_python_memory(setup, monkeypatch):
+    import tracemalloc
+    from google.cloud.storage.fileio import BlobWriter
+    record, metadata, blob, _ = setup
+    size = importer.MAX_VIDEO_BYTES
+    record['sizeBytes'] = size; metadata['size'] = str(size)
+    blob.bucket = SimpleNamespace(client=object())
+    transferred = 0
+    class Upload:
+        def transmit_next_chunk(self, transport, **options):
+            nonlocal transferred
+            data = self.stream.read(importer.UPLOAD_CHUNK_BYTES)
+            transferred += len(data)
+            if len(data) < importer.UPLOAD_CHUNK_BYTES:
+                blob.size = transferred; blob.generation = 9876; blob.content_type = 'video/webm'
+    def initiate(client, stream, kind, total, **options):
+        assert total is None and options['if_generation_match'] == 0
+        upload = Upload(); upload.stream = stream
+        return upload, SimpleNamespace()
+    blob._initiate_resumable_upload = initiate
+    blob.open = lambda mode, **options: BlobWriter(blob, **options)
+    class Media(Response):
+        def iter_content(self, chunk):
+            assert chunk == importer.TRANSFER_CHUNK_BYTES
+            block = b'x' * chunk
+            for offset in range(0, size, chunk): yield block
+    monkeypatch.setattr(importer.requests, 'get', lambda url, **options:
+        Media(b'', headers={'x-goog-generation': '123'}) if 'params' in options else Response(metadata))
+    tracemalloc.start()
+    try:
+        result = importer.import_owned_recording(record, 'alice', 'a1', id_token='token')
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert result[1] == '9876' and transferred == size
+    assert peak < 12 * 1024 * 1024  # Python allocations, not total native/container RSS.

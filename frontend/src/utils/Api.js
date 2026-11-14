@@ -372,17 +372,17 @@ export async function replayPartnerWebhookDelivery({ token, deliveryId }) {
   })
 }
 // Gated playback URL for a candidate's verified-skill capture (only cooks who applied to the org).
-export async function getCandidateVideo({ token, cookId, roleId, attemptId, landmarks = false }) {
+export async function getCandidateVideo({ token, cookId, roleId, attemptId, landmarks = false, signal }) {
   const filters = new URLSearchParams()
   if (landmarks) filters.set('landmarks', '1')
   if (roleId) filters.set('roleId', roleId)
   if (attemptId) filters.set('attemptId', attemptId)
   const query = filters.size ? `?${filters}` : ''
-  return http(`/api/business/candidate/${encodeURIComponent(cookId)}/video${query}`, { token, throwOnError: true })
+  return http(`/api/business/candidate/${encodeURIComponent(cookId)}/video${query}`, { token, throwOnError: true, signal })
 }
-export async function getCandidateReport({ token, cookId, roleId }) {
+export async function getCandidateReport({ token, cookId, roleId, signal }) {
   const query = roleId ? `?roleId=${encodeURIComponent(roleId)}` : ''
-  return http(`/api/business/candidate/${encodeURIComponent(cookId)}/report${query}`, { token, throwOnError: true })
+  return http(`/api/business/candidate/${encodeURIComponent(cookId)}/report${query}`, { token, throwOnError: true, signal })
 }
 
 // ── Hiring applications ─────────────────────────────────────────────────────
