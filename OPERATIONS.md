@@ -260,4 +260,11 @@ decoding, geometry, frame counts and per-frame timestamp drift, preserves both
 inputs, and reports the storage total for keeping both. A technical pass still
 requires human inspection of knife/hand detail and device playback. The API does
 not run this tool or ffmpeg; no encoder service, paid idle capacity, production
-codec change or original replacement is enabled by this diagnostic.
+codec change or original replacement is enabled by this diagnostic. The gate also
+compares sample aspect ratio, declared color range/space/transfer/primaries and
+decoded duration; changing these can alter the apparent evidence even when frame
+counts match. Unknown input color metadata is not a visual-quality certificate.
+Preserve variable-frame timestamps with an explicit encoder time base matching
+the source; do not convert to a nominal fixed frame rate. Compare every decoded
+frame timestamp before using a proposed derivative, and keep original scoring
+inputs separate from playback experiments.

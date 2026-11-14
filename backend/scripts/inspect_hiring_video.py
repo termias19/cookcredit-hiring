@@ -55,7 +55,7 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
         local.write_bytes(data)
         common = ['-protocol_whitelist', 'file', '-format_whitelist', 'mov,matroska,webm']
         raw = run([ffprobe, '-v', 'error', *common, '-show_entries',
-                   'stream=codec_type,width,height:stream_side_data=rotation:format=duration',
+                   'stream=codec_type,width,height,sample_aspect_ratio,color_range,color_space,color_transfer,color_primaries:stream_side_data=rotation:format=duration',
                    '-of', 'json', str(local)], 15)
         try:
             info = json.loads(raw)
@@ -98,6 +98,9 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             issues.append('inference-samples-missing')
     return {'schema': 'hiring-video-preflight-v1', 'serverVerified': False,
             'sha256': digest, 'bytes': len(data), 'width': width, 'height': height,
+            'sampleAspectRatio': stream.get('sample_aspect_ratio'),
+            'colorMetadata': {key: stream.get(key) for key in (
+                'color_range', 'color_space', 'color_transfer', 'color_primaries')},
             'decodedFrames': frames, 'decodedDurationSec': elapsed, 'issues': issues,
             'scope': 'Container decoding and geometry only; no motion or identity verification',
             'captureDurationDeltaMs': round(elapsed*1000-claim['durationMs']) if claim else None}
@@ -134,6 +137,9 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
     playback_timeline_issues = sum(b <= a for a, b in zip(after, after[1:]))
     drift = max(abs(a-b)*1000 for a, b in zip(before, after)) if matching_count else None
     geometry = (source['width'], source['height']) == (copy['width'], copy['height'])
+    aspect = source['sampleAspectRatio'] == copy['sampleAspectRatio']
+    color = source['colorMetadata'] == copy['colorMetadata']
+    duration_delta = abs(source['decodedDurationSec']-copy['decodedDurationSec'])*1000
     # Reject a source changed between the decoding and timeline passes. Hash in
     # chunks so the comparison does not retain another full recording in RAM.
     for path, expected in ((original, source['sha256']), (playback, copy['sha256'])):
@@ -148,12 +154,16 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             'retainedTogetherBytes': source['bytes'] + copy['bytes'],
             'reductionPercent': round(100*(1-copy['bytes']/source['bytes']), 2),
             'sameGeometry': geometry, 'sourceFrames': len(before), 'playbackFrames': len(after),
+            'sameSampleAspectRatio': aspect, 'sameDeclaredColorMetadata': color,
+            'sourceColorMetadata': source['colorMetadata'], 'playbackColorMetadata': copy['colorMetadata'],
+            'decodedDurationDeltaMs': round(duration_delta, 4),
             'sourceTimelineIssues': source_timeline_issues, 'playbackTimelineIssues': playback_timeline_issues,
             'maxFrameDriftMs': round(drift, 4) if drift is not None else None,
-            'technicalChecksPassed': bool(geometry and matching_count and drift <= 2
+            'technicalChecksPassed': bool(geometry and aspect and color and duration_delta <= 2
+                                         and matching_count and drift <= 2
                                          and not source_timeline_issues and not playback_timeline_issues),
             'humanQualityAcceptanceRequired': True, 'productionCompressionEnabled': False,
-            'scope': 'Decoding, geometry and timestamps only; no skill, identity or visual-quality certification'}
+            'scope': 'Decoding, geometry/aspect, declared color, duration and timestamps only; no skill, identity or visual-quality certification'}
 
 
 if __name__ == '__main__':
