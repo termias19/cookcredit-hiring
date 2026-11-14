@@ -78,7 +78,10 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             raise VideoInspectionError('Unsupported video stream, geometry, rotation or duration') from exc
         progress = run([ffmpeg, '-nostdin', '-v', 'error', '-xerror', '-threads', '1',
                         *common, '-i', str(local), '-map', '0:v:0', '-an', '-sn', '-dn',
-                        '-t', str(MAX_SECONDS + 1), '-threads', '1', '-progress', 'pipe:1',
+                        '-t', str(MAX_SECONDS + 1), '-threads', '1',
+                        # A null-output diagnostic must not resample VFR media
+                        # to ffprobe's guessed nominal frame rate.
+                        '-fps_mode', 'passthrough', '-enc_time_base', '-1', '-progress', 'pipe:1',
                         '-nostats', '-f', 'null', '-'], 60)
         values = dict(line.split('=', 1) for line in progress.splitlines() if '=' in line)
         try:
@@ -102,6 +105,7 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             'colorMetadata': {key: stream.get(key) for key in (
                 'color_range', 'color_space', 'color_transfer', 'color_primaries')},
             'decodedFrames': frames, 'decodedDurationSec': elapsed, 'issues': issues,
+            'containerDurationSec': float(duration) if duration is not None else None,
             'scope': 'Container decoding and geometry only; no motion or identity verification',
             'captureDurationDeltaMs': round(elapsed*1000-claim['durationMs']) if claim else None}
 
@@ -140,6 +144,8 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
     aspect = source['sampleAspectRatio'] == copy['sampleAspectRatio']
     color = source['colorMetadata'] == copy['colorMetadata']
     duration_delta = abs(source['decodedDurationSec']-copy['decodedDurationSec'])*1000
+    source_container, copy_container = source.get('containerDurationSec'), copy.get('containerDurationSec')
+    container_delta = abs(source_container-copy_container)*1000 if source_container is not None and copy_container is not None else None
     # Reject a source changed between the decoding and timeline passes. Hash in
     # chunks so the comparison does not retain another full recording in RAM.
     for path, expected in ((original, source['sha256']), (playback, copy['sha256'])):
@@ -157,9 +163,11 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             'sameSampleAspectRatio': aspect, 'sameDeclaredColorMetadata': color,
             'sourceColorMetadata': source['colorMetadata'], 'playbackColorMetadata': copy['colorMetadata'],
             'decodedDurationDeltaMs': round(duration_delta, 4),
+            'containerDurationDeltaMs': round(container_delta, 4) if container_delta is not None else None,
             'sourceTimelineIssues': source_timeline_issues, 'playbackTimelineIssues': playback_timeline_issues,
             'maxFrameDriftMs': round(drift, 4) if drift is not None else None,
             'technicalChecksPassed': bool(geometry and aspect and color and duration_delta <= 2
+                                         and (container_delta is None or container_delta <= 2)
                                          and matching_count and drift <= 2
                                          and not source_timeline_issues and not playback_timeline_issues),
             'humanQualityAcceptanceRequired': True, 'productionCompressionEnabled': False,

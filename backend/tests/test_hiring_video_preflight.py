@@ -103,3 +103,15 @@ def test_nonmonotonic_source_is_reported_and_blocks_compression_acceptance(video
     result = compare_playback(video, duplicate)
     assert result['sourceTimelineIssues'] == 1
     assert not result['technicalChecksPassed']
+
+
+def test_variable_frame_rate_diagnostic_does_not_resample_frames_or_duration(tmp_path):
+    path=tmp_path/'variable-rate.mp4'
+    subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=blue:s=64x64:r=30',
+        '-vf',"settb=1/60000,setpts='if(lt(N,6),N/(30*TB),(0.2+(N-6)/12)/TB)'",
+        '-frames:v','12','-fps_mode','passthrough','-enc_time_base','1:60000',
+        '-video_track_timescale','60000','-an','-c:v','mpeg4','-threads','1',str(path)],
+        capture_output=True,check=True,timeout=20)
+    result=inspect_video(path)
+    assert result['decodedFrames']==12
+    assert abs(result['decodedDurationSec']-result['containerDurationSec'])<0.002

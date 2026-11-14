@@ -48,3 +48,11 @@ def test_aspect_and_duration_changes_fail_even_when_frame_count_matches(comparis
     result=inspector.compare_playback(original, playback)
     assert result['sourceFrames']==result['playbackFrames'] and result['sameGeometry']
     assert not result['technicalChecksPassed']
+
+
+def test_container_duration_mismatch_is_not_hidden_by_equal_decoded_counters(comparison):
+    original, playback, source, copy = comparison
+    source['containerDurationSec']=63.063;copy['containerDurationSec']=64.063
+    result=inspector.compare_playback(original, playback)
+    assert result['decodedDurationDeltaMs']==0 and result['containerDurationDeltaMs']==1000
+    assert not result['technicalChecksPassed']

@@ -268,3 +268,6 @@ Preserve variable-frame timestamps with an explicit encoder time base matching
 the source; do not convert to a nominal fixed frame rate. Compare every decoded
 frame timestamp before using a proposed derivative, and keep original scoring
 inputs separate from playback experiments.
+The diagnostic null decode also preserves the input time base and variable-frame
+timestamps. Its duration counter must not be changed by an assumed constant
+frame rate. Container duration is compared separately when both inputs supply it.
