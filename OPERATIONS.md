@@ -251,3 +251,13 @@ does not report a network error; actual timeout and media failures still do.
 The maximum-size test measures Python buffer allocations, not total container
 RSS or a production throughput guarantee. Published scoring and recording
 quality settings are unchanged.
+
+### Compression quality gate
+
+Reuse the offline inspector with `--video ORIGINAL --playback LOCAL_COPY --output
+PRIVATE_REPORT.json` before proposing a playback derivative. It checks complete
+decoding, geometry, frame counts and per-frame timestamp drift, preserves both
+inputs, and reports the storage total for keeping both. A technical pass still
+requires human inspection of knife/hand detail and device playback. The API does
+not run this tool or ffmpeg; no encoder service, paid idle capacity, production
+codec change or original replacement is enabled by this diagnostic.

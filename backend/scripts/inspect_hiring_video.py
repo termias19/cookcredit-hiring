@@ -103,12 +103,70 @@ def inspect_video(path, capture=None, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             'captureDurationDeltaMs': round(elapsed*1000-claim['durationMs']) if claim else None}
 
 
+def _frame_times(path, ffprobe):
+    raw = run([ffprobe, '-v', 'error', '-protocol_whitelist', 'file',
+               '-format_whitelist', 'mov,matroska,webm', '-select_streams', 'v:0',
+               '-show_frames', '-show_entries', 'frame=best_effort_timestamp_time',
+               '-of', 'csv=p=0', str(path)], 60)
+    try:
+        times = [float(line.split(',', 1)[0]) for line in raw.splitlines() if line.strip()]
+        if not 2 <= len(times) <= 21600 or not all(math.isfinite(t) and t >= 0 for t in times):
+            raise ValueError('invalid frame timeline')
+        return times
+    except ValueError:
+        raise VideoInspectionError('Frame timestamps are missing, invalid or exceed the limit') from None
+
+
+def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
+    """Offline gate for a proposed derivative; never replaces or uploads evidence.
+
+    Identical frame counts alone cannot protect time-aligned landmark overlays.
+    Two milliseconds is a technical diagnostic tolerance, not a quality score.
+    """
+    original, playback = Path(original), Path(playback)
+    if original.resolve() == playback.resolve():
+        raise VideoInspectionError('Compare a separate playback copy')
+    source = inspect_video(original, ffprobe=ffprobe, ffmpeg=ffmpeg)
+    copy = inspect_video(playback, ffprobe=ffprobe, ffmpeg=ffmpeg)
+    before, after = _frame_times(original, ffprobe), _frame_times(playback, ffprobe)
+    matching_count = len(before) == len(after)
+    source_timeline_issues = sum(b <= a for a, b in zip(before, before[1:]))
+    playback_timeline_issues = sum(b <= a for a, b in zip(after, after[1:]))
+    drift = max(abs(a-b)*1000 for a, b in zip(before, after)) if matching_count else None
+    geometry = (source['width'], source['height']) == (copy['width'], copy['height'])
+    # Reject a source changed between the decoding and timeline passes. Hash in
+    # chunks so the comparison does not retain another full recording in RAM.
+    for path, expected in ((original, source['sha256']), (playback, copy['sha256'])):
+        digest = hashlib.sha256()
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024*1024), b''): digest.update(chunk)
+        if digest.hexdigest() != expected:
+            raise VideoInspectionError('A local recording changed during comparison')
+    return {'schema': 'hiring-playback-comparison-v1', 'localOnly': True,
+            'sourceSha256': source['sha256'], 'playbackSha256': copy['sha256'],
+            'sourceBytes': source['bytes'], 'playbackBytes': copy['bytes'],
+            'retainedTogetherBytes': source['bytes'] + copy['bytes'],
+            'reductionPercent': round(100*(1-copy['bytes']/source['bytes']), 2),
+            'sameGeometry': geometry, 'sourceFrames': len(before), 'playbackFrames': len(after),
+            'sourceTimelineIssues': source_timeline_issues, 'playbackTimelineIssues': playback_timeline_issues,
+            'maxFrameDriftMs': round(drift, 4) if drift is not None else None,
+            'technicalChecksPassed': bool(geometry and matching_count and drift <= 2
+                                         and not source_timeline_issues and not playback_timeline_issues),
+            'humanQualityAcceptanceRequired': True, 'productionCompressionEnabled': False,
+            'scope': 'Decoding, geometry and timestamps only; no skill, identity or visual-quality certification'}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video', type=Path, required=True)
     parser.add_argument('--capture', type=Path)
+    parser.add_argument('--playback', type=Path, help='Optional local proposed compressed copy; no cloud writes')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    if args.output.resolve() in {p.resolve() for p in (args.video, args.playback, args.capture) if p}:
+        parser.error('Output must be separate from every input file')
     claim = json.loads(args.capture.read_text()) if args.capture else None
-    args.output.write_text(json.dumps(inspect_video(args.video, claim), indent=2))
+    result = (compare_playback(args.video, args.playback) if args.playback
+              else inspect_video(args.video, claim))
+    args.output.write_text(json.dumps(result, indent=2))
     print('Local video preflight saved; serverVerified=false. No cloud or applicant changes.')
