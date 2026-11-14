@@ -48,10 +48,8 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
     return () => { document.removeEventListener('visibilitychange', update); element?.pause() }
   }, [active, reel, url])
   const toggle = () => { if (video.current?.paused) video.current.play().catch(() => setStatus('error')); else video.current?.pause() }
-  return <div className={`cc-candidate-player${reel ? ' cc-player-reel' : ''}`}>
-    {!reel && <div className="cc-report-view"><PlaybackViewControl />
-      {onOriginal && <button className="cc-original-recording" type="button" onClick={onOriginal}>Original recording</button>}
-    </div>}
+  return <><div className={`cc-candidate-player${reel ? ' cc-player-reel' : ''}`}>
+    {!reel && <div className="cc-report-view"><PlaybackViewControl /></div>}
     <video ref={video} src={url} crossOrigin="anonymous" controls={!reel} playsInline muted={muted} loop={reel} preload={active ? 'metadata' : 'none'}
       aria-label={label} onLoadedMetadata={event => { setStatus('ready'); setDuration(event.currentTarget.duration) }} onCanPlay={() => setStatus('ready')}
       onError={event => { setStatus('error'); const code = event.currentTarget.error?.code; if (code !== 1) reportClientError(({2:'video_network_error',3:'video_decode_error',4:'video_format_error'})[code] || 'video_format_error') }} onPlaying={() => { setStatus('ready'); setPlaying(true) }} onPause={() => setPlaying(false)}
@@ -72,4 +70,6 @@ export default function CandidateVideoPlayer({ url, active = true, reel = false,
       <a href={url} target="_blank" rel="noopener noreferrer">Open recording</a>
     </div>}
   </div>
+    {!reel && onOriginal && <button className="cc-original-recording" type="button" onClick={onOriginal}>Original recording</button>}
+  </>
 }
