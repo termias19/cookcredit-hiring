@@ -2,14 +2,15 @@
 import json
 import math
 import re
+import hashlib
 from pathlib import Path
 from fractions import Fraction
 
-from scripts.inspect_hiring_video import run, compare_playback, VideoInspectionError
+from scripts.inspect_hiring_video import run, compare_playback, VideoInspectionError, _frame_times
 
 # Version the byte-producing profile and gates together. No scaling, frame-rate
 # conversion or B-frames: the published landmark timestamps must stay aligned.
-PROFILE = 'h264-crf24-timing-v2'
+PROFILE = 'h264-crf24-timing-v3'
 INPUT = ['-max_alloc', '67108864', '-protocol_whitelist', 'file',
          '-format_whitelist', 'mov,matroska,webm', '-codec_whitelist', 'h264,vp8,vp9']
 
@@ -21,40 +22,35 @@ class EncodingSkipped(ValueError):
         self.checks = checks or {}
 
 
-def _final_packet_duration(source, stream, duration):
+def _final_frame_duration(source, duration):
     """Preserve the real final sample length, not an encoder's nominal FPS.
 
     FFmpeg 7 can keep every VFR PTS yet extend the last MP4 sample. Read the
-    pinned source's integer packet timing and change only that output duration.
+    pinned source's decoded presentation timeline and declared end time. Raw
+    packet duration fields are optional and differ between FFmpeg versions.
     Subsequent decoding/count/timestamp/container checks remain mandatory.
     """
-    raw = run(['ffprobe', '-v', 'error', *INPUT, '-select_streams', 'v:0',
-               '-show_packets', '-show_entries', 'packet=pts,duration', '-of', 'csv=p=0', str(source)], 30)
-    try:
-        value = stream['time_base']
-        if not re.fullmatch(r'[1-9][0-9]{0,8}/[1-9][0-9]{0,8}', value):
-            raise ValueError()
-        timebase = Fraction(value)
-        packets = [tuple(int(v) for v in line.split(',')[:2]) for line in raw.splitlines() if line.strip()]
-        if (not 2 <= len(packets) <= 21600 or any(len(p) != 2 or p[0] < 0 or p[1] <= 0 for p in packets)
-                or packets[0][0] != 0 or any(b[0] <= a[0] for a, b in zip(packets, packets[1:]))
-                or not 0 < packets[-1][1] * timebase <= 1
-                or abs(float(sum(packets[-1]) * timebase) - duration) > .002):
-            raise ValueError()
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
-        raise EncodingSkipped('unsupported_timing') from None
+    times = _frame_times(source, 'ffprobe')
+    if any(b <= a for a, b in zip(times, times[1:])):
+        raise EncodingSkipped('unsupported_timing', checks={'timingReason':'nonmonotonic_frame_timeline'})
+    final = Fraction(str(duration)) - Fraction(str(times[-1]))
+    if not 0 < final <= 1:
+        raise EncodingSkipped('unsupported_timing', checks={'timingReason':'final_visible_interval_outside_limits'})
     # The bitstream filter sees encoder packet time units (TB), which can
     # differ from the MP4 track time base. All interpolated values are integers.
-    ticks = packets[-1][1]
-    expression = (f'setts=pts=PTS:dts=DTS:duration=if(eq(N\\,{len(packets)-1})\\,'
-                  f'{ticks}*{timebase.numerator}/({timebase.denominator}*TB)\\,DURATION)')
-    return len(packets), expression
+    expression = (f'setts=pts=PTS:dts=DTS:duration=if(eq(N\\,{len(times)-1})\\,'
+                  f'floor({final.numerator}/({final.denominator}*TB)+0.5)\\,DURATION)')
+    return len(times), expression
 
 
 def encode_playback(source, target):
     source, target = Path(source), Path(target)
     if source.resolve() == target.resolve() or target.exists():
         raise VideoInspectionError('A separate new output is required')
+    digest = hashlib.sha256()
+    with source.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(256 * 1024), b''): digest.update(chunk)
+    original_sha = digest.hexdigest()
     info = json.loads(run(['ffprobe', '-v', 'error', *INPUT, '-show_streams',
                            '-show_format', '-of', 'json', str(source)], 15))
     streams = info.get('streams', [])
@@ -78,7 +74,7 @@ def encode_playback(source, target):
             if not re.fullmatch(r'[a-z0-9_-]{1,24}', value):
                 raise EncodingSkipped('unsupported_color')
             colors.extend([option, value])
-    packet_count, duration_filter = _final_packet_duration(source, stream, duration)
+    frame_count, duration_filter = _final_frame_duration(source, duration)
     run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-threads', '1', *INPUT,
          '-copyts', '-start_at_zero', '-i', str(source), '-map', '0:v:0', '-an', '-sn', '-dn',
          '-t', '180', '-map_metadata', '-1', '-map_chapters', '-1', '-c:v', 'libx264',
@@ -88,7 +84,9 @@ def encode_playback(source, target):
          '-bsf:v', duration_filter,
          '-movflags', '+faststart', '-fs', str(80 * 1024 * 1024), '-n', str(target)], 480)
     check = compare_playback(source, target)
-    if not check['technicalChecksPassed'] or check['sourceFrames'] != packet_count:
+    if check['sourceSha256'] != original_sha:
+        raise VideoInspectionError('The local source changed during encoding')
+    if not check['technicalChecksPassed'] or check['sourceFrames'] != frame_count:
         details = {key: check[key] for key in ('sameGeometry', 'sameSampleAspectRatio',
             'sameDeclaredColorMetadata', 'sourceFrames', 'playbackFrames', 'sourceTimelineIssues',
             'playbackTimelineIssues', 'maxFrameDriftMs', 'decodedDurationDeltaMs', 'containerDurationDeltaMs')}

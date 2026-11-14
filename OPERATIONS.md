@@ -256,7 +256,7 @@ attempts, retry delays, a 20-minute lease and publication fencing. This caps
 active spend; it is not a high-volume capacity certification. Review queue age
 and actual demand before raising admission. Existing SQL/API capacity is unchanged.
 
-The v2 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
+The v3 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
 up to 720p pixels with no rotation. It preserves dimensions, frame timestamps,
 aspect and declared color, uses H.264 CRF 24, and requires at least 10% savings,
 matching complete decodes, <=2 ms timing/duration drift, average SSIM >=0.985
@@ -288,8 +288,9 @@ are observed. This adds silence coverage while preserving every immediate
 processing Scheduler failure, worker error and backlog alert. No new polling
 service or work queue is introduced.
 
-The final sample duration is copied explicitly from validated integer source
-packet timing. FFmpeg 7 otherwise can preserve every PTS but lengthen the MP4's
+The final visible sample duration is derived explicitly from the decoded frame
+timeline and declared container end; raw packet-duration fields are optional.
+FFmpeg 7 otherwise can preserve every PTS but lengthen the MP4's
 last sample by 25.3 ms on a real VFR recording. This repair keeps the <=2 ms
 container-duration gate intact, preserves PTS/DTS, and uses a new deterministic
 profile key. Rejections log the safe per-gate flags and measured deltas without
