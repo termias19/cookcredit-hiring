@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { reportPlayback } from '../src/utils/reportPlayback.js'
+import { reportPlayback, recordingLabel, playbackFailure } from '../src/utils/reportPlayback.js'
 
 test('playback pins the displayed attempt even when a later attempt exists', async () => {
   const input = {token:'test', cookId:'candidate', roleId:'role', attemptId:'shown-attempt'}
@@ -27,4 +27,27 @@ test('revoked access never retries without the pinned identity', async () => {
   let calls = 0
   await assert.rejects(reportPlayback({token:'test', attemptId:'shown-attempt', request: async () => { calls++; throw new Error('Consent revoked') }}), /Consent revoked/)
   assert.equal(calls, 1)
+})
+
+test('original quality still uses the pinned, consent-gated playback request', async () => {
+  let input
+  const url = await reportPlayback({token:'test',cookId:'cook',attemptId:'shown-attempt',original:true,
+    request:async value => { input=value;return {attemptId:'shown-attempt',videoUrl:'private-original'} }})
+  assert.equal(input.original,true)
+  assert.equal(input.attemptId,'shown-attempt')
+  assert.equal(url,'private-original')
+})
+
+test('missing and expired recordings explain availability without deleting the assessment', () => {
+  for (const code of ['recording_expired','recording_missing']) {
+    const failure = playbackFailure({code,requestId:'a'.repeat(32),message:'secret URL'})
+    assert.equal(failure.terminal,true)
+    assert.match(failure.message,/application and assessment history remain available/)
+    assert.match(failure.message,/Reference: a{32}/)
+    assert.ok(!failure.message.includes('secret'))
+  }
+  assert.equal(playbackFailure({code:'recording_temporarily_unavailable'}).terminal,false)
+  assert.equal(recordingLabel(), 'Check recording')
+  assert.equal(recordingLabel({state:'expired'}), 'Recording expired')
+  assert.equal(recordingLabel({state:'unavailable'}), 'Recording unavailable')
 })

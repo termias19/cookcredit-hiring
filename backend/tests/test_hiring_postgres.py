@@ -90,6 +90,9 @@ def db(monkeypatch):
             dispatch_migration = (Path(__file__).parents[1] / 'migrations/013_scoring_dispatch.sql').read_text()
             conn.exec_driver_sql(dispatch_migration)
             conn.exec_driver_sql(dispatch_migration)
+            compression_migration = (Path(__file__).parents[1] / 'migrations/034_recording_compression.sql').read_text()
+            conn.exec_driver_sql(compression_migration)
+            conn.exec_driver_sql(compression_migration)
             hiring_migration = (Path(__file__).parents[1] / 'migrations/014_hiring_applications.sql').read_text()
             conn.exec_driver_sql(hiring_migration)
             conn.exec_driver_sql(hiring_migration)
@@ -164,7 +167,7 @@ def client(db, monkeypatch):
         'uid': token, 'email': token+'@example.test', 'email_verified': True,
     })
     monkeypatch.setattr(assessment_sharing, 'inspect_recording', lambda *a: ('skill_videos/cook/clip.webm', '123', 'video/webm'))
-    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid: f'https://storage.example.test/{uid}/{generation}')
+    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid, **kw: f'https://storage.example.test/{uid}/{generation}')
     monkeypatch.setattr(hiring, '_ensure_cook_profile', lambda *a: None)
     monkeypatch.setattr(hiring.hiring_cv, 'cleanup_on_rollback', lambda *a: None)
     monkeypatch.setattr(hiring.hiring_cv, 'store_cv', lambda aid, data: {'path': f'hiring_cv/{aid}/test.pdf', 'sha256': 'a' * 64, 'generation': '1', 'bytes': len(data)})
@@ -749,6 +752,38 @@ def invitation_application(client, item, uid='cook', **changes):
         'acceptedEvidenceShare': True, 'consentVersion': hiring.APPLICATION_CONSENT_VERSION,
         'answers': {}, 'invitationToken': item['assessmentUrl'].split('invite=', 1)[1], **changes,
     })
+
+
+def test_expiry_commits_once_when_independent_website_check_fails(db, client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from services import public_site_health, runtime_config
+    auth_headers = integration_auth(db, client)
+    assert client.post('/partner/manage/webhooks', headers=headers('employer'), json={
+        'url': 'https://hooks.example.test/live', 'eventTypes': ['assessment.expired'],
+    }).status_code == 201
+    created = request_assessment(client, auth_headers)
+    assert created.status_code == 201
+    with database.db_session() as session:
+        session.query(PartnerInvitation).update({'expires_at': datetime.now(timezone.utc)-timedelta(minutes=1)})
+    monkeypatch.setattr(partner, 'internal_request_authorized', lambda request: False)
+    path = '/partner/internal/expire-assessment-requests'
+    assert client.post(path).status_code == 403
+    monkeypatch.setattr(partner, 'internal_request_authorized', lambda request: True)
+    monkeypatch.setattr(runtime_config, 'deployment_environment', lambda: 'production')
+    def failed_website(environment, *, retry_fetch):
+        assert environment == 'production' and retry_fetch
+        # A separate transaction must already see both committed changes.
+        with database.db_session() as session:
+            assert session.query(PartnerInvitation).one().status == 'expired'
+            assert session.query(PartnerWebhookDelivery).count() == 1
+        return False
+    monkeypatch.setattr(public_site_health, 'check_public_site', failed_website)
+    first, second = client.post(path), client.post(path)
+    assert first.status_code == second.status_code == 200
+    assert first.json == {'expired': 1, 'publicSiteHealthy': False}
+    assert second.json == {'expired': 0, 'publicSiteHealthy': False}
+    with database.db_session() as session:
+        assert session.query(PartnerWebhookDelivery).one().event_type == 'assessment.expired'
 
 
 def test_parallel_partner_retries_charge_and_emit_once(db, client):

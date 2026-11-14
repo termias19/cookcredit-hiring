@@ -30,7 +30,7 @@ def test_finalized_engine_record_is_verified_server_side(monkeypatch):
     record = valid_record()
     monkeypatch.setattr(engine_assessment, 'get_firestore_client', lambda: Document(record))
     monkeypatch.setattr(engine_assessment, 'inspect_recording',
-                        lambda locator, uid: (record['storagePath'], '123', 'video/webm'))
+                        lambda locator, uid, **kw: (record['storagePath'], '123', 'video/webm'))
     result = engine_assessment.verified_engine_assessment('alice', 'assessment_1')
     assert result['generation'] == '123'
     assert result['onDevice']['score'] == 81

@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:home": "vite --config home/vite.config.js",
+    "build:home": "vite build --config home/vite.config.js",
     "dev": "vite",
     "build": "vite build && node scripts/copy-landing.mjs && node scripts/copy-hiring-assessment.mjs",
     "lint": "eslint .",
@@ -20,6 +22,11 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "7.18.4"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.7",
+    "glob": "14.0.3",
+    "minimatch": "11.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

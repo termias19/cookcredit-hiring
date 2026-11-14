@@ -8,20 +8,31 @@ import hashlib
 import json
 import os
 import re
-import tempfile
+import base64
+import time
+from threading import BoundedSemaphore
 from urllib.parse import quote
 
 import requests
 from google.api_core.exceptions import PreconditionFailed
-from services.assessment_media import MAX_VIDEO_BYTES, VIDEO_TYPES
+from google.cloud.storage.retry import DEFAULT_RETRY
+from services.assessment_media import MAX_VIDEO_BYTES, VIDEO_TYPES, recording_snapshot
 from services.firebase import get_storage_bucket
 
 ID = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
 SOURCE_PROJECT = 'foodnlit-1123e'
 SOURCE_BUCKET = 'foodnlit-1123e.firebasestorage.app'
+TRANSFER_CHUNK_BYTES = 256 * 1024
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+TRANSFER_SECONDS = 120
+_import_gate = BoundedSemaphore(2)
 
 
 class EngineImportError(ValueError):
+    pass
+
+
+class EngineImportBusy(RuntimeError):
     pass
 
 
@@ -89,7 +100,19 @@ def read_owned_record(owner_uid, assessment_id, *, id_token, app_check=None):
     return {key: _value(value) for key, value in document.get('fields', {}).items()}
 
 
-def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_check=None):
+def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_check=None, observation=None):
+    # Bound memory and provider connections per API process without another
+    # queue or background worker. The caller may retry the same immutable import.
+    if not _import_gate.acquire(blocking=False):
+        raise EngineImportBusy('Recording transfers are busy. Please retry shortly.')
+    try:
+        return _import_owned_recording(record, owner_uid, assessment_id,
+            id_token=id_token, app_check=app_check, observation=observation)
+    finally:
+        _import_gate.release()
+
+
+def _import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_check=None, observation=None):
     """Call only after the finalized document and application consent are checked."""
     path = str(record.get('storagePath') or '')
     expected = f'cookcredit-skill/users/{owner_uid}/assessments/{assessment_id}/'
@@ -129,12 +152,22 @@ def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_ch
         blob.reload(timeout=20)
         if blob.metadata != metadata or int(blob.size or 0) != size or blob.content_type != kind:
             raise EngineImportError('The existing private recording did not match this assessment.')
+        if observation is not None:
+            observation.update(recording_snapshot(blob))
         return destination, str(blob.generation), kind, generation
 
-    # Spool to disk beyond 4 MB rather than multiplying an 80 MB byte buffer per request.
-    with tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024) as recording:
-        received = 0
-        try:
+    # Cloud Run's temporary filesystem also consumes container RAM. Stream into
+    # a bounded resumable upload instead of keeping the complete recording there.
+    # BlobWriter does not finalize the object until close(); validate source size,
+    # checksum (when supplied) and generation before closing. An exception cancels
+    # only this incomplete upload session; no existing object is deleted.
+    blob.metadata = metadata
+    received, started = 0, time.monotonic()
+    digest = hashlib.md5(usedforsecurity=False)  # GCS integrity checksum, not authentication.
+    try:
+        with blob.open('wb', chunk_size=UPLOAD_CHUNK_BYTES, content_type=kind,
+                       if_generation_match=0, timeout=(5, 30), checksum='crc32c',
+                       retry=DEFAULT_RETRY.with_timeout(30)) as recording:
             with requests.get(url, headers=headers, params={'alt': 'media', 'generation': generation},
                               timeout=(5, 60), stream=True, allow_redirects=False) as response:
                 if response.status_code != 200:
@@ -142,31 +175,33 @@ def import_owned_recording(record, owner_uid, assessment_id, *, id_token, app_ch
                 actual_generation = response.headers.get('x-goog-generation')
                 if actual_generation and actual_generation != generation:
                     raise EngineImportError('The recording changed. Please select it again.')
-                for chunk in response.iter_content(256 * 1024):
+                for chunk in response.iter_content(TRANSFER_CHUNK_BYTES):
+                    if time.monotonic() - started > TRANSFER_SECONDS:
+                        raise EngineImportError('The recording transfer took too long. Please retry.')
                     received += len(chunk)
                     if received > size or received > MAX_VIDEO_BYTES:
                         raise EngineImportError('The recording exceeds its verified size.')
+                    digest.update(chunk)
                     recording.write(chunk)
-        except requests.RequestException:
-            raise EngineImportError('The recording transfer was interrupted. Please retry.') from None
-        if received != size:
-            raise EngineImportError('The recording transfer was incomplete. Please retry.')
-        # The Firebase endpoint may vary which generation headers it exposes.
-        # Re-reading server metadata also detects any source replacement while
-        # downloading; GCS generations are never reused.
-        confirmed = _json_get(url, headers)
-        if str(confirmed.get('generation')) != generation:
-            raise EngineImportError('The recording changed. Please select it again.')
-        recording.seek(0)
-        blob.metadata = metadata
-        try:
-            blob.upload_from_file(recording, size=size, content_type=kind,
-                                  if_generation_match=0, timeout=120, checksum='auto')
-        except PreconditionFailed:
-            # A concurrent retry won the immutable create; verify its identity.
-            pass
+            if received != size:
+                raise EngineImportError('The recording transfer was incomplete. Please retry.')
+            expected_hash = source.get('md5Hash')
+            if expected_hash and base64.b64encode(digest.digest()).decode('ascii') != expected_hash:
+                raise EngineImportError('The recording checksum did not match. Please retry.')
+            # Some Firebase responses omit generation headers. Confirm server
+            # metadata too, before the final chunk makes the destination visible.
+            confirmed = _json_get(url, headers)
+            if str(confirmed.get('generation')) != generation:
+                raise EngineImportError('The recording changed. Please select it again.')
+    except PreconditionFailed:
+        # A concurrent retry won the immutable create; verify its identity below.
+        pass
+    except requests.RequestException:
+        raise EngineImportError('The recording transfer was interrupted. Please retry.') from None
     blob.reload(timeout=20)
     if (blob.metadata != metadata or int(blob.size or 0) != size
             or blob.content_type != kind or not blob.generation):
         raise EngineImportError('The imported recording could not be verified.')
+    if observation is not None:
+        observation.update(recording_snapshot(blob))
     return destination, str(blob.generation), kind, generation

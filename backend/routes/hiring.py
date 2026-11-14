@@ -539,6 +539,8 @@ def complete_attempt(session_id):
                 app_check=request.headers.get('X-Firebase-AppCheck'))
         else:
             evidence = verified_engine_assessment(g.user_id, engine_id)
+    except engine_recording_import.EngineImportBusy:
+        return jsonify(error='Recording transfers are busy. Please retry shortly.', code='recording_transfer_busy'), 503, {'Retry-After': '5'}
     except InvalidEngineAssessment as exc:
         return jsonify(error=str(exc)), 409
     except Exception:

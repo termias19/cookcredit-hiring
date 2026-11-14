@@ -87,6 +87,58 @@ Review the existing owner notification channel and enabled alert policies during
 each release. Test alert routing in staging with clearly labelled synthetic events;
 do not represent API acceptance as proof of email notification receipt.
 
+### Background failure and recovery review
+
+Run `python deploy/platform_monitoring.py --environment production --include-shared`
+after an alert and during release verification. Use `--environment staging` for
+the private deployment. This read-only command checks existing completed Scheduler
+attempts, current job state, and recent durable queue counters. It reports failed
+attempts that have a later successful invocation separately from failures with no
+observed recovery. A successful invocation alone does not establish delivery or
+settlement. Missing, stale, unreadable or truncated evidence fails the review.
+The command makes no SQL connection, dispatch, resend or payment call.
+
+The IAM-protected **CookCredit operations and recovery** Cloud Monitoring dashboard
+uses the same existing logs: server errors, Home validation rejections, failed and
+successful background attempts, durable queue counters, and shared/legacy cleanup.
+The dashboard definition is `dashboard()` in `deploy/platform_monitoring.py`.
+Reuse that dashboard; do not create another alert policy, worker or metric for it.
+For production `cc-hiring-webhooks`, a failed Scheduler attempt stays in Cloud
+Logging. The dispatcher alert fires after 40 minutes without a recorded success.
+The window covers the five-minute schedule, full attempt deadlines, retry backoff
+and metric ingestion delay. The existing application alert still reports webhook
+queue entries that fail permanently or have been pending for at least ten minutes.
+Application exceptions, other Scheduler jobs, and staging use their existing rules.
+
+`deploy/hiring_webhook_alert.py` defaults to a read-only plan. Prepare the
+success metric and replacement policy before activating the Scheduler exclusion.
+Activation requires a fresh positive metric sample after policy creation. Recheck
+the silence window before changing the webhook schedule or retry budget. A
+recovered attempt remains available in the Scheduler logs and the recovery review.
+
+The same rollout supports `--job emails`. Prepare and verify the email success
+metric and dispatcher policy before activating its immediate-alert exclusion.
+The forty-minute window also covers the one-minute email schedule, four possible
+300-second attempts, configured backoff and telemetry delay. Terminal email
+delivery failures and ten-minute pending queue age retain immediate coverage.
+Only known recoverable dependencies at `auth.dispatch_emails` receive the
+server-generated `retryableBackground` marker. These attempts remain ERROR logs.
+After the replacement has observed success, activation excludes only those marked
+dependency/request events from the immediate application policy. Unknown errors,
+authentication failures, other endpoints, queues and staging retain coverage.
+SQLSTATE and connection categories are bounded. Driver text, SQL, credentials and
+addresses are never emitted. Existing database pre-ping, outboxes, leases and
+Scheduler retries handle recovery. Do not add another resend path.
+
+With `--include-shared`, the review explicitly reports
+`blocked_database_disabled` when the old retention job targets a Cloud SQL
+instance whose activation policy is `NEVER`. This is an unresolved cleanup
+blocker, not successful retention or an empty database. Keep the data and shared
+assessment resources intact. Do not restart the instance, disable retention or
+delete its records without the dependency, record-disposition and recovery review
+described in the incident record. Do not use this legacy blocker as a reason to
+replay active Hiring/Home work.
+
 Do not blindly resend terminal messages: confirm recipient/destination, why retries failed, deduplication state and whether a provider accepted the prior send. Keep event IDs and signed webhook payloads stable. Webhooks are at-least-once delivery; receivers must deduplicate event IDs.
 
 ## Capacity and rate limits
@@ -108,6 +160,10 @@ Database runtime timeouts: connect 5 seconds, statement 30 seconds, lock 3 secon
 ## Retention and access
 
 Private hiring recording, landmark and CV prefixes expire after 30 days. Active company logos are excluded from that lifecycle. CV links report expiration/unavailability instead of endless retries. Existing sharing checks and five-minute signed playback links still apply. Firebase disabled/revoked sessions are checked on verification with a maximum 30-second cache; company approval and application consent are checked separately.
+
+Recording playback verifies the exact object generation after workspace and consent checks, before signing. Links expire within five minutes and cannot outlive the server-observed retention deadline. Existing assessment metadata stores the observation and original object creation/expiry dates. A retry does not extend those dates. Historical records without storage metadata show Check recording until verified. An absent historical object is unavailable, without an invented deletion date. Applications and assessment history remain visible.
+
+An authorized playback request returns 410 with `recording_expired` or `recording_missing` when the media cannot be provided. Expected expiry emits an INFO event. Unexpected missing objects and storage/signing failures emit structured ERROR events through existing alert coverage, with a safe category and support reference. Temporary failures return 503 and Retry-After. No recording path, signed URL, token, applicant identity or raw provider error is logged. Browser network/stall diagnostics are WARNING; decode/format failures are ERROR. These reports are bounded and untrusted. Verify actual browser loading, playback and seeking instead of treating a signed-URL response as successful playback. Do not recreate expired employer copies from a cook's library or extend retention without the applicable permission and retention decision.
 
 ## Rollback
 
@@ -166,3 +222,130 @@ customers. Keep private acceptance addresses out of public release records.
 The read-only query has a five-second statement limit and six requests/minute
 per owner. Responses are private/no-store and contain aggregates, never account
 identities. No new database, schema, worker, polling or tracking service is used.
+### Independent expiry and public-site results
+
+The existing expiry tick commits pending invitation expirations and their durable
+webhook events before probing Hosting. A committed expiry returns HTTP 200 even
+when the website check fails; `publicSiteHealthy` reports that independent result.
+The check retries only failed temporary transport/429/5xx probes once. Recovered
+probes are INFO events. Persistent failures and indexing/canonical regressions
+remain `public_site_health` ERROR events covered by the application alert.
+SQL failures still return 503 and retain Scheduler retries. No additional job,
+queue or alert policy is needed for this separation.
+
+### Optional background playback compression
+
+The original consented Hiring object remains the scoring/evidence source. Its
+path, generation and 30-day retention clock are unchanged. A smaller playback
+copy is optional; it never certifies or changes a skill score.
+
+`034_recording_compression.sql` adds processing state to existing attempts. The
+existing `/api/skills/dispatch-pending` Scheduler tick claims bounded work and
+starts an on-demand Cloud Run Job. There is no additional queue, Scheduler or
+idle worker. `HIRING_COMPRESSION_JOB` enables dispatch; `HIRING_COMPRESSED_PLAYBACK=1`
+enables consumption independently. The API image excludes FFmpeg. Build the
+same Dockerfile with `--target compression` for the private worker image. The
+pure plans in `deploy/hiring_compression.py` exclude SMTP, Stripe and integration
+credentials from its environment and reuse each environment's runtime identity
+and SQL connection. Job invocation permission belongs only on that specific job,
+never at project scope or to public principals.
+
+Admission defaults to two active executions (hard ceiling four). Each task has
+one CPU, 1 GiB, a 15-minute timeout and zero provider retries. SQL owns three
+attempts, retry delays, a 20-minute lease and publication fencing. This caps
+active spend; it is not a high-volume capacity certification. Review queue age
+and actual demand before raising admission. Existing SQL/API capacity is unchanged.
+
+The v4 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
+up to 720p pixels with no rotation. It preserves dimensions, frame timestamps,
+aspect and declared color, uses H.264 CRF 24, and requires at least 10% savings,
+matching complete decodes, <=2 ms timing/duration drift, average SSIM >=0.985
+and minimum frame SSIM >=0.95. SSIM is diagnostic; representative cutting detail
+and browser playback still need review. Unsupported or rejected inputs keep
+using the original. Decoders run only in an isolated job, with local-file input
+protocols, format/codec limits, bounded output, deadlines and capped allocations.
+
+The deterministic derivative key includes original path/generation and profile.
+Uploads use generation preconditions. Consent and retention are checked again
+before publication. The derivative inherits the original creation time as
+Custom-Time; a derivative-only lifecycle rule expires it on the original clock.
+No original lifecycle rule is changed. Signed links remain at most five minutes,
+after existing company/seat/consent checks and an original-generation lookup.
+An unavailable derivative falls back to the original.
+
+Trace `recording_compression_*` events by `processingReference`, attempt UUID,
+execution, profile and release. Logs exclude identities, object paths, signed
+URLs, provider bodies and raw decoder exceptions. Recoverable processing failures
+log warnings. Exhaustion, unexpected job failures, or queue age >=30 minutes
+match the existing enabled application alert; email/webhook recovery coverage
+and all unrelated alert policies stay intact. `platform_monitoring.py` includes
+the processing queue when enabled and a processing/fallback log panel.
+
+The existing recovery-monitor tool also supports `--job processing`: its
+40-minute heartbeat detects a silently stopped `cc-hiring-dispatch` schedule.
+Prepare it only after a real success metric and an empty live absence query
+are observed. This adds silence coverage while preserving every immediate
+processing Scheduler failure, worker error and backlog alert. No new polling
+service or work queue is introduced.
+
+The final visible sample duration is derived explicitly from the decoded frame
+timeline and declared container end; raw packet-duration fields are optional.
+FFmpeg 7 otherwise can preserve every PTS but lengthen the MP4's
+last sample by 25.3 ms on a real VFR recording. This repair keeps the <=2 ms
+container-duration gate intact, preserves PTS/DTS, and uses a new deterministic
+profile key. Rejections log the safe per-gate flags and measured deltas without
+paths, timestamps, identities or raw decoder errors.
+
+FFmpeg's null-output progress clock can also exceed the input MP4's declared
+endpoint because of a nominal codec-frame duration. Keep that raw difference
+as `decodedDurationDeltaMs`, but gate the visible presentation interval (capped
+at the input container end) with `presentationDurationDeltaMs <= 2`. Full
+decoding, identical frame counts, every frame PTS within 2 ms, endpoint coverage
+of all decoded frames and the independent container-duration gate remain
+mandatory. Missing-duration containers retain the uncapped decoder check.
+Do not increase a tolerance to bypass a failed gate.
+
+Rollback: disable compressed playback to restore original playback immediately;
+remove the job dispatch flag to stop new launches. Keep additive columns,
+originals, derivative records, retry evidence and alerts. Let in-flight leases
+finish or expire; do not delete media or blindly requeue failed records. Diagnose
+the safe failure code and exact release before an explicitly reviewed retry.
+
+### Bounded recording transfers and reel playback
+
+Hiring imports the applicant-selected, generation-pinned object through the
+existing Firebase rules. Transfers use a 1 MiB resumable SDK buffer and 256 KiB
+source reads, with two simultaneous imports per API process and a bounded retry
+response for excess work. No complete recording is spooled to Cloud Run's
+memory-backed temporary filesystem. Size, available source checksum and source
+generation are checked before finalization; destination creation remains
+immutable and CRC32C checked. Failed transfers cancel only their incomplete
+resumable session, never an existing recording. Retention remains 30 days.
+
+Reels mount a player only for the visible candidate, cancel obsolete report and
+signing requests and release the old decoder/source on unmount. Returning to a
+candidate obtains a fresh consent-checked URL. Deliberate navigation cancellation
+does not report a network error; actual timeout and media failures still do.
+The maximum-size test measures Python buffer allocations, not total container
+RSS or a production throughput guarantee. Published scoring and recording
+quality settings are unchanged.
+
+### Compression quality gate
+
+Reuse the offline inspector with `--video ORIGINAL --playback LOCAL_COPY --output
+PRIVATE_REPORT.json` before proposing a playback derivative. It checks complete
+decoding, geometry, frame counts and per-frame timestamp drift, preserves both
+inputs, and reports the storage total for keeping both. A technical pass still
+requires human inspection of knife/hand detail and device playback. The API does
+not run this tool or ffmpeg; no encoder service, paid idle capacity, production
+codec change or original replacement is enabled by this diagnostic. The gate also
+compares sample aspect ratio, declared color range/space/transfer/primaries and
+decoded duration; changing these can alter the apparent evidence even when frame
+counts match. Unknown input color metadata is not a visual-quality certificate.
+Preserve variable-frame timestamps with an explicit encoder time base matching
+the source; do not convert to a nominal fixed frame rate. Compare every decoded
+frame timestamp before using a proposed derivative, and keep original scoring
+inputs separate from playback experiments.
+The diagnostic null decode also preserves the input time base and variable-frame
+timestamps. Its duration counter must not be changed by an assumed constant
+frame rate. Container duration is compared separately when both inputs supply it.

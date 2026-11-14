@@ -15,6 +15,7 @@ import { Search, ShieldCheck, Star, Video } from 'lucide-react'
 import BusinessShell from '../components/BusinessShell'
 import MobileCandidateFeed from '../components/MobileCandidateFeed'
 import useIsDesktop from '../hooks/useIsDesktop'
+import { recordingLabel } from '../utils/reportPlayback'
 import { useBusiness } from '../context/BusinessContext'
 import { rankCandidates } from '../utils/ranking'
 import { searchCandidates } from '../utils/search'
@@ -61,7 +62,7 @@ function CandidateCard({ rank, cook, onClick, onStar, starred, rankingEnabled })
           <p style={{ fontSize: 12, color: 'var(--cc-muted)', margin: '2px 0 11px' }}>{(cook.cuisines || []).join(' · ')}{cook.years != null ? ` · ${cook.years} yrs` : ''}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: rankingEnabled ? 9 : 14 }}>
             <span className="cc-evidence-pill">Shared assessment</span>
-            {cook.hasVideo && <span className="cc-evidence-pill"><Video size={12} strokeWidth={2} />Recording ready</span>}
+            <span className="cc-evidence-pill"><Video size={12} strokeWidth={2} />{recordingLabel(cook.recording)}</span>
           </div>
           {rankingEnabled && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15, duration: 0.3 }}
             style={{ fontSize: 12, color: 'var(--cc-muted)', margin: '0 0 11px', lineHeight: 1.5 }}>{(cook._rank?.reasons || []).join(' · ')}</motion.p>}

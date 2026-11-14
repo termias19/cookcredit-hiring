@@ -49,7 +49,8 @@ from extensions import limiter
 from middleware.auth import require_auth, require_verified_email
 from services.database import db_session
 from services.matching import match_role, FEATURE_WEIGHTS
-from services.assessment_media import playback_url, PLAYBACK_TTL_SECONDS
+from services.assessment_media import playback_url, PLAYBACK_TTL_SECONDS, recording_view, RecordingUnavailable, RecordingPlaybackError
+from services.operations import emit_event
 from services.assessment_outcomes import evaluate_assessment
 from services.live_motion_evidence import hiring_motion_criteria
 from services.integration_access import open_role_limit, team_access
@@ -230,7 +231,8 @@ def _assessment_report(attempt):
     """Allowlisted, explainable view of scoring evidence; excludes storage locators."""
     from services.live_motion_evidence import is_live_motion, motion_report
     if is_live_motion(attempt):
-        return motion_report(attempt, (attempt.metadata_ or {}).get('assessment_criteria'))
+        return {**motion_report(attempt, (attempt.metadata_ or {}).get('assessment_criteria')),
+                'recording': recording_view(attempt.metadata_)}
     server = attempt.server_block if isinstance(attempt.server_block, dict) else {}
     motion = server.get("motion_half") if isinstance(server.get("motion_half"), dict) else {}
     product = server.get("product_half") if isinstance(server.get("product_half"), dict) else {}
@@ -242,6 +244,7 @@ def _assessment_report(attempt):
         criteria=(attempt.metadata_ or {}).get('assessment_criteria'))
     return {
         "attemptId": str(attempt.id),
+        "recording": recording_view(attempt.metadata_),
         "status": "recording-analyzed" if attempt.verification_state == "VERIFIED" else attempt.verification_state.lower(),
         "score": float(attempt.authoritative_score) if attempt.authoritative_score is not None else None,
         "tier": attempt.tier,
@@ -1154,7 +1157,9 @@ def candidates():
             out.append({
                 'id': u.id, 'name': u.name, 'verifiedScore': evidence['score'],
                 'tier': evidence['tier'], 'cuisines': cp.cuisines or [],
-                'city': cp.base_city, 'years': cp.years_experience, 'hasVideo': True,
+                'city': cp.base_city, 'years': cp.years_experience,
+                'hasVideo': evidence['recording']['state'] not in ('expired', 'unavailable'),
+                'recording': evidence['recording'],
                 'assessmentStatus': evidence['status'],
             })
     employment_validated = os.environ.get('ASSESSMENT_EMPLOYMENT_VALIDATED') == '1'
@@ -1212,18 +1217,58 @@ def candidate_video(cook_id):
         grant = query.order_by(*_shared_attempt_order()).with_for_update(of=AssessmentShare).first()
         if not grant:
             return jsonify(error='The applicant has not shared an assessment with this company'), 403
+        attempt = session.get(SkillAttempt, grant.attempt_id)
+        stored = (attempt.metadata_ or {}).get('recording_availability')
+        observation = dict(stored) if isinstance(stored, dict) else {}
+        def remember_observation():
+            if observation:
+                # A scoring worker or another viewer can update other metadata
+                # while Storage is queried. Merge this field atomically instead
+                # of writing a stale copy of the entire assessment document.
+                from sqlalchemy import func, cast
+                from sqlalchemy.dialects.postgresql import JSONB
+                from sqlalchemy.orm.attributes import set_committed_value
+                session.query(SkillAttempt).filter_by(id=attempt.id).update({
+                    SkillAttempt.metadata_: func.coalesce(SkillAttempt.metadata_, cast({}, JSONB)).op('||')(
+                        {'recording_availability': observation})}, synchronize_session=False)
+                set_committed_value(attempt, 'metadata_', {**(attempt.metadata_ or {}), 'recording_availability': observation})
         original_url = None
         try:
-            url = playback_url(grant.storage_path, grant.storage_generation, cook_id)
+            url = playback_url(grant.storage_path, grant.storage_generation, cook_id, observation=observation)
+            remember_observation()
+            from services.recording_compression import compressed_playback_url
+            if request.args.get('original') != '1' and observation.get('expiresAt'):
+                url = compressed_playback_url(grant.storage_path, grant.storage_generation, cook_id,
+                    (attempt.metadata_ or {}).get('playback_derivative'),
+                    datetime.fromisoformat(observation['expiresAt'])) or url
             if request.args.get('landmarks') == '1':
-                attempt = session.get(SkillAttempt, grant.attempt_id)
                 original_url = landmarks_url((attempt.metadata_ or {}).get('original_landmarks'),
                                              grant.storage_path, grant.storage_generation)
-        except Exception:
-            return jsonify(error='Recording playback is temporarily unavailable'), 503
+        except RecordingUnavailable as exc:
+            remember_observation()
+            emit_event('recording_playback_unavailable', severity='INFO' if exc.code == 'recording_expired' else 'ERROR',
+                       code=exc.code, endpoint='business.candidate_video')
+            message = ('This recording has expired under the 30-day Hiring retention policy. The application and assessment history remain available.'
+                       if exc.code == 'recording_expired' else
+                       'This recording is no longer available. The application and assessment history remain available.')
+            response = jsonify(error=message, code=exc.code, recording=recording_view(attempt.metadata_, grant.storage_generation), requestId=getattr(g, 'request_id', None))
+            response.status_code = 410
+            response.headers['Cache-Control'] = 'no-store'
+            return response
+        except Exception as exc:
+            category = exc.code if isinstance(exc, RecordingPlaybackError) else 'playback_failed'
+            emit_event('recording_playback_failed', severity='ERROR', code=category, endpoint='business.candidate_video')
+            response = jsonify(error='Recording playback is temporarily unavailable. Please retry.', code='recording_temporarily_unavailable', requestId=getattr(g, 'request_id', None))
+            response.status_code = 503
+            response.headers['Retry-After'] = '5'
+            response.headers['Cache-Control'] = 'no-store'
+            return response
         session.add(AssessmentAccessLog(share_id=grant.id, viewer_id=g.user_id))
         shared_attempt = str(grant.attempt_id)
-    response = jsonify(videoUrl=url, landmarksUrl=original_url, attemptId=shared_attempt, expiresInSeconds=PLAYBACK_TTL_SECONDS)
+        view = recording_view(attempt.metadata_, grant.storage_generation)
+        expires = observation.get('expiresAt')
+        ttl = min(PLAYBACK_TTL_SECONDS, max(0, int((datetime.fromisoformat(expires) - datetime.now(timezone.utc)).total_seconds()))) if expires else PLAYBACK_TTL_SECONDS
+    response = jsonify(videoUrl=url, landmarksUrl=original_url, attemptId=shared_attempt, expiresInSeconds=ttl, recording=view)
     response.headers['Cache-Control'] = 'no-store'
     return response, 200
 

@@ -1,0 +1,42 @@
+.people-toolbar { display:flex; align-items:end; gap:16px; flex-wrap:wrap; margin:24px 0 14px; }
+.people-toolbar label { margin:0; min-width:220px; }
+.people-toolbar label:first-child { flex:1; }
+.people-toolbar input,.people-toolbar select { margin-bottom:0; }
+.people-list-summary { color:var(--muted); font-size:15px; margin:12px 0; }
+.people-table-wrap { border:1px solid var(--line); background:#fffdf8; }
+.people-table { width:100%; border-collapse:collapse; font-size:16px; text-align:left; table-layout:fixed; }
+.people-table thead { background:#efeee7; }
+.people-table th,.people-table td { vertical-align:top; padding:16px 14px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.people-table thead th { font-size:13px; font-weight:600; color:#515a50; }
+.people-table thead th:first-child { width:25%; }.people-table thead th:nth-child(2) { width:19%; }
+.people-table thead th:nth-child(3) { width:17%; }.people-table thead th:nth-child(4) { width:25%; }
+.people-table tbody th { font-weight:400; }
+.people-name { display:block; font-size:18px; line-height:1.4; margin-bottom:8px; }
+.people-contact { display:block; font-size:14px; margin:4px 0; }
+.people-note { display:block; color:var(--muted); font-size:14px; line-height:1.5; margin-top:8px; font-weight:400; }
+.people-review { display:block; margin-top:8px; color:#8b392b; font-weight:600; }
+.people-table select { font-size:15px; min-height:48px; padding:8px; margin:0; width:100%; }
+.people-status { display:inline-block; padding:5px 10px; background:#ebe5d6; color:#4b3b1f; font-size:14px; }
+.people-status-done { background:#e9eee8; color:#294f3f; }
+.people-call-actions { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.people-table button,.people-table .button { min-height:44px; padding:9px 12px; font-size:14px; }
+.people-detail-row { background:#f4f3ed; }.people-detail-row h3 { margin-top:0; font-family:inherit; font-size:18px; }
+.people-detail-row p { font-size:16px; }.people-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.people-worklist .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+.people-link-customer h3 { font-family:inherit; font-size:16px; }
+.people-link-customer input { font-size:15px; min-height:44px; }
+.people-explanation { margin-top:28px; padding:18px 0; border-top:1px solid var(--line); }
+.people-explanation p { max-width:780px; font-size:16px; }
+.people-empty { padding:24px; border:1px solid var(--line); background:#fffdf8; }
+.people-empty h2 { font-size:28px; }.people-empty p { max-width:620px; }
+@media(max-width:1150px) { .people-table { table-layout:auto; } .people-table th,.people-table td { padding:12px 10px; } }
+@media(max-width:760px) {
+  .people-toolbar { display:grid; grid-template-columns:1fr; }.people-toolbar label { min-width:0; }
+  .people-table,.people-table tbody { display:block; }.people-table thead { display:none; }
+  .people-table tr { display:grid; grid-template-columns:1fr; padding:18px; border-bottom:1px solid var(--line); }
+  .people-table tr:last-child { border-bottom:0; }.people-table th,.people-table td { display:block; padding:8px 0; border:0; }
+  .people-table td::before { content:attr(data-label); display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px; }
+  .people-table tbody th { padding-top:0; }.people-name { font-size:21px; }.people-contact { font-size:16px; }
+  .people-call-actions { flex-direction:row; flex-wrap:wrap; }.people-detail-grid { grid-template-columns:1fr; }
+  .people-detail-row td::before { display:none; }
+}
