@@ -126,16 +126,14 @@ def _claim():
         attempt = (session.query(SkillAttempt).filter(
             SkillAttempt.compression_state.in_(('pending', 'running')),
             SkillAttempt.compression_due_at <= stamp,
-            SkillAttempt.metadata_['source'].astext == 'cookcredit-skill-live',
-            or_(SkillAttempt.compression_lease_until.is_(None), SkillAttempt.compression_lease_until <= stamp),
-            session.query(AssessmentShare.id).filter(AssessmentShare.attempt_id == SkillAttempt.id,
-                AssessmentShare.revoked_at.is_(None)).exists())
+            or_(SkillAttempt.compression_lease_until.is_(None), SkillAttempt.compression_lease_until <= stamp))
             .order_by(SkillAttempt.created_at, SkillAttempt.id).with_for_update(skip_locked=True).first())
         if attempt is None:
             return None
         if not _eligible(attempt) or not _shared(session, attempt):
             attempt.compression_state, attempt.compression_due_at = 'skipped', None
-            attempt.compression_error = 'original_unavailable'
+            attempt.compression_lease_id = attempt.compression_lease_until = None
+            attempt.compression_error = 'consent_or_retention_changed'
             return None
         if (attempt.compression_count or 0) >= MAX_TRIES:
             attempt.compression_state, attempt.compression_due_at = 'failed', None

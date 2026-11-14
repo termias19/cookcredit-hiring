@@ -146,3 +146,14 @@ def test_concurrent_metadata_merge_is_preserved(db):
     compression._finish(aid, token, 'ready', derivative={'profile': compression.PROFILE})
     with database.db_session() as session:
         assert session.get(SkillAttempt, db.attempt).metadata_['unrelated_review'] == 'preserved'
+
+
+def test_revoked_queued_recording_does_not_become_a_false_backlog(db):
+    prepare(db)
+    with database.db_session() as session:
+        session.query(AssessmentShare).filter_by(attempt_id=db.attempt).one().revoked_at = compression.now()
+    assert compression._claim() is None
+    with database.db_session() as session:
+        attempt = session.get(SkillAttempt, db.attempt)
+        assert attempt.compression_state == 'skipped' and attempt.compression_due_at is None
+        assert attempt.compression_lease_id is None and attempt.compression_count == 0
