@@ -222,3 +222,13 @@ customers. Keep private acceptance addresses out of public release records.
 The read-only query has a five-second statement limit and six requests/minute
 per owner. Responses are private/no-store and contain aggregates, never account
 identities. No new database, schema, worker, polling or tracking service is used.
+### Independent expiry and public-site results
+
+The existing expiry tick commits pending invitation expirations and their durable
+webhook events before probing Hosting. A committed expiry returns HTTP 200 even
+when the website check fails; `publicSiteHealthy` reports that independent result.
+The check retries only failed temporary transport/429/5xx probes once. Recovered
+probes are INFO events. Persistent failures and indexing/canonical regressions
+remain `public_site_health` ERROR events covered by the application alert.
+SQL failures still return 503 and retain Scheduler retries. No additional job,
+queue or alert policy is needed for this separation.

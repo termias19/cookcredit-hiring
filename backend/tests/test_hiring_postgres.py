@@ -751,6 +751,38 @@ def invitation_application(client, item, uid='cook', **changes):
     })
 
 
+def test_expiry_commits_once_when_independent_website_check_fails(db, client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from services import public_site_health, runtime_config
+    auth_headers = integration_auth(db, client)
+    assert client.post('/partner/manage/webhooks', headers=headers('employer'), json={
+        'url': 'https://hooks.example.test/live', 'eventTypes': ['assessment.expired'],
+    }).status_code == 201
+    created = request_assessment(client, auth_headers)
+    assert created.status_code == 201
+    with database.db_session() as session:
+        session.query(PartnerInvitation).update({'expires_at': datetime.now(timezone.utc)-timedelta(minutes=1)})
+    monkeypatch.setattr(partner, 'internal_request_authorized', lambda request: False)
+    path = '/partner/internal/expire-assessment-requests'
+    assert client.post(path).status_code == 403
+    monkeypatch.setattr(partner, 'internal_request_authorized', lambda request: True)
+    monkeypatch.setattr(runtime_config, 'deployment_environment', lambda: 'production')
+    def failed_website(environment, *, retry_fetch):
+        assert environment == 'production' and retry_fetch
+        # A separate transaction must already see both committed changes.
+        with database.db_session() as session:
+            assert session.query(PartnerInvitation).one().status == 'expired'
+            assert session.query(PartnerWebhookDelivery).count() == 1
+        return False
+    monkeypatch.setattr(public_site_health, 'check_public_site', failed_website)
+    first, second = client.post(path), client.post(path)
+    assert first.status_code == second.status_code == 200
+    assert first.json == {'expired': 1, 'publicSiteHealthy': False}
+    assert second.json == {'expired': 0, 'publicSiteHealthy': False}
+    with database.db_session() as session:
+        assert session.query(PartnerWebhookDelivery).one().event_type == 'assessment.expired'
+
+
 def test_parallel_partner_retries_charge_and_emit_once(db, client):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
