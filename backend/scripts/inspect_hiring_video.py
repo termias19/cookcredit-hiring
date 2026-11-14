@@ -168,6 +168,15 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
     duration_delta = abs(source['decodedDurationSec']-copy['decodedDurationSec'])*1000
     source_container, copy_container = source.get('containerDurationSec'), copy.get('containerDurationSec')
     container_delta = abs(source_container-copy_container)*1000 if source_container is not None and copy_container is not None else None
+    # -progress reports the NULL OUTPUT muxer's clock, not the input player's
+    # visible endpoint. FFmpeg 7 can carry a codec's nominal final-frame duration
+    # beyond an MP4 edit/sample boundary. Preserve that raw diagnostic, but cap
+    # the presentation interval at the declared input end. Complete decoding,
+    # every PTS, frame counts and the independent container-end gate still apply.
+    source_end = min(source['decodedDurationSec'], source_container) if source_container is not None else source['decodedDurationSec']
+    copy_end = min(copy['decodedDurationSec'], copy_container) if copy_container is not None else copy['decodedDurationSec']
+    presentation_delta = abs(source_end-copy_end)*1000
+    covers_frames = source_end+.002 >= before[-1] and copy_end+.002 >= after[-1]
     # Reject a source changed between the decoding and timeline passes. Hash in
     # chunks so the comparison does not retain another full recording in RAM.
     for path, expected in ((original, source['sha256']), (playback, copy['sha256'])):
@@ -185,10 +194,12 @@ def compare_playback(original, playback, *, ffprobe='ffprobe', ffmpeg='ffmpeg'):
             'sameSampleAspectRatio': aspect, 'sameDeclaredColorMetadata': color,
             'sourceColorMetadata': source['colorMetadata'], 'playbackColorMetadata': copy['colorMetadata'],
             'decodedDurationDeltaMs': round(duration_delta, 4),
+            'presentationDurationDeltaMs': round(presentation_delta, 4),
+            'presentationEndCoversDecodedFrames': covers_frames,
             'containerDurationDeltaMs': round(container_delta, 4) if container_delta is not None else None,
             'sourceTimelineIssues': source_timeline_issues, 'playbackTimelineIssues': playback_timeline_issues,
             'maxFrameDriftMs': round(drift, 4) if drift is not None else None,
-            'technicalChecksPassed': bool(geometry and aspect and color and duration_delta <= 2
+            'technicalChecksPassed': bool(geometry and aspect and color and presentation_delta <= 2 and covers_frames
                                          and (container_delta is None or container_delta <= 2)
                                          and matching_count and drift <= 2
                                          and not source_timeline_issues and not playback_timeline_issues),

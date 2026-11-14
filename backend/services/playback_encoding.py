@@ -10,7 +10,7 @@ from scripts.inspect_hiring_video import run, compare_playback, VideoInspectionE
 
 # Version the byte-producing profile and gates together. No scaling, frame-rate
 # conversion or B-frames: the published landmark timestamps must stay aligned.
-PROFILE = 'h264-crf24-timing-v3'
+PROFILE = 'h264-crf24-timing-v4'
 INPUT = ['-max_alloc', '67108864', '-protocol_whitelist', 'file',
          '-format_whitelist', 'mov,matroska,webm', '-codec_whitelist', 'h264,vp8,vp9']
 
@@ -89,7 +89,8 @@ def encode_playback(source, target):
     if not check['technicalChecksPassed'] or check['sourceFrames'] != frame_count:
         details = {key: check[key] for key in ('sameGeometry', 'sameSampleAspectRatio',
             'sameDeclaredColorMetadata', 'sourceFrames', 'playbackFrames', 'sourceTimelineIssues',
-            'playbackTimelineIssues', 'maxFrameDriftMs', 'decodedDurationDeltaMs', 'containerDurationDeltaMs')}
+            'playbackTimelineIssues', 'maxFrameDriftMs', 'decodedDurationDeltaMs', 'presentationDurationDeltaMs',
+            'presentationEndCoversDecodedFrames', 'containerDurationDeltaMs')}
         raise EncodingSkipped('timing_or_metadata_gate', checks=details)
     if check['reductionPercent'] < 10:
         raise EncodingSkipped('insufficient_savings')

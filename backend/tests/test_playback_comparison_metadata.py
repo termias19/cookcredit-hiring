@@ -56,3 +56,30 @@ def test_container_duration_mismatch_is_not_hidden_by_equal_decoded_counters(com
     result=inspector.compare_playback(original, playback)
     assert result['decodedDurationDeltaMs']==0 and result['containerDurationDeltaMs']==1000
     assert not result['technicalChecksPassed']
+
+
+def test_null_mux_progress_beyond_mp4_end_is_not_a_presentation_change(comparison):
+    original, playback, source, copy = comparison
+    source['containerDurationSec']=copy['containerDurationSec']=63.063
+    source['decodedDurationSec']=63.0883
+    result=inspector.compare_playback(original, playback)
+    assert result['decodedDurationDeltaMs']==25.3
+    assert result['presentationDurationDeltaMs']==0
+    assert result['technicalChecksPassed']
+
+
+def test_incomplete_decoder_interval_is_not_hidden_by_equal_containers(comparison):
+    original, playback, source, copy = comparison
+    source['containerDurationSec']=copy['containerDurationSec']=63.063
+    copy['decodedDurationSec']=63.0
+    result=inspector.compare_playback(original, playback)
+    assert result['presentationDurationDeltaMs']==63
+    assert not result['technicalChecksPassed']
+
+
+def test_container_end_cannot_hide_decoded_frames_after_the_visible_interval(comparison):
+    original, playback, source, copy = comparison
+    source['containerDurationSec']=copy['containerDurationSec']=.05
+    result=inspector.compare_playback(original, playback)
+    assert not result['presentationEndCoversDecodedFrames']
+    assert not result['technicalChecksPassed']

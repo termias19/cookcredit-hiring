@@ -256,7 +256,7 @@ attempts, retry delays, a 20-minute lease and publication fencing. This caps
 active spend; it is not a high-volume capacity certification. Review queue age
 and actual demand before raising admission. Existing SQL/API capacity is unchanged.
 
-The v3 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
+The v4 profile accepts one silent H.264/VP8/VP9 stream below three minutes and
 up to 720p pixels with no rotation. It preserves dimensions, frame timestamps,
 aspect and declared color, uses H.264 CRF 24, and requires at least 10% savings,
 matching complete decodes, <=2 ms timing/duration drift, average SSIM >=0.985
@@ -295,6 +295,15 @@ last sample by 25.3 ms on a real VFR recording. This repair keeps the <=2 ms
 container-duration gate intact, preserves PTS/DTS, and uses a new deterministic
 profile key. Rejections log the safe per-gate flags and measured deltas without
 paths, timestamps, identities or raw decoder errors.
+
+FFmpeg's null-output progress clock can also exceed the input MP4's declared
+endpoint because of a nominal codec-frame duration. Keep that raw difference
+as `decodedDurationDeltaMs`, but gate the visible presentation interval (capped
+at the input container end) with `presentationDurationDeltaMs <= 2`. Full
+decoding, identical frame counts, every frame PTS within 2 ms, endpoint coverage
+of all decoded frames and the independent container-duration gate remain
+mandatory. Missing-duration containers retain the uncapped decoder check.
+Do not increase a tolerance to bypass a failed gate.
 
 Rollback: disable compressed playback to restore original playback immediately;
 remove the job dispatch flag to stop new launches. Keep additive columns,
