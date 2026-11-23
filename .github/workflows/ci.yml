@@ -52,6 +52,23 @@ jobs:
         working-directory: frontend
       - run: node --test tests/*.test.mjs
         working-directory: frontend
+      - name: Build Hiring frontend and pinned assessment
+        # Build-only identifiers cannot sign in. No production secrets or deploy
+        # credentials enter CI; this bundle must never be promoted to Hosting.
+        env:
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_PREVIEW: '0'
+          VITE_API_URL: https://cookcredit-hiring-915097816203.us-central1.run.app
+          VITE_AUTH_EMAIL_CONTINUE_URL: https://hiring.cookcredit.com/login
+          VITE_ASSESSMENT_SAME_ORIGIN: '1'
+          VITE_FIREBASE_PROJECT_ID: foodnlit-1123e
+          VITE_FIREBASE_API_KEY: ci-build-only-not-a-credential
+          VITE_FIREBASE_APP_ID: ci-build-only-not-a-credential
+          VITE_FIREBASE_AUTH_DOMAIN: cookcredit.com
+          VITE_HIRING_AUTH_DOMAIN: cookcredit.com
+          VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ci-build-only-not-a-credential
+        run: npm run build
+        working-directory: frontend
       - name: Build isolated Home frontend
         run: npm run build:home
         working-directory: frontend
