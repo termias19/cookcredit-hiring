@@ -7,8 +7,9 @@ from services.operations import emit_event
 
 observability_bp = Blueprint('observability', __name__)
 CODES = {'render_error', 'unhandled_error', 'unhandled_rejection', 'api_network_error',
-         'api_timeout', 'api_response_invalid', 'google_signin_error'}
-SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other'}
+         'api_timeout', 'api_response_invalid', 'google_signin_error', 'app_check_timeout',
+         'video_network_error', 'video_decode_error', 'video_format_error', 'video_stalled'}
+SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other', 'home_customer', 'home_helper', 'home_operator'}
 
 
 @observability_bp.post('/client-error')
@@ -16,7 +17,8 @@ SCREENS = {'landing', 'auth', 'manager', 'applicant', 'assessment', 'other'}
 def client_error():
     # No token is needed: login and initial render errors must also be visible.
     # The report is untrusted, uses shared IP rate limits and cannot carry free text.
-    origins = {v.strip().rstrip('/') for v in os.getenv('FRONTEND_URL', '').split(',') if v.strip()}
+    origin_setting = 'HOME_FRONTEND_ORIGINS' if os.getenv('COOKCREDIT_PRODUCT') == 'home-services' else 'FRONTEND_URL'
+    origins = {v.strip().rstrip('/') for v in os.getenv(origin_setting, '').split(',') if v.strip()}
     if request.headers.get('Origin', '') not in origins:
         return jsonify(error='Forbidden'), 403
     if request.content_length is None or request.content_length > 2048:
@@ -32,7 +34,7 @@ def client_error():
     if (not isinstance(reference, str) or not re.fullmatch(r'[a-f0-9]{32}', reference)
             or not isinstance(release, str) or not re.fullmatch(r'[a-f0-9]{40}|unrecorded', release)):
         return jsonify(error='Invalid report'), 400
-    emit_event('client_error', severity='ERROR', code=data['code'], screen=data['screen'],
+    emit_event('client_error', severity='WARNING' if data['code'] in ('video_network_error', 'video_stalled') else 'ERROR', code=data['code'], screen=data['screen'],
                clientRelease=release, clientReference=reference,
                requestId=getattr(g, 'request_id', None), source='untrusted_browser')
     return '', 204

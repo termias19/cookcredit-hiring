@@ -17,7 +17,7 @@ import { credentialDetails } from '../utils/accreditation'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import { getCandidateReport, getCandidateVideo } from '../utils/Api'
-import { reportPlayback } from '../utils/reportPlayback'
+import { reportPlayback, recordingLabel, playbackFailure } from '../utils/reportPlayback'
 import { fadeUp, scaleIn, staggerContainer, buttonPress } from '../styles/motion'
 
 const SERIF = "var(--cc-display)"
@@ -50,7 +50,7 @@ function CandidateReport({ id, roleId }) {
     ...rosterCandidate, ...report.candidate,
     verifiedScore: report.assessment?.score,
     assessed: report.assessment?.recordedAt,
-    hasVideo: true,
+    hasVideo: !['expired', 'unavailable'].includes(report.assessment?.recording?.state),
   } : rosterCandidate
   const shortlisted = biz?.isShortlisted?.(id) || false
 
@@ -69,14 +69,14 @@ function CandidateReport({ id, roleId }) {
     return () => { live = false }
   }, [user, id, roleId])
 
-  async function playVideo() {
-    setVideo({ open: true, url: null, loading: true })
+  async function playVideo({ original = false } = {}) {
+    setVideo({ open: true, url: null, loading: true, original })
     try {
       const token = await user?.getIdToken?.()
       const url = await reportPlayback({ token, cookId: id, roleId,
-        attemptId: report?.assessment?.attemptId, request: getCandidateVideo })
-      setVideo({ open: true, url, loading: false })
-    } catch { setVideo({ open: true, url: null, loading: false }) }
+        attemptId: report?.assessment?.attemptId, request: getCandidateVideo, original })
+      setVideo({ open: true, url, loading: false, original })
+    } catch (error) { setVideo({ open: true, url: null, loading: false, ...playbackFailure(error) }) }
   }
 
   const header = (
@@ -154,22 +154,24 @@ function CandidateReport({ id, roleId }) {
         <p style={{ fontSize: 11, color: '#8a7f73', margin: '10px 0 0' }}>Next step: {report.assessment.outcome.workflowGate?.status?.replaceAll('_', ' ')}.</p>
       </motion.div>}
       {/* skill assessment video */}
-      {c.hasVideo && (
+      {(report || c.hasVideo) && (
         <motion.div variants={fadeUp} style={{ padding: '0 0 0' }}>
           <p style={overline}>Skill assessment video</p>
-          {!video.open ? (
+          {!c.hasVideo ? <p role="status">{recordingLabel(report?.assessment?.recording)}. The application and assessment history remain available.</p> : !video.open ? (
             <button onClick={playVideo} style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', border: 'none', cursor: 'pointer', padding: 0,
               background: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.45)), #000 url(${c.photo}) center/cover` }}>
               <span style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <PlayCircle size={50} color="#fff" strokeWidth={1.25} />
-                <span style={{ color: '#fff', fontSize: 12, letterSpacing: 0.5 }}>Watch {c.name.split(' ')[0]}’s shared assessment</span>
+                <span style={{ color: '#fff', fontSize: 12, letterSpacing: 0.5 }}>Open {c.name.split(' ')[0]}’s shared recording</span>
               </span>
             </button>
           ) : video.url ? (
-            <CandidateVideoPlayer key={video.url} url={video.url} cookId={id} roleId={roleId} attemptId={report?.assessment?.attemptId} onRetry={playVideo} />
+            <CandidateVideoPlayer key={video.url} url={video.url} cookId={id} roleId={roleId} attemptId={report?.assessment?.attemptId}
+              onRetry={() => playVideo({ original: video.original })} onOriginal={video.original ? undefined : () => playVideo({ original: true })} />
           ) : (
             <div style={{ border: '1px solid var(--cc-border)', padding: '14px 16px', fontSize: 13, color: '#777', lineHeight: 1.5 }}>
-              {video.loading ? 'Loading…' : 'The recording could not be loaded. Close and reopen the report to retry.'}
+              <p role="status">{video.loading ? 'Loading…' : video.message || 'The recording could not be loaded.'}</p>
+              {!video.loading && !video.terminal && <button type="button" onClick={playVideo}>Retry recording</button>}
             </div>
           )}
           <p style={{ fontSize: 11, color: '#74756f', margin: '6px 0 0' }}>The submitted clip from this candidate’s assessment — held under the same retention as biometric data.</p>

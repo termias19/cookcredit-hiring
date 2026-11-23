@@ -15,6 +15,8 @@ from services import database
 from services.database import db_session
 from routes import business
 from middleware import auth
+from services import assessment_media as media
+from google.api_core.exceptions import NotFound, Forbidden
 
 pytestmark = pytest.mark.skipif(not os.environ.get('HIRING_TEST_DATABASE_URL'), reason='explicit local test database required')
 
@@ -67,7 +69,7 @@ def db(monkeypatch):
 @pytest.fixture
 def client(db, monkeypatch):
     monkeypatch.setattr(auth, '_verify_token', lambda token: {'uid':token, 'email':token+'@example.test', 'email_verified':True})
-    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid: 'https://example.test/' + generation)
+    monkeypatch.setattr(business, 'playback_url', lambda path, generation, uid, **kw: 'https://example.test/' + generation)
     app = Flask(__name__)
     app.config.update(TESTING=True, RATELIMIT_ENABLED=False)
     app.register_blueprint(business.business_bp, url_prefix='/business')
@@ -147,5 +149,69 @@ def test_pinned_playback_keeps_tenant_role_and_identity_boundaries(db, client, m
     for invalid in ('bad', ''):
         assert client.get('/business/candidate/cook/video?attemptId=' + invalid, headers=headers('employer')).status_code == 400
     signer.assert_not_called()
+    with db_session() as session:
+        assert session.query(AssessmentAccessLog).count() == 0
+
+
+@pytest.mark.parametrize('expired', [False, True])
+def test_missing_or_expired_recording_keeps_application_evidence_and_never_signs(db, client, monkeypatch, expired):
+    add_share(db, db.attempt)
+    reload = Mock(side_effect=None if expired else NotFound('private object identifier'))
+    blob = SimpleNamespace(generation=123, size=4, content_type='video/webm', reload=reload,
+                           time_created=datetime.now(timezone.utc)-timedelta(days=31))
+    signer = Mock()
+    monkeypatch.setattr(business, 'playback_url', media.playback_url)
+    monkeypatch.setattr(media, 'get_storage_bucket', lambda: SimpleNamespace(blob=lambda *a, **kw: blob))
+    monkeypatch.setattr(media, 'signed_url', signer)
+    response = client.get('/business/candidate/cook/video', headers=headers('employer'))
+    assert response.status_code == 410
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert response.json['code'] == ('recording_expired' if expired else 'recording_missing')
+    assert 'application and assessment history remain available' in response.json['error']
+    assert 'videoUrl' not in response.json
+    signer.assert_not_called()
+    report = client.get('/business/candidate/cook/report', headers=headers('employer'))
+    assert report.status_code == 200
+    assert report.json['assessment']['recording']['state'] == ('expired' if expired else 'unavailable')
+    assert len(report.json['attemptHistory']) == 1
+    with db_session() as session:
+        assert session.query(AssessmentShare).one().revoked_at is None
+        assert session.query(AssessmentAccessLog).count() == 0
+
+
+def test_available_media_is_observed_and_access_is_logged(db, client, monkeypatch):
+    add_share(db, db.attempt)
+    blob = SimpleNamespace(generation=123, size=4, content_type='video/webm', reload=Mock(),
+                           time_created=datetime.now(timezone.utc)-timedelta(days=1))
+    monkeypatch.setattr(business, 'playback_url', media.playback_url)
+    monkeypatch.setattr(media, 'get_storage_bucket', lambda: SimpleNamespace(blob=lambda *a, **kw: blob))
+    def sign(*args, **kwargs):
+        # A worker commits an unrelated field while this request holds an older
+        # ORM snapshot. Availability persistence must preserve that update.
+        with db_session() as session:
+            attempt = session.get(SkillAttempt, db.attempt)
+            attempt.metadata_ = {**(attempt.metadata_ or {}), 'worker_result_preserved':True}
+        return 'https://example.test/private'
+    monkeypatch.setattr(media, 'signed_url', sign)
+    response = client.get('/business/candidate/cook/video', headers=headers('employer'))
+    assert response.status_code == 200 and response.json['recording']['state'] == 'ready'
+    assert 0 < response.json['expiresInSeconds'] <= 300
+    with db_session() as session:
+        assert session.query(AssessmentAccessLog).count() == 1
+        assert session.get(SkillAttempt, db.attempt).metadata_['worker_result_preserved'] is True
+
+
+def test_storage_permission_failure_is_retryable_logged_and_private(db, client, monkeypatch, capsys):
+    add_share(db, db.attempt)
+    blob = SimpleNamespace(reload=Mock(side_effect=Forbidden('secret path or credential')))
+    monkeypatch.setattr(business, 'playback_url', media.playback_url)
+    monkeypatch.setattr(media, 'get_storage_bucket', lambda: SimpleNamespace(blob=lambda *a, **kw: blob))
+    response = client.get('/business/candidate/cook/video', headers=headers('employer'))
+    assert response.status_code == 503 and response.headers['Retry-After'] == '5'
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert response.json['code'] == 'recording_temporarily_unavailable'
+    logged = capsys.readouterr().out
+    assert 'storage_permission_denied' in logged and '"severity": "ERROR"' in logged
+    assert 'secret' not in logged and 'secret' not in response.text
     with db_session() as session:
         assert session.query(AssessmentAccessLog).count() == 0

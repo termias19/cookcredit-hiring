@@ -26,6 +26,7 @@ backend/_tr4_out.txt
 frontend/node_modules/
 frontend/dist/
 frontend/dist-staging/
+frontend/dist-home/
 frontend/preview-dist/
 frontend/.preview-bin/
 frontend/.vite-preview-cache/

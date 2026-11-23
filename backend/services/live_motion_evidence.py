@@ -116,7 +116,7 @@ def motion_report(attempt, criteria=None):
             'scoreSource': 'Published live assessment; not independently verified',
             'clientScoreUsedForHiring': False,
             'comparison': 'Rhythm measures timing steadiness; consistency measures stroke-depth steadiness; form measures vertical motion. Available axes use weights 45%, 30% and 25%.',
-            'resultReason': 'The uploaded recording is available for review. These estimates do not certify knife skill, cut quality or food safety.',
+            'resultReason': 'These estimates do not certify knife skill, cut quality or food safety. Recording availability is shown separately.',
         },
         'provenance': {'recordingGenerationPinned': bool((attempt.metadata_ or {}).get('recording_generation')),
                        'profileId': PROFILE_ID, 'scoringSchema': 'published-wrist-motion-v1',

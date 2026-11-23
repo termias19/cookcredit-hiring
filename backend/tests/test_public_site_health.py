@@ -161,3 +161,39 @@ def test_invalid_internal_reference_cannot_leak_into_operational_log(capsys):
         assert check_public_site('production', get=getter(pages()))
     output = capsys.readouterr().out
     assert 'requestId' not in json.loads(output) and 'PRIVATE_TOKEN' not in output
+
+
+def test_recovered_fetch_is_logged_without_triggering_an_error_alert(capsys):
+    normal = getter(pages())
+    calls = []
+    def get(url, **options):
+        calls.append(url)
+        if len(calls) == 1:
+            raise requests.exceptions.ReadTimeout('PRIVATE_TOKEN')
+        return normal(url, **options)
+    assert check_public_site('production', get=get, retry_fetch=True)
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(calls) == 5 and calls[0] == calls[-1]
+    assert [e['event'] for e in events] == ['public_site_recovered', 'public_site_health']
+    assert all(e['severity'] == 'INFO' for e in events)
+    assert events[0]['probes'] == ['home'] and 'PRIVATE_TOKEN' not in str(events)
+
+
+@pytest.mark.parametrize('failure', ['transport', 'http', 'indexing', 'redirect'])
+def test_persistent_and_policy_failures_keep_separate_website_alerts(failure, capsys):
+    responses = pages()
+    calls = []
+    if failure == 'http': responses['/'].status_code = 503
+    if failure == 'redirect': responses['/'].status_code = 302
+    if failure == 'indexing': responses['/'].headers['X-Robots-Tag'] = 'noindex'
+    normal = getter(responses)
+    def get(url, **options):
+        calls.append(url)
+        if failure == 'transport' and url.endswith('/'):
+            raise requests.exceptions.ReadTimeout('PRIVATE_TOKEN')
+        return normal(url, **options)
+    assert not check_public_site('production', get=get, retry_fetch=True)
+    event = json.loads(capsys.readouterr().out)
+    assert event['severity'] == 'ERROR'
+    assert len(calls) == (5 if failure in ('transport','http') else 4)
+    assert 'PRIVATE_TOKEN' not in str(event)

@@ -45,6 +45,27 @@ def test_text_true_is_not_release_authorization():
     assert values['HIRING_ACCESS_APPROVALS_ENABLED'] == '0'
     assert not refs and not jobs
 
+
+def test_google_mail_deployment_preserves_verified_public_sender(monkeypatch):
+    image='us-central1-docker.pkg.dev/cookcredit-scoring/cookcredit-hiring/api@sha256:'+'a'*64
+    record=dict(migrationSucceeded=True,migrationImage=image,imageDigest=image,
+        firebaseConfig={'projectId':'foodnlit-1123e'},firebaseApp='test-app',
+        database='isolated-test',sqlConnection='test-connection',googleSmtpAuthenticated=True)
+    requests=[]
+    monkeypatch.setattr(module,'state',lambda:dict(record))
+    monkeypatch.setattr(module,'client',lambda:object())
+    monkeypatch.setattr(module,'save',lambda value:None)
+    def api(session,method,url,**options):
+        if method=='GET':return None
+        requests.append(options['json']);return {'name':'test-operation'}
+    monkeypatch.setattr(module,'api',api)
+    module.deploy_api()
+    environment={e['name']:e for e in requests[0]['template']['containers'][0]['env']}
+    assert environment['GOOGLE_SMTP_VERIFIED_FROM']['value']=='no-replys@cookcredit.com'
+    assert environment['GOOGLE_SMTP_USER']['value']==module.ACCOUNT
+    assert 'valueSource' in environment['GOOGLE_SMTP_APP_PASSWORD']
+    assert environment['AUTH_EMAIL_PROVIDER']['value']=='google_smtp'
+
 @pytest.mark.parametrize('change', [None, 'disabled', 'wrong_path', 'wrong_identity', 'wrong_audience'])
 def test_existing_email_schedule_validation(change):
     origin = 'https://hiring.example.test'

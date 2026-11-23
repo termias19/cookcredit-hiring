@@ -15,6 +15,10 @@ access, audit coverage and known gaps. [AUTH_FLOW.md](AUTH_FLOW.md) describes ac
 creation and verification. These documents distinguish implemented controls from
 customer journeys that still require live acceptance.
 
+[HOME_SERVICES.md](HOME_SERVICES.md) describes the separate, disabled-by-default
+Home cooking/cleaning backend and its staged acceptance gates. It does not add
+customer booking routes to the live Hiring application.
+
 ## Local verification
 
 Use Python3.12, Node22 and a disposable PostgreSQL/PostGIS16 database. Install `backend/requirements.txt` plus pytest8.3.5, and run `npm ci` in frontend. Run `node --test tests/*.test.mjs` there. For backend integration tests set HIRING_TEST_DATABASE_URL to a localhost database owned by the dedicated `cookcredit_test` user, then run `python -m pytest tests -q` from backend. Never point test variables at production.

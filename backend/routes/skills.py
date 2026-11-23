@@ -240,6 +240,8 @@ def internal_dispatch_pending():
     if not internal_request_authorized(request):
         return jsonify(error='forbidden'), 403
     stats = drain_scoring_dispatch()
+    from services.recording_compression import drain_compression
+    stats['compression'] = drain_compression()
     # Return non-success for queue failures so monitoring/scheduler sees outages.
     return jsonify(stats), 503 if stats['failed'] else 200
 

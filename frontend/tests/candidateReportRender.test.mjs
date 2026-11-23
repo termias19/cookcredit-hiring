@@ -36,7 +36,7 @@ test('candidate review renders the authorized report without a cached role', asy
     const rendered = screen.type(screen.props)
     const text = JSON.stringify(rendered)
     assert.ok(text.includes('Private chef'), 'match must use the role returned with this report')
-    assert.ok(text.includes('Watch '), 'the recording action remains available')
+    assert.ok(text.includes('Open '), 'the recording action remains available')
     assert.ok(!text.includes('Old cached title'), 'a stale workspace role must not override the report')
   }
 })

@@ -55,15 +55,17 @@ def _failure_category(error):
     return 'unexpected_error'
 
 
-def check_public_site(environment, *, get=None):
-    if environment not in ORIGINS:
-        return True  # No local-development calls to production.
+PATHS = {'home': '/', 'login': '/login', 'robots': '/robots.txt', 'sitemap': '/sitemap.xml'}
+TRANSIENT = {'dns_error', 'read_timeout', 'connect_timeout', 'timeout',
+             'connection_reset', 'incomplete_response', 'connection_error'}
+
+
+def _inspect_public_site(environment, get, probes):
     origin = ORIGINS[environment]
     failures = []
     details = []
-    paths = {'home': '/', 'login': '/login', 'robots': '/robots.txt', 'sitemap': '/sitemap.xml'}
-    get = get or requests.get
-    for name, path in paths.items():
+    for name in probes:
+        path = PATHS[name]
         started = time.monotonic()
         phase, status = 'fetch', None
 
@@ -112,6 +114,27 @@ def check_public_site(environment, *, get=None):
         except Exception as error:
             # Never log response bodies, provider errors, URLs or query strings.
             failed(name + '_unavailable', _failure_category(error))
+    return failures, details
+
+
+def check_public_site(environment, *, get=None, retry_fetch=False):
+    if environment not in ORIGINS:
+        return True  # No local-development calls to production.
+    get = get or requests.get
+    failures, details = _inspect_public_site(environment, get, PATHS)
+    # Retry only failed transport/temporary HTTP probes, once. Never conceal an
+    # indexing, canonical, redirect, content or authorization regression. This
+    # runs after the expiry transaction, with no database connection held.
+    retry = {d['probe'] for d in details if d['category'] in TRANSIENT or (
+        d['category'] == 'http_status' and (d.get('statusCode') == 429 or d.get('statusCode', 0) >= 500))}
+    if retry_fetch and retry:
+        repeated, repeated_details = _inspect_public_site(environment, get, sorted(retry))
+        recovered = sorted(retry - {d['probe'] for d in repeated_details})
+        if recovered:
+            emit_event('public_site_recovered', environment=environment, probes=recovered,
+                       attempts=2, failureDetails=[d for d in details if d['probe'] in recovered])
+        failures = [f for f, d in zip(failures, details) if d['probe'] not in retry] + repeated
+        details = [d for d in details if d['probe'] not in retry] + repeated_details
     emit_event('public_site_health', severity='ERROR' if failures else 'INFO',
-               environment=environment, failures=failures, checked=len(paths), failureDetails=details)
+               environment=environment, failures=failures, checked=len(PATHS), failureDetails=details)
     return not failures

@@ -102,12 +102,14 @@ def create_or_get_attempt(session, *, user_id: str, session_id: str, profile_id:
         if video_url and not existing.video_url:
             existing.video_url = video_url
             existing.metadata_ = {**(existing.metadata_ or {}),
-                                  **{k: metadata[k] for k in ('recording_path', 'recording_generation') if k in metadata}}
+                                  **{k: metadata[k] for k in ('recording_path', 'recording_generation', 'recording_availability') if k in metadata}}
             existing.updated_at = _utcnow()
         if (existing.verification_state not in ATTEMPT_TERMINAL and existing.video_url
                 and (existing.metadata_ or {}).get('recording_generation')
                 and existing.dispatch_due_at is None):
             existing.dispatch_due_at = _utcnow()
+        from services.recording_compression import ensure_compression_intent
+        ensure_compression_intent(existing)
         return existing, False
 
     local_score = local_result.get("skill_score") if local_result.get("ok") else None
@@ -119,6 +121,8 @@ def create_or_get_attempt(session, *, user_id: str, session_id: str, profile_id:
         trajectory=trajectory, metadata_=metadata or {}, video_url=video_url,
         dispatch_due_at=_utcnow() if video_url and metadata.get('recording_generation') else None,
     )
+    from services.recording_compression import ensure_compression_intent
+    ensure_compression_intent(attempt)
     try:
         with session.begin_nested():
             session.add(attempt)

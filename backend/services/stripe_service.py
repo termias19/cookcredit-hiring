@@ -89,6 +89,11 @@ def construct_webhook_event(payload: bytes, sig_header: str):
 
 # ─── Business subscriptions ──────────────────────────────────────────────────
 
+def bounded_stripe_client(key):
+    """Shared SDK transport; individual products enforce their own mode/policy."""
+    return stripe.StripeClient(key, http_client=stripe.RequestsClient(timeout=5), max_network_retries=0)
+
+
 def _billing_client():
     key = os.environ.get('STRIPE_SECRET_KEY', '').strip()
     if not key:
@@ -98,7 +103,7 @@ def _billing_client():
             raise RuntimeError('Staging requires a Stripe test key.')
     elif os.environ.get('K_SERVICE') and not key.startswith(('sk_live_', 'rk_live_')):
         raise RuntimeError('Production requires a Stripe live key.')
-    return stripe.StripeClient(key, http_client=stripe.RequestsClient(timeout=5), max_network_retries=0)
+    return bounded_stripe_client(key)
 
 
 def retrieve_billing_subscription(subscription_id: str):

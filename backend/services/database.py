@@ -50,10 +50,10 @@ engine = None
 SessionLocal = None
 
 
-def init_db():
+def init_db(*, url=None):
     """Initialize the database engine and session factory. Call once at app startup."""
     global engine, SessionLocal
-    url = _build_url()
+    url = url or _build_url()
     pool_size = max(1, min(20, int(os.environ.get('DB_POOL_SIZE', '5'))))
     max_overflow = max(0, min(40, int(os.environ.get('DB_MAX_OVERFLOW', '10'))))
     engine = create_engine(
@@ -83,12 +83,14 @@ def db_session():
     webhook_dispatch_due = None
     billing_dispatch_due = None
     email_dispatch_due = None
+    home_dispatch_due = None
     try:
         yield session
         session.commit()
         webhook_dispatch_due = session.info.pop('webhook_dispatch_due', None)
         billing_dispatch_due = session.info.pop('billing_dispatch_due', None)
         email_dispatch_due = session.info.pop('email_dispatch_due', None)
+        home_dispatch_due = session.info.pop('home_dispatch_due', None)
     except Exception:
         session.rollback()
         raise
@@ -96,6 +98,13 @@ def db_session():
         session.close()
     # Never hold a connection while contacting the task service. A failed wakeup
     # cannot roll back committed work; the scheduler recovers pending deliveries.
+    if home_dispatch_due is not None:
+        try:
+            from services.home_dispatch import enqueue
+            enqueue(home_dispatch_due)
+        except Exception:
+            from services.operations import emit_event
+            emit_event('home_enqueue_failed', severity='ERROR')
     if webhook_dispatch_due is not None:
         try:
             from services.webhook_dispatch import enqueue_dispatch

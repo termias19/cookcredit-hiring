@@ -34,6 +34,8 @@ def test_live_axes_and_configured_criteria_are_explicit_but_provisional():
     assert report['deviceEstimates']['zeroMayMeanUnavailable'] is True
     assert 'productScore' not in report['measurements']
     assert report['provenance']['recordingGenerationPinned'] is True
+    assert 'available for review' not in report['calculation']['resultReason']
+    assert 'Recording availability is shown separately' in report['calculation']['resultReason']
 
 
 @pytest.mark.parametrize('value', [True, -1, 101, float('nan'), float('inf'), '75'])

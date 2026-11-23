@@ -1,0 +1,378 @@
+import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
+import { api } from "../api";
+import HomeErrorBoundary from "../HomeErrorBoundary";
+import { preferences, cleaningTasks as tasks, visitSchedule, serviceNames } from "../visitPresentation";
+import { formatServiceAddress, readServiceAddress, repeatLabels } from "../serviceAddress";
+
+const SuggestedTimes = lazy(() => import("./SuggestedTimes"));
+
+function localDay(zone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: zone,
+    year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map(p => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+export default function RequestVisit({ profile, initialService, onSubmitted }) {
+  const heading = useRef(null);
+  const mounted = useRef(true);
+  const [service, setService] = useState(
+    ["cooking", "cleaning", "both"].includes(initialService) ? initialService : "cooking",
+  ),
+    [forOther, setForOther] = useState(false),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(null),
+    [useSaved, setUseSaved] = useState(false),
+    [step, setStep] = useState(0);
+  const [savedError, setSavedError] = useState(false), [received, setReceived] = useState(null);
+  const [cookingMinutes, setCookingMinutes] = useState(120), [cleaningMinutes, setCleaningMinutes] = useState(60);
+  const [preferredDate, setPreferredDate] = useState(""), [preferredTime, setPreferredTime] = useState("10:00");
+  const serviceStates = Array.isArray(profile.serviceStates) && profile.serviceStates.length ? profile.serviceStates : ["GA"];
+  const [serviceState, setServiceState] = useState(serviceStates[0]);
+  const [checkedTimeZone, setCheckedTimeZone] = useState(null);
+  const timeZone = checkedTimeZone || profile.serviceTimeZone || "America/New_York";
+  const durationMinutes = (service === "cleaning" ? 0 : cookingMinutes) + (service === "cooking" ? 0 : cleaningMinutes);
+  const loadSaved = () => {
+    setSavedError(false);
+    return api("/household")
+      .then((value) => { if (mounted.current) setSaved(value.household); })
+      .catch(() => { if (mounted.current) setSavedError(true); });
+  };
+  useEffect(() => {
+    mounted.current = true;
+    loadSaved();
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    heading.current?.focus();
+    window.scrollTo(0, 0);
+  }, [step]);
+  const submit = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (step < 2) {
+      setStep(step + 1);
+      window.scrollTo(0, 0);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const f = new FormData(form);
+    const addressDetails = readServiceAddress(f);
+    const cooking = service === "cleaning" ? 0 : Number(f.get("cooking")),
+      cleaning = service === "cooking" ? 0 : Number(f.get("cleaning"));
+    const instructions = {
+      preferences: f.getAll("preferences"),
+      cleaningTasks: service === "cooking" ? [] : f.getAll("cleaningTasks"),
+      visitNotes: f.get("notes"),
+    };
+    const body = {
+      service,
+      date: f.get("date"),
+      time: f.get("time"),
+      timeZone,
+      durationMinutes: cooking + cleaning,
+      serviceMinutes: { cooking, cleaning },
+      address: formatServiceAddress(addressDetails),
+      addressDetails,
+      repeatPreference: f.get("repeatPreference"),
+      instructions,
+      consent: {
+        version: profile.consentVersion,
+        shareWithAssignedHelper: f.get("consent") === "on",
+      },
+    };
+    if (forOther)
+      body.arrangingFor = {
+        name: f.get("recipient"),
+        permissionConfirmed: f.get("permission") === "on",
+      };
+    try {
+      const value = await api("/visits", { method: "POST", body });
+      if (mounted.current) onSubmitted?.();
+      // The acknowledged visit remains saved, but leaving this screen must not
+      // start another account's household update or pull the person back here.
+      if (!mounted.current) return;
+      // Saving household details is a separate, explicit choice. A failure must
+      // never make an already-created visit appear to have failed.
+      if (f.get("remember") === "on") {
+        try { await api("/household", {
+          method: "PUT",
+          body: { address: body.address, addressDetails, instructions, remember: true },
+        }); } catch {
+          if (mounted.current) setReceived(value.id);
+          return;
+        }
+      }
+      if (mounted.current) location.hash = "visit/" + value.id;
+    } catch (e) {
+      if (mounted.current) setError(e.code === "operating_rules_changed"
+        ? "CookCredit’s operating rules changed. Check suggested times again, then review your date and time before resending."
+        : e.message);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+  if (received) return <section className="narrow customer-request">
+    <p className="eyebrow">Request received</p><h1>Your request is saved.</h1>
+    <p role="status">We received your visit request. We couldn’t also save the address and preferences for future visits.</p>
+    <p>Your request does not need to be sent again. You can check its details now.</p>
+    <a className="button" href={"#visit/" + received}>View my request</a>
+  </section>;
+  return (
+    <section className="narrow customer-request">
+      <a href="#visits">← My visits</a>
+      <p className="eyebrow">Request a visit · Step {step + 1} of 3</p>
+      <ol className="customer-request-progress" aria-label="Request progress">
+        {["Help", "Instructions", "Time and address"].map((title,index) => <li key={title} aria-current={step === index ? "step" : undefined}><span>{index+1}</span>{title}</li>)}
+      </ol>
+      <h1 ref={heading} tabIndex="-1">
+        {["Choose your help", "Visit instructions", "Time and address"][step]}
+      </h1>
+      <p>
+        {step === 0 ? "Choose cooking, cleaning or both, and how much time you would like. There is no payment to send a request."
+          : step === 1 ? "Add the practical details your helper will need. You can leave optional instructions blank."
+            : "Tell us your preferred time and address. We’ll confirm availability and send a full quote before you pay."}
+      </p>
+      <form onSubmit={submit}>
+        <fieldset hidden={step !== 0} disabled={busy}>
+          <legend>Choose your help</legend>
+          <div className="service-choices">
+            {[
+              ["cooking", "Cooking"],
+              ["cleaning", "Cleaning"],
+              ["both", "Cooking and cleaning"],
+            ].map(([value, title]) => (
+              <label key={value} className="check">
+                <input
+                  type="radio"
+                  name="service"
+                  checked={service === value}
+                  onChange={() => setService(value)}
+                />
+                {title}
+              </label>
+            ))}
+          </div>
+          {service !== "cleaning" && (
+            <label>
+              Cooking time
+              <select name="cooking" value={cookingMinutes} onChange={event => setCookingMinutes(Number(event.target.value))}>
+                {[60, 90, 120, 150, 180, 210, 240].map((v) => (
+                  <option key={v} value={v}>
+                    {v / 60} {v === 60 ? "hour" : "hours"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {service !== "cooking" && (
+            <label>
+              Cleaning time
+              <select name="cleaning" value={cleaningMinutes} onChange={event => setCleaningMinutes(Number(event.target.value))}>
+                {[60, 90, 120, 150, 180, 210, 240].map((v) => (
+                  <option key={v} value={v}>
+                    {v / 60} {v === 60 ? "hour" : "hours"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="quiet">
+            Need help choosing the right time? Select a phone discussion on the
+            next step.
+          </p>
+        </fieldset>
+        <fieldset hidden={step !== 1} disabled={busy}>
+          <legend>Preferences and instructions</legend>
+          {savedError && <p className="notice">Your saved details could not load. You can enter new details for this visit, or <button type="button" className="text" onClick={loadSaved}>Try saved details again</button>.</p>}
+          {saved?.address && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={useSaved}
+                onChange={(e) => setUseSaved(e.target.checked)}
+              />
+              Use my saved address and preferences
+            </label>
+          )}
+          <div key={useSaved ? "saved" : "fresh"}>
+            <div className="customer-instruction-choices">
+            {preferences.filter(([value]) => value === "phone_help" ||
+              (service === "cleaning" ? ["fragrance_free", "customer_supplies"].includes(value)
+                : service === "cooking" ? !["fragrance_free", "customer_supplies"].includes(value) : true)).map(([value, title]) => (
+              <label className="check" key={value}>
+                <input
+                  type="checkbox"
+                  name="preferences"
+                  value={value}
+                  defaultChecked={
+                    useSaved && saved?.instructions.preferences.includes(value)
+                  }
+                />
+                {title}
+              </label>
+            ))}
+            </div>
+            {service !== "cooking" && (
+              <>
+                <h2>What needs cleaning?</h2>
+                {tasks.map(([value, title]) => (
+                  <label className="check" key={value}>
+                    <input
+                      type="checkbox"
+                      name="cleaningTasks"
+                      value={value}
+                      defaultChecked={
+                        useSaved &&
+                        saved?.instructions.cleaningTasks.includes(value)
+                      }
+                    />
+                    {title}
+                  </label>
+                ))}
+              </>
+            )}
+            <label>
+              Anything we should know?
+              <textarea
+                name="notes"
+                maxLength="1000"
+                rows="5"
+                defaultValue={useSaved ? saved?.instructions.visitNotes : ""}
+                placeholder="For example: avoid peanuts; prepare softer meals; ring the doorbell and allow me time to answer."
+              />
+            </label>
+          </div>
+          <p className="quiet">
+            Share only what your helper needs for this visit. We offer household
+            help, not medical care or dietary advice. An allergen-free kitchen
+            cannot be guaranteed.
+          </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={forOther}
+              onChange={(e) => setForOther(e.target.checked)}
+            />
+            I’m arranging this for someone else
+          </label>
+          {forOther && (
+            <>
+              <label>
+                Their name
+                <input name="recipient" maxLength="120" required={step === 1} />
+              </label>
+              <label className="check">
+                <input
+                  name="permission"
+                  type="checkbox"
+                  required={step === 1}
+                />
+                I have their permission to arrange this visit and share these
+                details.
+              </label>
+            </>
+          )}
+        </fieldset>
+        <fieldset hidden={step !== 2} disabled={busy}>
+          <legend>Your visit details</legend>
+          <section className="service-address" aria-labelledby="service-address-title" key={useSaved ? "saved-address" : "new-address"}>
+            <h2 id="service-address-title">Service address</h2>
+            <p className="quiet" id="address-help">Use your browser’s saved address, or enter it below. We’ll confirm coverage before arranging your visit.</p>
+            {useSaved && saved?.address && !saved.addressDetails && <p className="notice">Your saved address: {saved.address}. Please check each field below.</p>}
+            <label>Street address<input name="street" autoComplete="section-visit address-line1" maxLength="160"
+              defaultValue={useSaved ? (saved?.addressDetails?.street || saved?.address) : ""} required={step === 2} aria-describedby="address-help" /></label>
+            <label>Apartment, suite or unit <small>Optional</small><input name="unit" autoComplete="section-visit address-line2" maxLength="60"
+              defaultValue={useSaved ? saved?.addressDetails?.unit : ""} /></label>
+            <label>City<input name="city" autoComplete="section-visit address-level2" maxLength="100"
+              defaultValue={useSaved ? saved?.addressDetails?.city : ""} required={step === 2} /></label>
+            <div className="two address-region">
+              <label>State<select name="state" autoComplete="section-visit address-level1" defaultValue={useSaved ? (saved?.addressDetails?.state || serviceStates[0]) : serviceStates[0]}
+                onChange={event => setServiceState(event.target.value)}>
+                {serviceStates.map(value => <option value={value} key={value}>{value === "GA" ? "Georgia" : value}</option>)}
+              </select></label>
+              <label>ZIP code<input name="postalCode" autoComplete="section-visit postal-code" inputMode="numeric" maxLength="10" pattern="[0-9]{5}(-[0-9]{4})?"
+                defaultValue={useSaved ? saved?.addressDetails?.postalCode : ""} required={step === 2} /></label>
+            </div>
+          </section>
+          <h2>Your preferred time</h2>
+          <div className="two">
+            <label>
+              Preferred date
+              <input
+                type="date"
+                name="date"
+                value={preferredDate}
+                onChange={event => setPreferredDate(event.target.value)}
+                min={localDay(timeZone)}
+                required={step === 2}
+              />
+            </label>
+            <label>
+              Preferred start time
+              <input
+                type="time"
+                name="time"
+                value={preferredTime}
+                onChange={event => setPreferredTime(event.target.value)}
+                step="1800"
+                required={step === 2}
+              />
+            </label>
+          </div>
+          <p className="quiet">
+            Times are in {visitSchedule(preferredDate, preferredTime, timeZone).zone}. Your requested time is subject to
+            availability.
+          </p>
+          <label>How often would you like help?<select name="repeatPreference" defaultValue="once" aria-describedby="repeat-help">
+            {Object.entries(repeatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+          <p className="quiet" id="repeat-help">This requests your first visit. If you want regular help, we’ll contact you to agree future dates and prices. Each visit needs confirmation; nothing repeats or charges automatically.</p>
+          {step === 2 && <HomeErrorBoundary fallback={({ reference }) => <section className="section" aria-label="Suggested visit times">
+            <h2>Suggested times are unavailable.</h2>
+            <p role="status">Choose your preferred date and time above for CookCredit review. No time has been verified or reserved.</p>
+            {reference && <p className="quiet">Support reference: {reference}</p>}
+          </section>}><Suspense fallback={<p role="status">Loading time suggestions…</p>}><SuggestedTimes date={preferredDate} service={service} durationMinutes={durationMinutes} state={serviceState}
+            timeZone={timeZone} selectedTime={preferredTime} onChoose={setPreferredTime} disabled={busy}
+            onTimeZone={value => { if (value !== timeZone) {
+              setCheckedTimeZone(value); setPreferredTime("");
+              setError(`Service times now use ${value}. Choose your preferred start time again.`);
+            } }} /></Suspense></HomeErrorBoundary>}
+          <label className="check">
+            <input name="consent" type="checkbox" required={step === 2} />
+            {profile.consentText}
+          </label>
+          <label className="check">
+            <input name="remember" type="checkbox" />
+            Save my address and preferences for future visits on this account
+          </label>
+        </fieldset>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {step === 2 && <p className="customer-request-review"><strong>{serviceNames[service]} · {durationMinutes / 60} {durationMinutes === 60 ? "hour" : "hours"}</strong><br />Request only. You’ll review the full price before paying.</p>}
+        <div className="actions customer-request-actions">
+          {step > 0 && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => setStep((s) => s - 1)}
+            >
+              Back
+            </button>
+          )}
+          <button disabled={busy}>
+            {busy
+              ? "Sending request…"
+              : step === 2
+                ? "Send my request"
+                : "Continue"}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}

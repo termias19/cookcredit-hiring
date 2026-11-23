@@ -39,13 +39,14 @@ def verified_engine_assessment(owner_uid, assessment_id, *, id_token=None, app_c
         raise InvalidEngineAssessment('Assessment consent evidence is incomplete')
     path = record['storagePath']
     source_generation = None
+    observation = {}
     try:
         if importing:
             path, generation, content_type, source_generation = engine_recording_import.import_owned_recording(
-                record, owner_uid, assessment_id, id_token=id_token, app_check=app_check)
+                record, owner_uid, assessment_id, id_token=id_token, app_check=app_check, observation=observation)
         else:
             locator = f'https://firebasestorage.googleapis.com/v0/b/{STORAGE_BUCKET}/o/{quote(path, safe="")}'
-            inspected_path, generation, content_type = inspect_recording(locator, owner_uid)
+            inspected_path, generation, content_type = inspect_recording(locator, owner_uid, observation=observation)
             if inspected_path != path:
                 raise InvalidEngineAssessment('Assessment recording path did not match')
     except (InvalidRecording, engine_recording_import.EngineImportError) as exc:
@@ -67,5 +68,6 @@ def verified_engine_assessment(owner_uid, assessment_id, *, id_token=None, app_c
             'cut': record.get('cutting'), 'duration_sec': record.get('durationSec'),
             'schema': f"engine-cloud-{record.get('schemaVersion', 'unknown')}",
             'source_recording_generation': source_generation,
+            'recording_availability': observation,
         },
     }

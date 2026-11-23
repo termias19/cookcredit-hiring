@@ -65,7 +65,8 @@ def trace_response(response):
     if response.status_code >= 500:
         emit_event('request_failed', severity='ERROR', requestId=request_id,
                    endpoint=request.endpoint or 'unmatched', status=response.status_code,
-                   durationMs=round((time.monotonic()-getattr(g,'request_started',time.monotonic()))*1000))
+                   durationMs=round((time.monotonic()-getattr(g,'request_started',time.monotonic()))*1000),
+                   **getattr(g, 'dependency_diagnostic', {}))
     return response
 
 
@@ -205,8 +206,8 @@ def ratelimit_handler(e):
     return resp, 429
 
 # ── Generic error handlers ─────────────────────────────────────────────────────
-# Clients get a stable, generic JSON shape; full detail (incl. tracebacks) goes to
-# the SERVER logs only — never leak internals to a caller. Keeps responses JSON
+# Clients get stable JSON. Server diagnostics contain cause codes and stack
+# locations, without provider text, SQL, credentials or request payloads.
 # (not Flask's HTML error pages) and lets the after_request CORS headers apply.
 from werkzeug.exceptions import HTTPException  # noqa: E402
 
@@ -232,9 +233,13 @@ def handle_exception(e):
     from limits.errors import StorageError
     from services.email_capacity import EmailQueueBusy
     if isinstance(e, (OperationalError, PoolTimeout, RedisError, StorageError, EmailQueueBusy)):
-        from services.operations import emit_event
+        from services.operations import emit_event, dependency_diagnostic
+        diagnostic = dependency_diagnostic(e)
+        diagnostic['retryableBackground'] = bool(
+            request.endpoint == 'auth.dispatch_emails' and diagnostic['retryableDependency'])
+        g.dependency_diagnostic = diagnostic
         emit_event('dependency_unavailable', severity='ERROR', requestId=g.request_id,
-                   exception=type(e).__name__, endpoint=request.endpoint or 'unmatched')
+                   exception=type(e).__name__, endpoint=request.endpoint or 'unmatched', **diagnostic)
         response = jsonify(error='Temporarily busy. Please try again shortly.', requestId=g.request_id)
         response.status_code = 503
         response.headers['Retry-After'] = '60' if isinstance(e, EmailQueueBusy) else '5'
