@@ -149,6 +149,15 @@ Database connection budget is instances * gunicorn workers * (DB_POOL_SIZE + DB_
 
 Google Workspace SMTP has account/provider sending quotas independent of API autoscaling. The bounded dispatcher and queue alerts prevent silent failure but do not increase that quota. Before a mass signup campaign, provision/verify an appropriate transactional delivery allowance or provider, test delivery and bounce handling, and publish the tested signup envelope. Never promise unlimited concurrency or mail delivery based on local tests.
 
+Public account mail must use the existing verified sender alias via
+`GOOGLE_SMTP_VERIFIED_FROM=connectwithus@cookcredit.com`. Keep `GOOGLE_SMTP_USER`
+and its Secret Manager credential as the authenticated mailbox. The alias must
+already be verified in Google Workspace; setting the variable does not grant a
+Send-as permission. Configure and verify Hiring production and staging
+independently of Home. Preserve this field on subsequent releases, and confirm
+the actual inbox From header before approving outreach. A healthy queue or SMTP
+acceptance alone does not prove inbox receipt or sender presentation.
+
 ## Overload response
 
 The existing-budget release caps pending/sending account and access email at 100 across all instances. A full queue returns HTTP 503 and Retry-After: 60; the surrounding transaction rolls back. Dedupe replays retain their existing slot. Do not raise the cap to conceal a provider outage. Inspect queue_health, message age and terminal failures first. At five messages per scheduled batch, a full queue already represents approximately twenty minutes of work before retries or provider delays.

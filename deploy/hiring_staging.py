@@ -670,7 +670,8 @@ def deploy_api():
         'GOOGLE_GEOCODING_API_KEY': 'GEOCODING_API_KEY', 'LOCATION_TOKEN_SECRET': 'LOCATION_TOKEN_SECRET'}
     if record.get('googleSmtpAuthenticated'):
         values.update(AUTH_EMAIL_PROVIDER='google_smtp', AUTH_EMAILS_ENABLED='1', AUTH_WELCOME_EMAILS_ENABLED='1',
-            GOOGLE_SMTP_USER=ACCOUNT, AUTH_EMAIL_TEST_RECIPIENTS='eassefa@cookcredit.com,termias18@gmail.com')
+            GOOGLE_SMTP_USER=ACCOUNT, GOOGLE_SMTP_VERIFIED_FROM='connectwithus@cookcredit.com',
+            AUTH_EMAIL_TEST_RECIPIENTS='eassefa@cookcredit.com,termias18@gmail.com')
         secrets_map['GOOGLE_SMTP_APP_PASSWORD'] = 'GOOGLE_SMTP_APP_PASSWORD'
     access_values, access_secrets, _ = owner_access_config(record)
     values.update(access_values)
