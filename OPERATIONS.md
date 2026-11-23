@@ -150,12 +150,15 @@ Database connection budget is instances * gunicorn workers * (DB_POOL_SIZE + DB_
 Google Workspace SMTP has account/provider sending quotas independent of API autoscaling. The bounded dispatcher and queue alerts prevent silent failure but do not increase that quota. Before a mass signup campaign, provision/verify an appropriate transactional delivery allowance or provider, test delivery and bounce handling, and publish the tested signup envelope. Never promise unlimited concurrency or mail delivery based on local tests.
 
 Public account mail must use the existing verified sender alias via
-`GOOGLE_SMTP_VERIFIED_FROM=connectwithus@cookcredit.com`. Keep `GOOGLE_SMTP_USER`
+`GOOGLE_SMTP_VERIFIED_FROM=no-replys@cookcredit.com`, with Reply-To directed to
+`connectwithus@cookcredit.com`. Keep `GOOGLE_SMTP_USER`
 and its Secret Manager credential as the authenticated mailbox. The alias must
 already be verified in Google Workspace; setting the variable does not grant a
 Send-as permission. Configure and verify Hiring production and staging
 independently of Home. Preserve this field on subsequent releases, and confirm
-the actual inbox From header before approving outreach. A healthy queue or SMTP
+the actual inbox From and Reply-To headers before approving outreach. Check the
+authenticated mailbox's Gmail Accounts > Send mail as list: receiving mail at an
+address does not establish permission to send as it. A healthy queue or SMTP
 acceptance alone does not prove inbox receipt or sender presentation.
 
 ## Overload response

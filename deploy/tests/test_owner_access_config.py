@@ -61,7 +61,7 @@ def test_google_mail_deployment_preserves_verified_public_sender(monkeypatch):
     monkeypatch.setattr(module,'api',api)
     module.deploy_api()
     environment={e['name']:e for e in requests[0]['template']['containers'][0]['env']}
-    assert environment['GOOGLE_SMTP_VERIFIED_FROM']['value']=='connectwithus@cookcredit.com'
+    assert environment['GOOGLE_SMTP_VERIFIED_FROM']['value']=='no-replys@cookcredit.com'
     assert environment['GOOGLE_SMTP_USER']['value']==module.ACCOUNT
     assert 'valueSource' in environment['GOOGLE_SMTP_APP_PASSWORD']
     assert environment['AUTH_EMAIL_PROVIDER']['value']=='google_smtp'
