@@ -1,3 +1,4 @@
+import { packageHiringPreview } from './assessment-preview-package.mjs'
 // Package the pinned published assessment. Never build a second scoring fork.
 import { captureFullOverlay, originalEngineRenderer } from './engine-overlay-adapter.mjs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
@@ -81,6 +82,7 @@ export async function copyHiringAssessment({ dest = resolve('dist'), env = proce
   const { firebaseConfig } = await import(pathToFileURL(configPath).href)
   const config = hiringFirebaseConfig(firebaseConfig, env)
   await writeFile(configPath, 'export const firebaseConfig = Object.freeze(' + JSON.stringify(config, null, 2) + ');\n')
+  await packageHiringPreview(dest)
   console.log(`Packaged ${entries.length} pinned hiring assessment assets; shared sign-in, original recording bucket.`)
 }
 
