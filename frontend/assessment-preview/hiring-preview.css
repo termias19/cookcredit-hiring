@@ -1,0 +1,23 @@
+#blade-preview-option[hidden], #blade-preview-layer[hidden], #blade-preview-status[hidden], #blade-preview-result[hidden] { display: none; }
+#blade-preview-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  pointer-events: none;
+}
+/* The legacy hand-axis illustration would overlap the measured points. */
+.show-blade-preview #overlay { visibility: hidden; }
+#blade-preview-status {
+  align-self: start;
+  justify-self: start;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: rgba(13, 23, 25, .88);
+  color: #fff;
+  font: 500 12px/1.4 Arial, sans-serif;
+}
+#blade-preview-result { margin: 12px 0; color: #42534c; }

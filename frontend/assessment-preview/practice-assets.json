@@ -1,0 +1,20 @@
+{
+  "practice-live/geometry.json": "d47bccfe21b6c0078907a01bcc044d2c03f564b488971dce0f8194406da2e724",
+  "practice-live/agreement.mjs": "13e73e5ee7e665838f1fc7339675162054c1c0958fafb6c1de2340f800e5a075",
+  "practice-live/geometry-160.json": "b6d858ad16a9b2fd23cac0443258a59f6e7f4a08eb028f861324da39d6d2cda2",
+  "practice-live/edge-streak.mjs": "ad39edb2d952118356cb3b8571d613b2101634071b3152c86224e455bb61a8d7",
+  "practice-contact-v1/native.js": "d1153666273496f64b457d7b57be56ff4bfe3b401669787d97874596107a3e74",
+  "practice-contact-v1/native.wasm": "a1aacb2992e51847217218ddf4eb27326857c23617af2432720e44c5f08411ac",
+  "practice-live/edge-follow.mjs": "649aef5c0f67ebb18c42dcff8384c327092b70082ebaab8552bfe31ddab1e5fc",
+  "practice-contact-v1/NOTICE.txt": "3a02215a174be26d51258927d8957598ffbd585a8eeb4aeccc51b96b6cc402e7",
+  "practice-live/landmarks/point-proposal.mjs": "9997d64fbadafa300670d5ce6a9c0a44eac23b8966e8758df5ecd6b31967ad28",
+  "practice-live/landmarks/landmarks.mjs": "e3e32600b44991b53a934c02b72e54785dd779daa3c314feb760ea6bc8c409d5",
+  "practice-live/landmarks/proposal-native.mjs": "bf08284ac167974e0fd153daec05dcc9b0022e60892d9d5bb31cb4e30acb7ef5",
+  "practice-live/landmarks/proposal-native.wasm": "41cca6e9d525e2d6260ab0432d3922be29da30e062d03ab086b0aa3b8ab3c8d0",
+  "practice-live/landmarks/shape-patterns.bin": "2ce6d8116b257c90fee53e25e1ff1905c9afd623faf9ec58c607a8468c8f8a64",
+  "practice-live/landmarks/readout-primitives.mjs": "d1fe5bd7ab31916abf8b3afd8761fdeca39c036176d67614f437971b15f3b227",
+  "practice-live/landmarks/grip-readout.mjs": "f3305059b03af0a194580c9c84ebbdc96b73961058e382ab06d102d4c95c8a12",
+  "practice-live/landmarks/grip-color.bin": "edb05f0c03878a108cac899a8104bef137128eedd825ae33aa2aa2aa48ceef65",
+  "practice-live/landmarks/grip-forest.bin": "7b23a5fa7ea08066092a3a67cab5defc596ba9e53b74dd7479c9619dcad750bb",
+  "practice-live/camera.js": "5206e90b1922d5a923b4795f8cd8be7e59e7621227314a8872f1e82c952cb7f1"
+}
